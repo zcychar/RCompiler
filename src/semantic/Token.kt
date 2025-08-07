@@ -1,4 +1,4 @@
-package parser
+package semantic
 
 enum class TokenType(val value: String?) {
     KW_As("as"),
