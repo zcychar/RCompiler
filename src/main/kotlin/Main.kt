@@ -1,5 +1,14 @@
-import semantic.RPreprocessor
+import semantic.*
+
 fun main() {
-  val input=read
-  print(RPreprocessor.process(input))
+    val a= Keyword.BREAK
+    print("${Keyword.valueOf("break")},${a.name}")
+//    val resourcePath = "comments.rs"
+//    val inputStream = object {}.javaClass.getResourceAsStream(resourcePath)
+//    if (inputStream == null) {
+//        println("Error: Cannot find resource '$resourcePath'")
+//        return
+//    }
+//    val rawText = inputStream.bufferedReader().readText()
+//    print(RPreprocessor.process(rawText))
 }

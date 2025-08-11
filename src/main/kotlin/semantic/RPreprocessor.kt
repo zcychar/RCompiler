@@ -1,5 +1,7 @@
 package semantic
 
+import kotlin.system.exitProcess
+
 /**
  * Preprocessor removes all // and nested /* */ pairs in code, passes a clear string to lexer
  * also,it deletes all string_continue escapes in strings
@@ -9,7 +11,6 @@ class RPreprocessor {
         fun process(input: String): StringBuilder {
             val data = StringBuilder()
             var idx = 0
-            var line = 0
             var nest_comment = 0
             var in_single_comment = false
             var in_string = false
@@ -20,12 +21,12 @@ class RPreprocessor {
                 val nextch = if (idx < input.length - 1) input[idx + 1] else null
                 when {
                     in_single_comment -> {
-                        idx++;
+                        idx++
                         if (ch == '\n') {
-                            data.append(' ');
+                            if (!data.endsWith(' ') && !data.isEmpty()) data.append(' ')
                             in_single_comment = false
                         }
-                        continue;
+                        continue
                     }
 
                     in_char -> {
@@ -46,7 +47,7 @@ class RPreprocessor {
                             idx += 2
                             continue
                         }
-                        data.append(if(ch=='\n') "\\n" else ch)
+                        data.append(if (ch == '\n') "\\n" else ch)
                         if (escaped) {
                             escaped = false
                         } else if (ch == '\\') {
@@ -54,8 +55,8 @@ class RPreprocessor {
                         } else if (ch == '\"') {
                             in_char = false
                         }
-                        idx++;
-                        continue;
+                        idx++
+                        continue
                     }
 
                     nest_comment > 0 -> {
@@ -69,7 +70,8 @@ class RPreprocessor {
                             nest_comment--
                             continue
                         }
-                        continue;
+                        idx++
+                        continue
                     }
                 }
                 when {
@@ -84,7 +86,7 @@ class RPreprocessor {
                     }
 
                     ch == '\n' || ch == '\r' -> {
-                        data.append(' ')
+                        if (!data.endsWith(' ') && !data.isEmpty()) data.append(' ')
                     }
 
                     ch == '\'' -> {
@@ -92,9 +94,13 @@ class RPreprocessor {
                         in_char = true
                     }
 
-                    ch == '\"' -> {
+                    ch == '"' -> {
                         data.append(ch)
                         in_string = true
+                    }
+
+                    ch == ' ' -> {
+                        if (!data.endsWith(' ') && !data.isEmpty()) data.append(' ')
                     }
 
                     else -> data.append(ch)
