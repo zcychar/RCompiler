@@ -42,16 +42,7 @@ enum class Keyword(val id: String) : TokenType {
     USE("use"),
     WHERE("where"),
     WHILE("while"),
-    DYN("dyn");
-
-    companion object {
-        private val byId = ReservedKeyword.entries.associateBy { it.id }
-
-        fun fromId(id: String): ReservedKeyword? = byId[id]
-    }
-}
-
-enum class ReservedKeyword(val id: String) : TokenType {
+    DYN("dyn"),
     ABSTRACT("abstract"),
     BECOME("become"),
     BOX("box"),
@@ -67,10 +58,11 @@ enum class ReservedKeyword(val id: String) : TokenType {
     TRY("try"),
     GEN("gen");
 
-    companion object {
-        private val byId = entries.associateBy { it.id }
 
-        fun fromId(id: String): ReservedKeyword? = byId[id]
+    companion object {
+        private val byId = Keyword.entries.associateBy { it.id }
+
+        fun fromId(id: String): Keyword? = byId[id]
     }
 }
 
@@ -130,9 +122,9 @@ enum class Punctuation(val id: String) : TokenType {
     RIGHT_PAREN(")");            // )
 
     companion object {
-        private val byId = ReservedKeyword.entries.associateBy { it.id }
+        private val byId = Punctuation.entries.associateBy { it.id }
 
-        fun fromId(id: String): ReservedKeyword? = byId[id]
+        fun fromId(id: String): Punctuation? = byId[id]
     }
 }
 
