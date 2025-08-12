@@ -105,4 +105,5 @@ class RPreprocessor(private val input: String) {
         return data.toString()
     }
 
+    fun dumpToString(): String = data.toString()
 }

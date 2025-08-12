@@ -2,6 +2,9 @@ package semantic
 
 import utils.CompileError
 
+fun Char.isWord(): Boolean {
+    return this == '_' || this.isDigit() || this.isLetter()
+}
 
 class RLexer(private val input: String) {
     private val tokens: MutableList<Token> = mutableListOf()
@@ -14,6 +17,10 @@ class RLexer(private val input: String) {
             skipWhitespace()
         }
         return tokens
+    }
+
+    fun dumpToString(): String {
+        return tokens.joinToString("\n") { it.toString() }
     }
 
     private fun nextToken() {
@@ -86,15 +93,29 @@ class RLexer(private val input: String) {
     }
 
     private fun identifierOrKeyword() {
-
+        var fi = position
+        while (fi < input.length && input[fi].isWord()) fi++;
+        val str = input.substring(position until fi)
+        position = fi
+        Keyword.fromId(str)?.let {
+            tokens.add(Token(it, str))
+            return
+        }
+        tokens.add(Token(Identifier, str))
     }
 
     private fun number() {
+        var fi = position
+        while (fi < input.length && input[fi].isWord()) fi++;
+        val str = input.substring(position until fi)
+        position = fi
+        tokens.add(Token(Literal.INTEGER, str))
     }
 
     private fun punctuation() {
-        for (i in 2 downTo 0) {
-            val str = input.substring(position, position + i)
+        for (i in 3 downTo 1) {
+            if (position + i >= input.length) continue
+            val str = input.substring(position until position + i)
             Punctuation.fromId(str)?.let {
                 tokens.add(Token(it, str))
                 position += i
@@ -104,9 +125,15 @@ class RLexer(private val input: String) {
         throw CompileError("Parser:encounter unrecognized punctuation ${span()}")
     }
 
+    private fun wordspan(): String {
+        var fi = position
+        while (fi < input.length && input[fi].isWord()) fi++;
+        return input.substring(position until fi)
+    }
+
     private fun span(): String {
         var fi = position
         while (fi < input.length && input[fi] != ' ') fi++;
-        return input.substring(position, fi - position)
+        return input.substring(position until fi)
     }
 }
