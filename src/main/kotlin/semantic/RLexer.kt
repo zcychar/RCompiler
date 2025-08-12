@@ -14,6 +14,7 @@ class RLexer(private val input: String) {
         skipWhitespace()
         while (!isEnd()) {
             nextToken()
+            println("now process ${tokens.last() }")
             skipWhitespace()
         }
         return tokens
@@ -114,7 +115,7 @@ class RLexer(private val input: String) {
 
     private fun punctuation() {
         for (i in 3 downTo 1) {
-            if (position + i >= input.length) continue
+            if (position + i > input.length) continue
             val str = input.substring(position until position + i)
             Punctuation.fromId(str)?.let {
                 tokens.add(Token(it, str))
