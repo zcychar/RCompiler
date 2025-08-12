@@ -14,7 +14,7 @@ class RLexer(private val input: String) {
         skipWhitespace()
         while (!isEnd()) {
             nextToken()
-            println("now process ${tokens.last()},now sequence: ${input.substring(position)}")
+            //println("now process ${tokens.last()},now sequence: ${input.substring(position)}")
             skipWhitespace()
         }
         return tokens
@@ -79,11 +79,13 @@ class RLexer(private val input: String) {
     }
 
     private fun rawCString() {
-
+        position += 2
+        rawLiteral(Literal.RAW_C_STRING)
     }
 
     private fun rawString() {
-
+        ++position
+        rawLiteral(Literal.RAW_STRING)
     }
 
     private fun string() = literal('\"', Literal.STRING)
@@ -109,6 +111,22 @@ class RLexer(private val input: String) {
             fi++
         }
         throw CompileError("Lexer:encounter no-end char/string literal ${input.substring(position)}")
+    }
+
+    private fun rawLiteral(type: TokenType) {
+        var prefix_end=position
+        while(prefix_end<input.length&&input[prefix_end]=='#')prefix_end++;
+        if(input[prefix_end]!='\"')throw CompileError("Lexer:missing quotes in raw_string literal")
+        val prefix_length=prefix_end-position
+        val suffix='\"'+"#".repeat(prefix_length)
+        val suffix_begin=input.indexOf(suffix,prefix_end+1)
+        if(suffix_begin==-1){
+            throw CompileError("Lexer:encounter no-end raw_string literal ${input.substring(position)}")
+        }else{
+            val str= if(suffix_begin==prefix_end+1) "" else input.substring(prefix_end+1..suffix_begin-1)
+            tokens.add(Token(type,str))
+            position=suffix_begin+suffix.length
+        }
     }
 
     private fun identifierOrKeyword() {
