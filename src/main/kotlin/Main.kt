@@ -2,14 +2,13 @@ import semantic.*
 import utils.CompileError
 
 fun main() {
-    val resourcePath = "string1.rs"
+    val resourcePath = "string2.rs"
     val inputStream = object {}.javaClass.getResourceAsStream(resourcePath)
     if (inputStream == null) {
         println("Error: Cannot find resource '$resourcePath'")
         return
     }
     val rawText = inputStream.bufferedReader().readText()
-    println(rawText)
     try{
         val preprocessor = RPreprocessor(rawText)
         val lexer = RLexer(preprocessor.process())

@@ -6,8 +6,8 @@ package semantic
  */
 class RPreprocessor(private val input: String) {
     private val data = StringBuilder()
+    private var idx = 0
     fun process(): String {
-        var idx = 0
         var nest_comment = 0
         var in_single_comment = false
         var in_string = false
@@ -71,6 +71,7 @@ class RPreprocessor(private val input: String) {
                     continue
                 }
             }
+            if (skipRawString()) continue
             when {
                 ch == '/' && nextch == '/' -> {
                     in_single_comment = true
@@ -101,6 +102,31 @@ class RPreprocessor(private val input: String) {
             idx++
         }
         return data.toString()
+    }
+
+    private fun skipRawString(): Boolean {
+        val nextch = if (idx < input.length - 1) input[idx + 1] else null
+        val nextnextch = if (idx < input.length - 2) input[idx + 2] else null
+
+        val skip = { x: Int ->
+            Boolean
+            var prefix_end = idx + x
+            while (prefix_end < input.length && input[prefix_end] == '#') prefix_end++
+            if (input[prefix_end] == '\"') {
+                val prefix_length = prefix_end - idx - x
+                val suffix = '\"' + "#".repeat(prefix_length)
+                val suffix_begin = input.indexOf(suffix, prefix_end + 1)
+                if (suffix_begin != -1) {
+                    data.append(input.substring(idx until suffix_begin + suffix.length))
+                    idx = suffix_begin + suffix.length
+                    true
+                } else false
+            }else false
+        }
+
+        if (input[idx] == 'r' && (nextch == '#' || nextch == '\"')) return skip(1)
+        if (input[idx] == 'c' && nextch == 'r' && (nextnextch == '#' || nextnextch == '\"')) return skip(2)
+        return false
     }
 
     fun dumpToString(): String = data.toString()
