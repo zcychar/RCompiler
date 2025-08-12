@@ -14,7 +14,7 @@ class RLexer(private val input: String) {
         skipWhitespace()
         while (!isEnd()) {
             nextToken()
-            println("now process ${tokens.last() }")
+            println("now process ${tokens.last()},now sequence: ${input.substring(position)}")
             skipWhitespace()
         }
         return tokens
@@ -74,7 +74,8 @@ class RLexer(private val input: String) {
     }
 
     private fun cString() {
-
+        ++position
+        literal('\"', Literal.C_STRING)
     }
 
     private fun rawCString() {
@@ -85,12 +86,29 @@ class RLexer(private val input: String) {
 
     }
 
-    private fun string() {
+    private fun string() = literal('\"', Literal.STRING)
 
-    }
+    private fun char() = literal('\'', Literal.CHAR)
 
-    private fun char() {
+    private fun literal(id: Char, type: TokenType) {
+        var fi = position + 1
+        while (fi < input.length) {
+            when (input[fi]) {
+                '\\' -> {
+                    fi++
+                    continue
+                }
 
+                id -> {
+                    val str = if (fi == position + 1) "" else input.substring(position + 1..fi - 1)
+                    position = fi + 1
+                    tokens.add(Token(type, str))
+                    return
+                }
+            }
+            fi++
+        }
+        throw CompileError("Lexer:encounter no-end char/string literal ${input.substring(position)}")
     }
 
     private fun identifierOrKeyword() {
@@ -123,7 +141,7 @@ class RLexer(private val input: String) {
                 return
             }
         }
-        throw CompileError("Parser:encounter unrecognized punctuation ${span()}")
+        throw CompileError("Lexer:encounter unrecognized punctuation ${span()}")
     }
 
     private fun wordspan(): String {

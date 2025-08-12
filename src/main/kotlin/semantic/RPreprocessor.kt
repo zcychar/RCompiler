@@ -1,7 +1,5 @@
 package semantic
 
-import kotlin.system.exitProcess
-
 /**
  * Preprocessor removes all // and nested /* */ pairs in code, passes a clear string to lexer
  * also,it deletes all string_continue escapes in strings
@@ -52,7 +50,7 @@ class RPreprocessor(private val input: String) {
                     } else if (ch == '\\') {
                         escaped = true
                     } else if (ch == '\"') {
-                        in_char = false
+                        in_string = false
                     }
                     idx++
                     continue
