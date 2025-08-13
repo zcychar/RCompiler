@@ -1,4 +1,4 @@
-package semantic
+package frontend
 
 sealed interface TokenType
 

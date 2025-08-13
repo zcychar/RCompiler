@@ -1,4 +1,4 @@
-package semantic
+package frontend
 
 /**
  * Preprocessor removes all // and nested /* */ pairs in code, passes a clear string to lexer

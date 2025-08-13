@@ -1,4 +1,4 @@
-import semantic.*
+import frontend.*
 import utils.CompileError
 
 fun main() {

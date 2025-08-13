@@ -1,10 +1,8 @@
-package semantic
+package frontend
 
-import utils.CompileError
+import utils.*
 
-fun Char.isWord(): Boolean {
-    return this == '_' || this.isDigit() || this.isLetter()
-}
+
 
 class RLexer(private val input: String) {
     private val tokens: MutableList<Token> = mutableListOf()
@@ -25,12 +23,12 @@ class RLexer(private val input: String) {
     }
 
     private fun nextToken() {
-        when (val ch = peek()) {
+        when (peek()) {
             'c' -> {
-                when (val nextch = peek(1)) {
+                when (peek(1)) {
                     '\"' -> cString()
                     'r' -> {
-                        when (val nnextch = peek(2)) {
+                        when (peek(2)) {
                             '\"', '#' -> rawCString()
                         }
                     }
@@ -40,7 +38,7 @@ class RLexer(private val input: String) {
             }
 
             'r' -> {
-                when (val nextch = peek(1)) {
+                when (peek(1)) {
                     '\"', '#' -> rawString()
                     else -> identifierOrKeyword()
                 }
@@ -55,9 +53,9 @@ class RLexer(private val input: String) {
 
     }
 
-    private fun advance(): Char {
-        return input[position++]
-    }
+//    private fun advance(): Char {
+//        return input[position++]
+//    }
 
     private fun peek(offset: Int = 0): Char {
         if (position + offset >= input.length) return '\u0000'
@@ -66,7 +64,7 @@ class RLexer(private val input: String) {
 
     //only used between words
     private fun skipWhitespace() {
-        while (!isEnd() && input[position] == ' ') position++;
+        while (!isEnd() && input[position] == ' ') position++
     }
 
     private fun isEnd(): Boolean {
@@ -115,7 +113,7 @@ class RLexer(private val input: String) {
 
     private fun rawLiteral(type: TokenType) {
         var prefix_end=position
-        while(prefix_end<input.length&&input[prefix_end]=='#')prefix_end++;
+        while(prefix_end<input.length&&input[prefix_end]=='#')prefix_end++
         if(input[prefix_end]!='\"')throw CompileError("Lexer:missing quotes in raw_string literal")
         val prefix_length=prefix_end-position
         val suffix='\"'+"#".repeat(prefix_length)
@@ -131,7 +129,7 @@ class RLexer(private val input: String) {
 
     private fun identifierOrKeyword() {
         var fi = position
-        while (fi < input.length && input[fi].isWord()) fi++;
+        while (fi < input.length && input[fi].isWord()) fi++
         val str = input.substring(position until fi)
         position = fi
         Keyword.fromId(str)?.let {
@@ -143,7 +141,7 @@ class RLexer(private val input: String) {
 
     private fun number() {
         var fi = position
-        while (fi < input.length && input[fi].isWord()) fi++;
+        while (fi < input.length && input[fi].isWord()) fi++
         val str = input.substring(position until fi)
         position = fi
         tokens.add(Token(Literal.INTEGER, str))
@@ -162,15 +160,15 @@ class RLexer(private val input: String) {
         throw CompileError("Lexer:encounter unrecognized punctuation ${span()}")
     }
 
-    private fun wordspan(): String {
-        var fi = position
-        while (fi < input.length && input[fi].isWord()) fi++;
-        return input.substring(position until fi)
-    }
+//    private fun wordspan(): String {
+//        var fi = position
+//        while (fi < input.length && input[fi].isWord()) fi++
+//        return input.substring(position until fi)
+//    }
 
     private fun span(): String {
         var fi = position
-        while (fi < input.length && input[fi] != ' ') fi++;
+        while (fi < input.length && input[fi] != ' ') fi++
         return input.substring(position until fi)
     }
 }
