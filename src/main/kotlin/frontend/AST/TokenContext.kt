@@ -26,4 +26,6 @@ class TokenContext(val input: MutableList<Token>) {
         }
         return input[position].value
     }
+
+    fun eof(): Boolean = position < input.size
 }

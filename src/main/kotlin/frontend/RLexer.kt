@@ -12,7 +12,7 @@ class RLexer(private val input: String) {
         skipWhitespace()
         while (!isEnd()) {
             nextToken()
-            //println("now process ${tokens.last()},now sequence: ${input.substring(position)}")
+//            println("now process ${tokens.last()},now sequence: ${input.substring(position)}")
             skipWhitespace()
         }
         return tokens
@@ -30,6 +30,7 @@ class RLexer(private val input: String) {
                     'r' -> {
                         when (peek(2)) {
                             '\"', '#' -> rawCString()
+                            else -> identifierOrKeyword()
                         }
                     }
 
@@ -47,7 +48,7 @@ class RLexer(private val input: String) {
             '\"' -> string()
             '\'' -> char()
             in '0'..'9' -> number()
-            in 'a'..'z', in 'A'..'Z', '_' -> identifierOrKeyword()
+            in 'a'..'z', in 'A'..'Z' -> identifierOrKeyword()
             else -> punctuation()
         }
 
@@ -95,7 +96,7 @@ class RLexer(private val input: String) {
         while (fi < input.length) {
             when (input[fi]) {
                 '\\' -> {
-                    fi++
+                    fi+=2
                     continue
                 }
 

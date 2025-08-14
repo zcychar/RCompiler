@@ -1,13 +1,13 @@
 import frontend.*
 import utils.CompileError
 
-fun main() {
-    val resourcePath = "string2.rs"
-    val inputStream = object {}.javaClass.getResourceAsStream(resourcePath)
-    if (inputStream == null) {
-        println("Error: Cannot find resource '$resourcePath'")
+fun main(args: Array<String>) {
+    if (args.isEmpty()) {
+        println("Error: Please provide a path to a source file.")
         return
     }
+    val resourcePath = "string2.rs"
+    val inputStream = object {}.javaClass.getResourceAsStream(resourcePath)
     val rawText = inputStream.bufferedReader().readText()
     try{
         val preprocessor = RPreprocessor(rawText)
