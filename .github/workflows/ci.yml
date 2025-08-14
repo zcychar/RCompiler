@@ -1,0 +1,44 @@
+# A name for your workflow, which will be displayed in the Actions tab on GitHub.
+name: RCompiler CI/CD
+
+# This specifies the trigger for the workflow.
+# 'on: push' means this workflow will run on every push to any branch.
+on: push
+
+jobs:
+  # Defines a single job named 'build-and-test'.
+  build-and-test:
+    # Specifies that this job will run on the latest version of Ubuntu Linux.
+    runs-on: ubuntu-latest
+
+    # A sequence of tasks that will be executed as part of this job.
+    steps:
+      # Step 1: Checks out your repository's code onto the runner,
+      # so the workflow can access your files.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Sets up the Java Development Kit (JDK).
+      # Your build.gradle.kts specifies jvmToolchain(24), so we match that here.
+      - name: Set up JDK 24
+        uses: actions/setup-java@v4
+        with:
+          java-version: '24'
+          distribution: 'temurin' # A popular, open-source distribution of Java.
+
+      # Step 3: Sets up Gradle and enables caching for dependencies.
+      # This step significantly speeds up future builds by reusing downloaded libraries.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # Step 4: Grants execute permission to the Gradle Wrapper script.
+      # This is required to run the script on Linux-based runners.
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # Step 5: Runs the build.
+      # The './gradlew build' command compiles your code AND runs all tests
+      # found in src/test/kotlin/. If any test fails, this step will fail,
+      # causing the entire workflow run to be marked as failed.
+      - name: Build and run unit tests
+        run: ./gradlew build --no-daemon
