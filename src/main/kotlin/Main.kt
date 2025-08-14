@@ -2,17 +2,16 @@ import frontend.*
 import utils.CompileError
 
 fun main(args: Array<String>) {
-    if (args.isEmpty()) {
-        println("Error: Please provide a path to a source file.")
-        return
-    }
-    val resourcePath = "string2.rs"
+
+    val resourcePath = if(args.isEmpty()) readln() else args[0]
     val inputStream = object {}.javaClass.getResourceAsStream(resourcePath)
     val rawText = inputStream.bufferedReader().readText()
     try{
+        println("-----preprocessed-----")
         val preprocessor = RPreprocessor(rawText)
         val lexer = RLexer(preprocessor.process())
         println(preprocessor.dumpToString())
+        println("--------tokens---------")
         lexer.process()
         println(lexer.dumpToString())
     }catch(e: CompileError) {
