@@ -39,12 +39,12 @@ class RLexerTest {
 
     @Test
     fun `tokenizes various valid identifiers`() {
-        val input = "x my_variable _leading_underscore a123"
+        val input = "x my_variable u____ a123"
         val lexer = RLexer(input)
         val expectedTokens = listOf(
             Token(Identifier, "x"),
             Token(Identifier, "my_variable"),
-            Token(Identifier, "_leading_underscore"),
+            Token(Identifier, "u____"),
             Token(Identifier, "a123")
         )
         assertEquals(
