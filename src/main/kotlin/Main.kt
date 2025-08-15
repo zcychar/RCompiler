@@ -12,8 +12,9 @@ fun main(args: Array<String>) {
         val lexer = RLexer(preprocessor.process())
         println(preprocessor.dumpToString())
         println("--------tokens---------")
-        lexer.process()
+        val parser= RParser(lexer.process())
         println(lexer.dumpToString())
+        parser.process()
     }catch(e: CompileError) {
         println(e.message)
     }

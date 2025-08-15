@@ -1,12 +1,6 @@
 package frontend
 
-import frontend.AST.BlockExprNode
-import frontend.AST.CrateNode
-import frontend.AST.FunctionNode
-import frontend.AST.ItemNode
-import frontend.AST.ParamNode
-import frontend.AST.TypeNode
-import frontend.AST.UnitTypeNode
+import frontend.AST.*
 import utils.CompileError
 
 class RParser(val input: MutableList<Token>) {
@@ -18,8 +12,8 @@ class RParser(val input: MutableList<Token>) {
         return null
     }
 
-    private fun consume() {
-        if (position < input.size) position++
+    private fun consume(): Token {
+        if (position < input.size) return input[position++]
         throw CompileError("Parser:Out_of_size consume requested")
     }
 
@@ -56,8 +50,8 @@ class RParser(val input: MutableList<Token>) {
         if (currentToken?.type == Keyword.CONST && nextToken?.type == Keyword.FN) return parseFunction()
         return when (currentToken?.type) {
             Keyword.FN -> parseFunction()
-//            Keyword.STRUCT -> parseStruct()
-//            Keyword.ENUM -> parseEnum()
+            Keyword.STRUCT -> parseStruct()
+            Keyword.ENUM -> parseEnum()
 //            Keyword.CONST -> parseConstantItem()
 //            Keyword.TRAIT -> parseTrait()
 //            Keyword.IMPL -> parseImpl()
@@ -74,23 +68,69 @@ class RParser(val input: MutableList<Token>) {
         expect(Keyword.FN)
         consume()
         val id: String = expectAndConsume(Identifier)
-        expectAndConsume(Punctuation.LEFT_BRACKET)
-        var params : List<ParamNode>? = null
-        if (peek(1)?.type != Punctuation.RIGHT_BRACKET) {
-            params = parseParams()
+        expectAndConsume(Punctuation.LEFT_PAREN)
+        val params = when (peek(1)?.type) {
+            Punctuation.RIGHT_PAREN -> listOf()
+            else -> parseParams()
         }
-        expectAndConsume(Punctuation.RIGHT_BRACKET)
-        var returnType : TypeNode = UnitTypeNode
-        if (peek(1)?.type == Punctuation.RIGHT_ARROW) {
-            consume()
-            returnType = parseType()
-            consume()
+        expectAndConsume(Punctuation.RIGHT_PAREN)
+        val returnType = when (peek(1)?.type) {
+            Punctuation.RIGHT_ARROW -> {
+                consume()
+                val type = parseType()
+                consume()
+                type
+            }
+
+            else -> UnitTypeNode
         }
-        var blockExpr : BlockExprNode? = null
+        var blockExpr: BlockExprNode? = null
 //        if (peek(1)?.type != Punctuation.SEMICOLON) {
 //            blockExpr = parseBlockExpr()
 //        } else consume()
         return FunctionNode(isConst, id, params, returnType, blockExpr)
+    }
+
+    private fun parseStruct(): StructNode {
+        expectAndConsume(Keyword.STRUCT)
+        val id = expectAndConsume(Identifier)
+        val fields: List<StructNode.StructField> = when (peek(1)?.type) {
+            Punctuation.LEFT_BRACE -> {
+                val tmp_field = mutableListOf<StructNode.StructField>()
+                while (peek(1)?.type != Punctuation.RIGHT_BRACE) {
+                    tmp_field.add(run {
+                        val id = expectAndConsume(Identifier)
+                        expectAndConsume(Punctuation.COLON)
+                        val type = parseType()
+                        StructNode.StructField(id, type)
+                    })
+                    if (peek(1)?.type == Punctuation.COMMA) consume()
+                }
+                expectAndConsume(Punctuation.RIGHT_BRACE)
+                tmp_field.toList()
+            }
+
+            Punctuation.SEMICOLON -> {
+                consume()
+                listOf()
+            }
+
+            else -> throw CompileError("Parser:invalid token for struct field: ${peek(1)}")
+        }
+        return StructNode(id, fields)
+    }
+
+    private fun parseEnum(): EnumNode {
+        expectAndConsume(Keyword.ENUM)
+        val id = expectAndConsume(Identifier)
+        expectAndConsume(Punctuation.LEFT_BRACE)
+        val varients = mutableListOf<String>()
+        while (peek(1)?.type != Punctuation.RIGHT_BRACE) {
+            varients.add(expectAndConsume(Identifier))
+            if (peek(1)?.type == Punctuation.COMMA) consume()
+        }
+        expectAndConsume(Punctuation.RIGHT_BRACE)
+        return EnumNode(id, varients)
     }
 
 
@@ -104,9 +144,10 @@ class RParser(val input: MutableList<Token>) {
 //
 //    }
 
-    private fun parseType() : TypeNode{
+    private fun parseType(): TypeNode {
 
         return UnitTypeNode
     }
 }
+
 
