@@ -13,8 +13,10 @@ class RPreprocessor(private val input: String) {
         var in_string = false
         var in_char = false
         var escaped = false
+        var line = 0
         while (idx < input.length) {
             val ch = input[idx]
+            if(ch=='\n')line++
             val nextch = if (idx < input.length - 1) input[idx + 1] else null
             when {
                 in_single_comment -> {
@@ -121,7 +123,7 @@ class RPreprocessor(private val input: String) {
                     idx = suffix_begin + suffix.length
                     true
                 } else false
-            }else false
+            } else false
         }
 
         if (input[idx] == 'r' && (nextch == '#' || nextch == '\"')) return skip(1)

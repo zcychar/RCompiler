@@ -1,8 +1,12 @@
 package frontend
 
+import frontend.AST.BlockExprNode
 import frontend.AST.CrateNode
 import frontend.AST.FunctionNode
 import frontend.AST.ItemNode
+import frontend.AST.ParamNode
+import frontend.AST.TypeNode
+import frontend.AST.UnitTypeNode
 import utils.CompileError
 
 class RParser(val input: MutableList<Token>) {
@@ -17,6 +21,12 @@ class RParser(val input: MutableList<Token>) {
     private fun consume() {
         if (position < input.size) position++
         throw CompileError("Parser:Out_of_size consume requested")
+    }
+
+    private fun expectAndConsume(type: TokenType): String {
+        val tmp = expect(type)
+        consume()
+        return tmp
     }
 
     private fun expect(type: TokenType): String {
@@ -56,14 +66,47 @@ class RParser(val input: MutableList<Token>) {
     }
 
     private fun parseFunction(): FunctionNode {
-        var isConst=false
-        if (peek(1)?.type== Keyword.CONST){
-            isConst=true
+        var isConst = false
+        if (peek(1)?.type == Keyword.CONST) {
+            isConst = true
             consume()
         }
-
-
+        expect(Keyword.FN)
+        consume()
+        val id: String = expectAndConsume(Identifier)
+        expectAndConsume(Punctuation.LEFT_BRACKET)
+        var params : List<ParamNode>? = null
+        if (peek(1)?.type != Punctuation.RIGHT_BRACKET) {
+            params = parseParams()
+        }
+        expectAndConsume(Punctuation.RIGHT_BRACKET)
+        var returnType : TypeNode = UnitTypeNode
+        if (peek(1)?.type == Punctuation.RIGHT_ARROW) {
+            consume()
+            returnType = parseType()
+            consume()
+        }
+        var blockExpr : BlockExprNode? = null
+//        if (peek(1)?.type != Punctuation.SEMICOLON) {
+//            blockExpr = parseBlockExpr()
+//        } else consume()
+        return FunctionNode(isConst, id, params, returnType, blockExpr)
     }
 
 
+    private fun parseParams(): List<ParamNode> {
+
+        return emptyList()
+    }
+
+
+//    private fun parseBlockExpr(): BlockExprNode {
+//
+//    }
+
+    private fun parseType() : TypeNode{
+
+        return UnitTypeNode
+    }
 }
+
