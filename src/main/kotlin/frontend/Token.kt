@@ -140,3 +140,20 @@ enum class Literal : TokenType {
 data object Identifier : TokenType
 data object ErrorToken : TokenType
 
+val unaryOp = setOf(
+    Punctuation.MINUS, Punctuation.STAR, Punctuation.BANG, Punctuation.AMPERSAND, Punctuation.AND_AND
+)
+
+val binaryOp = setOf(
+    Punctuation.PLUS, Punctuation.MINUS, Punctuation.STAR, Punctuation.SLASH, Punctuation.PERCENT,
+    Punctuation.EQUAL_EQUAL, Punctuation.NOT_EQUAL, Punctuation.LESS, Punctuation.LESS_EQUAL,
+    Punctuation.GREATER, Punctuation.GREATER_EQUAL,
+    Punctuation.AND_AND, Punctuation.OR_OR,
+    Punctuation.AMPERSAND, Punctuation.PIPE, Punctuation.CARET,
+    Punctuation.LESS_LESS, Punctuation.GREATER_GREATER,
+    Punctuation.EQUAL, Punctuation.PLUS_EQUAL, Punctuation.MINUS_EQUAL, Punctuation.STAR_EQUAL,
+    Punctuation.SLASH_EQUAL, Punctuation.PERCENT_EQUAL, Punctuation.CARET_EQUAL,
+    Punctuation.AND_EQUAL, Punctuation.OR_EQUAL, Punctuation.LESS_LESS_EQUAL, Punctuation.GREATER_GREATER_EQUAL,
+    Punctuation.RIGHT_ARROW, Punctuation.LEFT_ARROW, Punctuation.FAT_ARROW
+)
+

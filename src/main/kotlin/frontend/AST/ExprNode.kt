@@ -37,6 +37,6 @@ data class PathExprNode(val segments: List<PathExprSeg>) : ExprNode {
 
 data class NumberExprNode(val value: Int) : ExprNode
 
-data class UnaryExprNode(val op: Punctuation, val rhs: ExprNode) : ExprNode
+data class UnaryExprNode(val op: TokenType,val hasMut: Boolean,val rhs: ExprNode) : ExprNode
 
-data class BinaryExprNode(val op: Punctuation, val lhs: ExprNode, val rhs: ExprNode) : ExprNode
+data class BinaryExprNode(val op: TokenType, val lhs: ExprNode, val rhs: ExprNode) : ExprNode

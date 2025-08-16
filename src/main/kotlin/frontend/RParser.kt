@@ -1,13 +1,19 @@
 package frontend
 
 import frontend.AST.*
+import frontend.unaryOp
 import utils.CompileError
+
 
 class RParser(val input: MutableList<Token>) {
     private var position = 0
 
+    companion object
 
-    private fun peek(offset: Int): Token? {
+
+    private
+
+    fun peek(offset: Int): Token? {
         if (position + offset - 1 < input.size) return input[position + offset - 1]
         return null
     }
@@ -44,6 +50,8 @@ class RParser(val input: MutableList<Token>) {
         return CrateNode(items.toList())
     }
 
+
+    //----------------------ParseItem------------------------------
     private fun parseItem(): ItemNode {
         val currentToken = peek(1)
         val nextToken = peek(2)
@@ -52,7 +60,7 @@ class RParser(val input: MutableList<Token>) {
             Keyword.FN -> parseFunction()
             Keyword.STRUCT -> parseStruct()
             Keyword.ENUM -> parseEnum()
-//            Keyword.CONST -> parseConstantItem()
+//            Keyword.CONST -> parseConstantItem() //TODO
 //            Keyword.TRAIT -> parseTrait()
 //            Keyword.IMPL -> parseImpl()
             else -> throw CompileError("Parser:Encounter invalid item begin with :${input[position]}")
@@ -85,7 +93,7 @@ class RParser(val input: MutableList<Token>) {
             else -> UnitTypeNode
         }
         var blockExpr: BlockExprNode? = null
-//        if (peek(1)?.type != Punctuation.SEMICOLON) {
+//        if (peek(1)?.type != Punctuation.SEMICOLON) { TODO
 //            blockExpr = parseBlockExpr()
 //        } else consume()
         return FunctionNode(isConst, id, params, returnType, blockExpr)
@@ -135,18 +143,64 @@ class RParser(val input: MutableList<Token>) {
 
 
     private fun parseParams(): List<ParamNode> {
-
+        //TODO
         return emptyList()
     }
 
+    //----------------------ParseExpr------------------------------
 
-//    private fun parseBlockExpr(): BlockExprNode {
+    private fun parseExpr(precedence: Int = 0): ExprNode {
+
+    }
+
+
+    private fun parseLiteral(): ExprNode {
+
+    }
+
+    private fun parseGrouped(): ExprNode {
+        expectAndConsume(Punctuation.LEFT_PAREN)
+        val expr = parseExpr()
+        expectAndConsume(Punctuation.RIGHT_PAREN)
+        return expr
+    }
+
+    private fun parseCall(left: ExprNode): ExprNode {
+
+    }
+
+
+    private fun parseUnary(): ExprNode {
+        val op = consume().type
+        val hasMut = if (peek(1)?.type == Keyword.MUT) {
+            consume()
+            true
+        } else false
+        val rhs = parseExpr()
+        return UnaryExprNode(op, hasMut, rhs)
+    }
+
+    private fun parseBinary(left: ExprNode): ExprNode {
+
+    }
+
+
+    //    private fun parseBlockExpr(): BlockExprNode {
 //
 //    }
-
     private fun parseType(): TypeNode {
 
         return UnitTypeNode
+    }
+
+
+    //----------------------support---------------------------------
+    private val nudRule: (TokenType) -> ExprNode = {
+        when {
+            it in unaryOp -> parseUnary()
+            it == Punctuation.LEFT_PAREN -> parseGrouped()
+            else -> throw CompileError("Parser:expect unary expression, encounter type $it")
+        }
     }
 }
 
