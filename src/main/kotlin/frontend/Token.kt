@@ -157,3 +157,37 @@ val binaryOp = setOf(
     Punctuation.RIGHT_ARROW, Punctuation.LEFT_ARROW, Punctuation.FAT_ARROW
 )
 
+val precedence = mapOf<Punctuation,Pair<Int,Int>>(
+    Punctuation.PLUS to Pair(101,100),
+    Punctuation.MINUS to Pair(101 ,100),
+    Punctuation.STAR to Pair(111,110),
+    Punctuation.SLASH to Pair(111,110),
+    Punctuation.PERCENT to Pair(111,110),
+    Punctuation.EQUAL_EQUAL to Pair(51,50),
+    Punctuation.NOT_EQUAL to Pair(51,50),
+    Punctuation.LESS to Pair(51,50),
+    Punctuation.LESS_EQUAL to Pair(51,50),
+    Punctuation.GREATER to Pair(511,50),
+    Punctuation.GREATER_EQUAL to Pair(51,50),
+    Punctuation.AND_AND to Pair(41,40),
+    Punctuation.OR_OR to Pair(31,30),
+    Punctuation.AMPERSAND to Pair(81,80),
+    Punctuation.PIPE to Pair(61,60),
+    Punctuation.CARET to Pair(71,70),
+    Punctuation.LESS_LESS to Pair(91,90),
+    Punctuation.GREATER_GREATER to Pair(91,90),
+    Punctuation.EQUAL to Pair(10,11),
+    Punctuation.PLUS_EQUAL to Pair(10,11),
+    Punctuation.MINUS_EQUAL to Pair(10,11),
+    Punctuation.STAR_EQUAL to Pair(10,11),
+    Punctuation.SLASH_EQUAL to Pair(10,11),
+    Punctuation.PERCENT_EQUAL to Pair(10,11),
+    Punctuation.CARET_EQUAL to Pair(10,11),
+    Punctuation.AND_EQUAL to Pair(10,11),
+    Punctuation.OR_EQUAL to Pair(10,11),
+    Punctuation.LESS_LESS_EQUAL to Pair(10,11),
+    Punctuation.GREATER_GREATER_EQUAL to Pair(10,11),
+    Punctuation.DOT_DOT to Pair(21,20),
+    Punctuation.DOT_DOT_EQUAL to Pair(21,20)
+)
+
