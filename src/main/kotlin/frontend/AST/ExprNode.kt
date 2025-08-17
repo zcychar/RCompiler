@@ -31,8 +31,8 @@ data class CondExprNode(val expr: ExprNode) : ExprNode
 
 data class LiteralExprNode(val value: String?, val type: TokenType) : ExprNode
 
-data class PathExprNode(val segments: List<PathExprSeg>) : ExprNode {
-    data class PathExprSeg(val id: String?, val keyword: Keyword?)
+data class PathExprNode(val seg1: PathExprSeg,val seg2: PathExprSeg?) : ExprNode {
+    data class PathExprSeg(val id: String?, val keyword: TokenType?)
 }
 
 data class NumberExprNode(val value: Int) : ExprNode

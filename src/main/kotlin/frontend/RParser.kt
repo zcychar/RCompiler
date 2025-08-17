@@ -150,12 +150,19 @@ class RParser(val input: MutableList<Token>) {
     //----------------------ParseExpr------------------------------
 
     private fun parseExpr(precedence: Int = 0): ExprNode {
-
+        throw CompileError("TODO")
     }
 
 
     private fun parseLiteral(): ExprNode {
-
+        val token = peek(1)
+        if (Literal.entries.any { it == token?.type }) {
+            return LiteralExprNode(token?.value, token!!.type)
+        } else if (token?.type == Keyword.TRUE || token?.type == Keyword.FALSE) {
+            return LiteralExprNode(null, token.type)
+        } else {
+            throw CompileError("Parser:Expect literal-expression, met $token")
+        }
     }
 
     private fun parseGrouped(): ExprNode {
@@ -166,7 +173,29 @@ class RParser(val input: MutableList<Token>) {
     }
 
     private fun parseCall(left: ExprNode): ExprNode {
+        throw CompileError("TODO")
+    }
 
+    private fun parsePath(): PathExprNode {
+        val exe: () -> PathExprNode.PathExprSeg = {
+            when (peek(1)?.type) {
+                Identifier -> {
+                    PathExprNode.PathExprSeg(consume().value, null)
+                }
+
+                Keyword.SELF_UPPER, Keyword.SELF -> {
+                    PathExprNode.PathExprSeg(null, consume().type)
+                }
+
+                else -> throw CompileError("Parser:expect path-segment, met ${peek(1)}")
+            }
+        }
+        val seg1 = exe()
+        val seg2 = if (peek(1)?.type == Punctuation.COLON_COLON) {
+            consume()
+            exe()
+        } else null
+        return PathExprNode(seg1, seg2)
     }
 
 
@@ -181,13 +210,65 @@ class RParser(val input: MutableList<Token>) {
     }
 
     private fun parseBinary(left: ExprNode): ExprNode {
-
+        val op = consume().type
+        val pre = precedence.get(op)?.second ?: throw CompileError("Parser:expect binary token, met $op")
+        val right = parseExpr(pre)
+        return BinaryExprNode(op, left, right)
     }
 
 
     //    private fun parseBlockExpr(): BlockExprNode {
 //
 //    }
+
+    //---------------------ParsePattern-----------------------------
+    private fun parsePattern(): PatternNode {
+        val nextToken=peek(1)
+        val nextnextToken=peek(2)
+        throw CompileError("TODO")
+    }
+
+    private fun parseLiteralPattern(): LiteralPatternNode {
+        val hasMinus = if (peek(1)?.type == Punctuation.MINUS) {
+            consume()
+            true
+        } else false
+        val expr = parseLiteral()
+        return LiteralPatternNode(hasMinus, expr)
+    }
+
+    private fun parseIdentifierPattern(): IdentifierPatternNode {
+        val hasRef = if (peek(1)?.type == Keyword.REF) {
+            consume()
+            true
+        } else false
+        val hasMut = if (peek(1)?.type == Keyword.MUT) {
+            consume()
+            true
+        } else false
+        val id = expectAndConsume(Identifier)
+        if (peek(1)?.type == Punctuation.AT) {
+            val subPattern = parsePattern()
+            return IdentifierPatternNode(hasRef, hasMut, id, subPattern)
+        } else return IdentifierPatternNode(hasRef, hasMut, id, null)
+    }
+
+    private fun parseRefPattern(): RefPatternNode {
+        val isDouble = when (peek(1)?.type) {
+            Punctuation.AMPERSAND -> false
+            Punctuation.AND_AND -> true
+            else -> throw CompileError("Parser:Expect ref-pattern, met ${peek(1)}")
+        }
+        consume()
+        val hasMut = if (peek(1)?.type == Keyword.MUT) true else false
+        val pattern = parsePattern()
+        return RefPatternNode(isDouble, hasMut, pattern)
+    }
+
+    private fun parsePathPattern(): PathPatternNode = PathPatternNode(parsePath())
+
+
+    //-----------------------ParseType------------------------------
     private fun parseType(): TypeNode {
 
         return UnitTypeNode
@@ -195,6 +276,8 @@ class RParser(val input: MutableList<Token>) {
 
 
     //----------------------support---------------------------------
+
+
     private val nudRule: (TokenType) -> ExprNode = {
         when {
             it in unaryOp -> parseUnary()
