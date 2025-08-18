@@ -158,6 +158,8 @@ val binaryOp = setOf(
 )
 
 val precedence = mapOf<Punctuation,Pair<Int,Int>>(
+    Punctuation.LEFT_PAREN to Pair(201,200),
+
     Punctuation.PLUS to Pair(101,100),
     Punctuation.MINUS to Pair(101 ,100),
     Punctuation.STAR to Pair(111,110),
