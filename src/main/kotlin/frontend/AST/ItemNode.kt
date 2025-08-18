@@ -1,24 +1,32 @@
 package frontend.AST
 
-import frontend.TokenType
-
 sealed interface ItemNode
 
-data class FunctionNode(
+data class FunctionItemNode(
     val isConst: Boolean,
     val name: String,
-    val params: List<ParamNode>,
-    val returnType: TypeNode,
+    val selfParam: SelfParamNode?,
+    val funParams: List<FunParamNode>,
+    val returnType: TypeNode?,
     val body: BlockExprNode?
-) : ItemNode
+) : ItemNode {
+    data class SelfParamNode(val hasBorrow: Boolean, val hasMut: Boolean, val type: TypeNode?)
+    data class FunParamNode(val pattern: PatternNode, val type: TypeNode)
+}
 
-data class StructNode(val name: String, val fields: List<StructField>?) : ItemNode {
+data class StructItemNode(val name: String, val fields: List<StructField>?) : ItemNode {
     data class StructField(val name: String, val type: TypeNode)
 }
 
-data class EnumNode(val name: String, val variants: List<String>): ItemNode
+data class EnumItemNode(val name: String, val variants: List<String>) : ItemNode
 
-data class ParamNode(val pattern: PatternNode, val type: TypeNode)
+data class ConstItemNode(val id: String, val type: TypeNode, val expr: ExprNode?) : ItemNode
+
+data class TraitItemNode(val id: String, val items: List<ItemNode>) : ItemNode
+
+data class ImplItemNode(val id: String?, val type: TypeNode, val items: List<ItemNode>) : ItemNode
+
+
 
 
 
