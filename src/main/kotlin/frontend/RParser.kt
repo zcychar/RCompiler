@@ -510,25 +510,16 @@ class RParser(val input: MutableList<Token>) {
     }
 
     private fun parseLiteralPattern(): LiteralPatternNode {
-        val hasMinus = if (peek(1)?.type == Punctuation.MINUS) {
-            consume()
-            true
-        } else false
+        val hasMinus = tryConsume(Punctuation.MINUS)
         val expr = parseLiteralExpr()
         return LiteralPatternNode(hasMinus, expr)
     }
 
     private fun parseIdentifierPattern(): IdentifierPatternNode {
-        val hasRef = if (peek(1)?.type == Keyword.REF) {
-            consume()
-            true
-        } else false
-        val hasMut = if (peek(1)?.type == Keyword.MUT) {
-            consume()
-            true
-        } else false
+        val hasRef = tryConsume(Keyword.REF)
+        val hasMut = tryConsume(Keyword.MUT)
         val id = expectAndConsume(Identifier)
-        if (peek(1)?.type == Punctuation.AT) {
+        if (tryConsume(Punctuation.AT)) {
             val subPattern = parsePattern()
             return IdentifierPatternNode(hasRef, hasMut, id, subPattern)
         } else return IdentifierPatternNode(hasRef, hasMut, id, null)
@@ -541,7 +532,7 @@ class RParser(val input: MutableList<Token>) {
             else -> throw CompileError("Parser:Expect ref-pattern, met ${peek(1)}")
         }
         consume()
-        val hasMut = if (peek(1)?.type == Keyword.MUT) true else false
+        val hasMut = tryConsume(Keyword.MUT)
         val pattern = parsePattern()
         return RefPatternNode(isDouble, hasMut, pattern)
     }
