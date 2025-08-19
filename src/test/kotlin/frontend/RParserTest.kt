@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import utils.CompileError
+import java.nio.file.Path
 
 
 class RParserTest {
@@ -217,9 +218,9 @@ class RParserTest {
         """
         val stmts = (parse(src).items[0] as FunctionItemNode).body!!.stmts
         val ifLet = (stmts[0] as ExprStmtNode).expr as IfExprNode
-        assertTrue(ifLet.conds[0].pattern is IdentifierPatternNode)
+        assertTrue(ifLet.conds[0].pattern is PathPatternNode)
         val whileLet = (stmts[1] as ExprStmtNode).expr as WhileExprNode
-        assertTrue(whileLet.conds[0].pattern is IdentifierPatternNode)
+        assertTrue(whileLet.conds[0].pattern is PathPatternNode)
     }
 
     @Test
@@ -234,17 +235,6 @@ class RParserTest {
         assertTrue((loopBlock.stmts[1] as ExprStmtNode).expr is ContinueExprNode)
     }
 
-//    @Test
-//    fun testRangeExpressions() {
-//        val src = "fn main() { (..); (1..); (..2); (..=3); (4..5); (6..=7); }"
-//        val stmts = (parse(src).items[0] as FunctionItemNode).body.stmts
-//        assertTrue(((stmts[0] as ExprStmtNode).expr as GroupedExprNode).expr is RangeExprNode)
-//        assertTrue(((stmts[1] as ExprStmtNode).expr as GroupedExprNode).expr is RangeExprNode)
-//        assertTrue(((stmts[2] as ExprStmtNode).expr as GroupedExprNode).expr is RangeExprNode)
-//        assertTrue(((stmts[3] as ExprStmtNode).expr as GroupedExprNode).expr is RangeExprNode)
-//        assertTrue(((stmts[4] as ExprStmtNode).expr as GroupedExprNode).expr is RangeExprNode)
-//        assertTrue(((stmts[5] as ExprStmtNode).expr as GroupedExprNode).expr is RangeExprNode)
-//    }
 
     // --- Type Parsing Tests ---
 
@@ -252,7 +242,7 @@ class RParserTest {
     fun testVariousTypes() {
         val src = """
            struct Me {
-                 a : i32 , b : & a , c : [ i32 ; true ] , d : [ char ] , e : _
+                 a : i32 , b : & a , c : [ i32 ; true ] , d : [ char ] 
            }
         """
         val fields = (parse(src).items[0] as StructItemNode).fields
@@ -261,7 +251,6 @@ class RParserTest {
         assertTrue(fields[1].type is RefTypeNode)
         assertTrue(fields[2].type is ArrayTypeNode)
         assertTrue(fields[3].type is SliceTypeNode)
-        assertTrue(fields[4].type is InferredTypeNode)
     }
 
 

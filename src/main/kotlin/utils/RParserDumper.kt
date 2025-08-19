@@ -188,7 +188,6 @@ fun ExprNode.dumpToString(indent: Int): String {
         is ArrayExprNode -> this.dumpToString(indent)
         is IndexExprNode -> this.dumpToString(indent)
         is StructExprNode -> this.dumpToString(indent)
-        is RangeExprNode -> this.dumpToString(indent)
         is UnderscoreExprNode -> this.dumpToString(indent)
         is UnaryExprNode -> this.dumpToString(indent)
         is BinaryExprNode -> this.dumpToString(indent)
@@ -401,16 +400,6 @@ fun StructExprNode.StructExprField.dumpToString(indent: Int): String {
     return builder.toString()
 }
 
-fun RangeExprNode.dumpToString(indent: Int): String {
-    val builder = StringBuilder()
-    val padding = " ".repeat(indent)
-    builder.append("${padding}RangeExprNode (op=${op}) {\n")
-    this.from?.let { builder.append("${padding}  from: ${it.dumpToString(indent + 2)}") }
-    this.to?.let { builder.append("${padding}  to: ${it.dumpToString(indent + 2)}") }
-    builder.append("${padding}}\n")
-    return builder.toString()
-}
-
 fun UnderscoreExprNode.dumpToString(indent: Int): String {
     val padding = " ".repeat(indent)
     return "${padding}UnderscoreExprNode\n"
@@ -492,7 +481,6 @@ fun TypeNode.dumpToString(indent: Int): String {
         is RefTypeNode -> this.dumpToString(indent)
         is ArrayTypeNode -> this.dumpToString(indent)
         is SliceTypeNode -> this.dumpToString(indent)
-        is InferredTypeNode -> this.dumpToString(indent)
         is UnitTypeNode -> this.dumpToString(indent)
     }
 }
@@ -530,10 +518,6 @@ fun SliceTypeNode.dumpToString(indent: Int): String {
     return builder.toString()
 }
 
-fun InferredTypeNode.dumpToString(indent: Int): String {
-    val padding = " ".repeat(indent)
-    return "${padding}InferredTypeNode\n"
-}
 
 fun UnitTypeNode.dumpToString(indent: Int): String {
     val padding = " ".repeat(indent)

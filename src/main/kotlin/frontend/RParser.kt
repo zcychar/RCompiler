@@ -206,9 +206,16 @@ class RParser(val input: MutableList<Token>) {
 
     //----------------------ParseExpr------------------------------
 
-
     private fun parseExpr(pre: Int = 0): ExprNode {
-        var left = when (peek(1)?.type) {
+        var left = parsePrefix()
+        while (!eof() && pre < getInfixPrecedence(peek(1)?.type)) {
+            left = parseInfix(left)
+        }
+        return left
+    }
+
+    private fun parsePrefix(): ExprNode {
+        return when (peek(1)?.type) {
             is Literal, Keyword.TRUE, Keyword.FALSE -> parseLiteralExpr()
             Identifier -> parseIdentifierExpr()
             Punctuation.LEFT_PAREN -> parseGroupedExpr()
@@ -221,31 +228,33 @@ class RParser(val input: MutableList<Token>) {
             Keyword.LOOP -> parseLoopExpr()
             Keyword.WHILE -> parseWhileExpr()
             Keyword.MATCH -> parseMatchExpr()
-            Keyword.CONST -> {
-                if (peek(2)?.type == Punctuation.LEFT_BRACE) parseBlockExpr()
-                else throw CompileError("TODO")
-            }
-
             Punctuation.UNDERSCORE -> parseUnderscoreExpr()
-            Punctuation.DOT_DOT -> throw CompileError("TODO")
             in unaryOp -> parseUnaryExpr()
             else -> throw CompileError("Parser:Expect expression, met ${peek(1)}")
         }
+    }
 
-        while (peek(1)?.type in precedence && (precedence[peek(1)?.type]?.first ?: -1) > pre) {
-            left = when (peek(1)?.type as TokenType) {
-                in binaryOp -> parseBinaryExpr(left)
-                Punctuation.LEFT_PAREN -> parseCallExpr(left)
-                Punctuation.DOT -> {
-                    if (peek(2)?.type == Keyword.SELF || peek(2)?.type == Keyword.SELF_UPPER || peek(3)?.type == Punctuation.LEFT_PAREN) {
-                        parseMethodCallExpr(left)
-                    } else parseFieldAccessExpr(left)
-                }
-
-                else -> throw CompileError("Parser:Expect right-side pattern, met ${peek(1)}")
+    private fun parseInfix(left: ExprNode): ExprNode {
+        val operator = peek(1)?.type ?: throw CompileError("Parser:expect binary operator, met null")
+        val pre = getInfixPrecedence(operator)
+        return when (operator) {
+            in binaryOp -> {
+                consume()
+                val right = parseExpr(pre)
+                BinaryExprNode(operator, left, right)
             }
+
+            Punctuation.LEFT_PAREN -> parseCallExpr(left)
+            Punctuation.DOT -> {
+                if (peek(2)?.type == Identifier && peek(3)?.type == Punctuation.LEFT_PAREN) {
+                    parseMethodCallExpr(left)
+                } else parseFieldAccessExpr(left)
+            }
+
+            Punctuation.LEFT_BRACKET -> parseIndexExpr(left)
+            Punctuation.LEFT_BRACE -> parseStructExpr(left)
+            else -> throw CompileError("Parser: Invalid infix operator: $operator")
         }
-        return left
     }
 
     private fun parseIdentifierExpr(): IdentifierExprNode = IdentifierExprNode(expectAndConsume(Identifier))
@@ -457,21 +466,6 @@ class RParser(val input: MutableList<Token>) {
         return UnaryExprNode(op, hasMut, rhs)
     }
 
-    private fun parseBinaryExpr(left: ExprNode): ExprNode {
-        val op = consume().type
-        return when (op) {
-            in precedence -> {
-                val right = parseExpr(precedence[op]!!.second)
-                BinaryExprNode(op, left, right)
-            }
-
-            Punctuation.LEFT_BRACKET -> parseIndexExpr(left)
-            Punctuation.LEFT_BRACE -> parseStructExpr(left)
-            Punctuation.LEFT_PAREN -> parseCallExpr(left)
-            Punctuation.DOT -> parseFieldAccessExpr(left)
-            else -> throw CompileError("Parser:Expect binary op for expression, met ${peek(1)}")
-        }
-    }
 
     private fun parseConds(): List<CondExprNode> {
         val conds = mutableListOf<CondExprNode>()
@@ -481,7 +475,6 @@ class RParser(val input: MutableList<Token>) {
                     val pattern = parsePattern()
                     expectAndConsume(Punctuation.EQUAL)
                     val expr = parseExpr()
-                    println(input.subList(position,input.size))
                     CondExprNode(pattern, expr)
                 } else CondExprNode(null, parseExpr())
             )
@@ -489,7 +482,6 @@ class RParser(val input: MutableList<Token>) {
         }
         return conds
     }
-
 
     //---------------------ParsePattern-----------------------------
     private fun parsePattern(): PatternNode {
@@ -571,13 +563,12 @@ class RParser(val input: MutableList<Token>) {
 
     private fun parseExprStmt(): ExprStmtNode {
         val expr = parseExpr()
-        if (expr is ExprWIBlock) expectAndConsume(Punctuation.SEMICOLON) else tryConsume(Punctuation.SEMICOLON)
+        if (expr is ExprWOBlock) expectAndConsume(Punctuation.SEMICOLON) else tryConsume(Punctuation.SEMICOLON)
         return ExprStmtNode(expr)
     }
 
     //-----------------------ParseType------------------------------
     private fun parseType(): TypeNode = when (peek(1)?.type) {
-        Punctuation.UNDERSCORE -> parseInferredType()
         Punctuation.AMPERSAND -> parseRefType()
         Punctuation.LEFT_BRACKET -> parseArrayOrSliceType()
         Identifier, Keyword.SELF, Keyword.SELF_UPPER -> parseTypePath()
@@ -606,12 +597,6 @@ class RParser(val input: MutableList<Token>) {
             expectAndConsume(Punctuation.RIGHT_BRACKET)
             return SliceTypeNode(type)
         }
-    }
-
-
-    private fun parseInferredType(): InferredTypeNode {
-        expectAndConsume(Punctuation.UNDERSCORE)
-        return InferredTypeNode
     }
 
 

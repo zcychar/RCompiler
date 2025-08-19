@@ -1,5 +1,6 @@
 import frontend.*
 import utils.CompileError
+import utils.dumpToString
 
 fun main(args: Array<String>) {
 
@@ -14,7 +15,8 @@ fun main(args: Array<String>) {
         println("--------tokens---------")
         val parser= RParser(lexer.process())
         println(lexer.dumpToString())
-        println(parser.process())
+        parser.process()
+        println(parser.dumpToString())
     }catch(e: CompileError) {
         println(e.message)
     }

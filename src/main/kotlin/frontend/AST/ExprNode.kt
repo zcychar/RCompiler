@@ -55,8 +55,6 @@ data class StructExprNode(val path: ExprNode,val fields:List<StructExprField>): 
     data class StructExprField(val id:String ,val expr: ExprNode?)
 }
 
-data class RangeExprNode(val op: TokenType, val from: ExprNode?, val to: ExprNode?) : ExprWOBlock
-
 data object UnderscoreExprNode : ExprWOBlock
 
 data class UnaryExprNode(val op: TokenType, val hasMut: Boolean, val rhs: ExprNode) : ExprWOBlock

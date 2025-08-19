@@ -193,3 +193,13 @@ val precedence = mapOf<TokenType, Pair<Int, Int>>(
     Punctuation.DOT_DOT_EQUAL to Pair(21, 20)
 )
 
+fun getInfixPrecedence(op: TokenType?): Int {
+    return when {
+        (op as TokenType) in binaryOp -> precedence[op]?.first ?: 0
+        op == Punctuation.DOT -> 200
+        op == Punctuation.LEFT_PAREN -> 200
+        op == Punctuation.LEFT_BRACKET -> 200
+        else -> 0
+    }
+}
+

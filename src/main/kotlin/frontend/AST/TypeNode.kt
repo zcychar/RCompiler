@@ -12,6 +12,5 @@ data class ArrayTypeNode(val type: TypeNode, val expr: ExprNode) : TypeNode
 
 data class SliceTypeNode(val type: TypeNode) : TypeNode
 
-data object InferredTypeNode : TypeNode
 
 data object UnitTypeNode : TypeNode
