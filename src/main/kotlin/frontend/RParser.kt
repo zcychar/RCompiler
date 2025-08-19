@@ -41,7 +41,7 @@ class RParser(val input: MutableList<Token>) {
         return input[position].value
     }
 
-    private fun eof(): Boolean = position < input.size
+    private fun eof(): Boolean = position >= input.size
 
     fun process() = parseCrate()
 
@@ -53,7 +53,7 @@ class RParser(val input: MutableList<Token>) {
         }
         return CrateNode(items.toList())
     }
-
+//TODO:Check all commas
 
     //----------------------ParseItem------------------------------
     private fun parseItem(): ItemNode {
@@ -64,7 +64,12 @@ class RParser(val input: MutableList<Token>) {
             Keyword.FN -> parseFunctionItem()
             Keyword.STRUCT -> parseStructItem()
             Keyword.ENUM -> parseEnumItem()
-            Keyword.CONST -> parseConstItem()
+            Keyword.CONST -> {
+                if (nextToken?.type == Keyword.FN) parseFunctionItem()
+                else if(nextToken?.type== Identifier) parseConstItem()
+                else throw CompileError("Parser:Encounter invalid const item begin with :${input[position+1]}")
+            }
+
             Keyword.TRAIT -> parseTraitItem()
             Keyword.IMPL -> parseImplItem()
             else -> throw CompileError("Parser:Encounter invalid item begin with :${input[position]}")
@@ -115,29 +120,20 @@ class RParser(val input: MutableList<Token>) {
     private fun parseStructItem(): StructItemNode {
         expectAndConsume(Keyword.STRUCT)
         val id = expectAndConsume(Identifier)
-        val fields: List<StructItemNode.StructField> = when (peek(1)?.type) {
-            Punctuation.LEFT_BRACE -> {
-                val tmp_field = mutableListOf<StructItemNode.StructField>()
-                while (peek(1)?.type != Punctuation.RIGHT_BRACE) {
-                    tmp_field.add(run {
-                        val id = expectAndConsume(Identifier)
-                        expectAndConsume(Punctuation.COLON)
-                        val type = parseType()
-                        StructItemNode.StructField(id, type)
-                    })
-                    if (peek(1)?.type == Punctuation.COMMA) consume()
+        val fields = mutableListOf<StructItemNode.StructField>()
+        if (tryConsume(Punctuation.LEFT_BRACE)) {
+            while (!tryConsume(Punctuation.RIGHT_BRACE)) {
+                fields.add(run {
+                    val id = expectAndConsume(Identifier)
+                    expectAndConsume(Punctuation.COLON)
+                    val type = parseType()
+                    StructItemNode.StructField(id, type)
+                })
+                if (peek(1)?.type != Punctuation.RIGHT_BRACE) {
+                    expectAndConsume(Punctuation.COMMA)
                 }
-                expectAndConsume(Punctuation.RIGHT_BRACE)
-                tmp_field.toList()
             }
-
-            Punctuation.SEMICOLON -> {
-                consume()
-                listOf()
-            }
-
-            else -> throw CompileError("Parser:invalid token for struct field: ${peek(1)}")
-        }
+        } else expectAndConsume(Punctuation.SEMICOLON)
         return StructItemNode(id, fields)
     }
 
@@ -146,11 +142,11 @@ class RParser(val input: MutableList<Token>) {
         val id = expectAndConsume(Identifier)
         expectAndConsume(Punctuation.LEFT_BRACE)
         val variants = mutableListOf<String>()
-        while (peek(1)?.type != Punctuation.RIGHT_BRACE) {
+        while (!tryConsume(Punctuation.RIGHT_BRACE)) {
             variants.add(expectAndConsume(Identifier))
-            if (peek(1)?.type == Punctuation.COMMA) consume()
+
+            if (peek(1)?.type != Punctuation.RIGHT_BRACE) expectAndConsume(Punctuation.COMMA)
         }
-        expectAndConsume(Punctuation.RIGHT_BRACE)
         return EnumItemNode(id, variants)
     }
 
@@ -160,8 +156,7 @@ class RParser(val input: MutableList<Token>) {
         val id = expectAndConsume(Identifier)
         expectAndConsume(Punctuation.COLON)
         val type = parseType()
-        if (peek(1)?.type == Punctuation.EQUAL) {
-            consume()
+        if (tryConsume(Punctuation.EQUAL)) {
             val expr = parseExpr()
             expectAndConsume(Punctuation.SEMICOLON)
             return ConstItemNode(id, type, expr)
@@ -211,7 +206,7 @@ class RParser(val input: MutableList<Token>) {
 
     private fun parseExpr(pre: Int = 0): ExprNode {
         var left = when (peek(1)?.type) {
-            is Literal -> parseLiteralExpr()
+            is Literal, Keyword.TRUE, Keyword.FALSE -> parseLiteralExpr()
             Identifier -> parseIdentifierExpr()
             Punctuation.LEFT_PAREN -> parseGroupedExpr()
             Punctuation.LEFT_BRACKET -> parseArrayExpr()
@@ -328,10 +323,10 @@ class RParser(val input: MutableList<Token>) {
 
 
     private fun parseLiteralExpr(): ExprNode {
-        val token = peek(1)
-        if (token?.type is Literal) {
+        val token = consume()
+        if (token.type is Literal) {
             return LiteralExprNode(token.value, token.type)
-        } else if (token?.type == Keyword.TRUE || token?.type == Keyword.FALSE) {
+        } else if (token.type == Keyword.TRUE || token.type == Keyword.FALSE) {
             return LiteralExprNode(null, token.type)
         } else {
             throw CompileError("Parser:Expect literal-expression, met $token")
@@ -572,7 +567,7 @@ class RParser(val input: MutableList<Token>) {
 
     private fun parseExprStmt(): ExprStmtNode {
         val expr = parseExpr()
-        if (expr is ExprWOBlock) expectAndConsume(Punctuation.SEMICOLON) else tryConsume(Punctuation.SEMICOLON)
+        if (expr is ExprWIBlock) expectAndConsume(Punctuation.SEMICOLON) else tryConsume(Punctuation.SEMICOLON)
         return ExprStmtNode(expr)
     }
 

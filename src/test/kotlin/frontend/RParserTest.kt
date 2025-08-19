@@ -10,7 +10,8 @@ import utils.CompileError
 class RParserTest {
 
     private fun parse(src: String): CrateNode {
-        val tokens = RLexer(src).process()
+        val input = RPreprocessor(src).process()
+        val tokens = RLexer(input).process()
         return RParser(tokens).process()
     }
 
@@ -21,6 +22,16 @@ class RParserTest {
         val src = ""
         val crate = parse(src)
         assertTrue(crate.items.isEmpty(), "An empty source should result in a crate with no items.")
+    }
+
+    @Test
+    fun testSimpleFunctionItem() {
+        val src = """
+            fn first_function() {}
+        """
+        val crate = parse(src)
+        assertEquals(1, crate.items.size, "Crate should contain one items.")
+        assertTrue(crate.items[0] is FunctionItemNode)
     }
 
     @Test
@@ -50,7 +61,7 @@ class RParserTest {
         val func = crate.items[0] as FunctionItemNode
         assertEquals("add", func.name)
         assertEquals(2, func.funParams.size)
-        assertEquals("x", (func.funParams[0].pattern as IdentifierPatternNode).id)
+        assertEquals("x", (func.funParams[0].pattern as PathPatternNode).path.seg1.id)
         assertEquals("i32", (func.funParams[0].type as TypePathNode).id)
         assertNotNull(func.returnType)
         assertEquals("i32", (func.returnType as TypePathNode).id)
@@ -236,6 +247,22 @@ class RParserTest {
 //    }
 
     // --- Type Parsing Tests ---
+
+    @Test
+    fun testVariousTypes() {
+        val src = """
+           struct Me {
+                 a : i32 , b : & a , c : [ i32 ; true ] , d : [ char ] , e : _
+           }
+        """
+        val fields = (parse(src).items[0] as StructItemNode).fields
+        assertEquals(fields.size, 5)
+        assertTrue(fields[0].type is TypePathNode)
+        assertTrue(fields[1].type is RefTypeNode)
+        assertTrue(fields[2].type is ArrayTypeNode)
+        assertTrue(fields[3].type is SliceTypeNode)
+        assertTrue(fields[4].type is InferredTypeNode)
+    }
 
 
     // --- Error Handling Tests ---
