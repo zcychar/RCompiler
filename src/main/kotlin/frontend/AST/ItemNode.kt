@@ -14,7 +14,7 @@ data class FunctionItemNode(
     data class FunParamNode(val pattern: PatternNode, val type: TypeNode)
 }
 
-data class StructItemNode(val name: String, val fields: List<StructField>?) : ItemNode {
+data class StructItemNode(val name: String, val fields: List<StructField>) : ItemNode {
     data class StructField(val name: String, val type: TypeNode)
 }
 

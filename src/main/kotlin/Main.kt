@@ -5,7 +5,7 @@ fun main(args: Array<String>) {
 
     val resourcePath = if(args.isEmpty()) readln() else args[0]
     val inputStream = object {}.javaClass.getResourceAsStream(resourcePath)
-    val rawText = inputStream.bufferedReader().readText()
+    val rawText = inputStream?.bufferedReader()!!.readText()
     try{
         println("-----preprocessed-----")
         val preprocessor = RPreprocessor(rawText)
@@ -14,7 +14,7 @@ fun main(args: Array<String>) {
         println("--------tokens---------")
         val parser= RParser(lexer.process())
         println(lexer.dumpToString())
-        parser.process()
+        println(parser.process())
     }catch(e: CompileError) {
         println(e.message)
     }

@@ -49,6 +49,7 @@ class RParser(val input: MutableList<Token>) {
         val items = mutableListOf<ItemNode>()
         while (!eof()) {
             items.add(parseItem())
+            println("now parsed ${items.last()}")
         }
         return CrateNode(items.toList())
     }
@@ -406,7 +407,7 @@ class RParser(val input: MutableList<Token>) {
             val guard = if (tryConsume(Keyword.IF)) parseExpr() else null
             expectAndConsume(Punctuation.FAT_ARROW)
             val expr = parseExpr()
-            arms.add(Pair(MatchExprNode.MatchArmNode(pattern, guard), expr))
+            arms.add(Pair(MatchArmNode(pattern, guard), expr))
             if (peek(1)?.type != Punctuation.COMMA && peek(1)?.type != Punctuation.RIGHT_BRACE && expr !is ExprWOBlock) {
                 throw CompileError("Parser:Expect comma in not-end match arm, met ${peek(1)}")
             }
