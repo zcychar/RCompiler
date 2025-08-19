@@ -3,11 +3,13 @@ package frontend
 import frontend.AST.*
 import frontend.AST.MatchExprNode.MatchArmNode
 import utils.CompileError
+import utils.dumpToString
 
 
 class RParser(val input: MutableList<Token>) {
     private var position = 0
 
+    var crate = CrateNode(listOf())
 
     private fun peek(offset: Int): Token? {
         if (position + offset - 1 < input.size) return input[position + offset - 1]
@@ -49,9 +51,10 @@ class RParser(val input: MutableList<Token>) {
         val items = mutableListOf<ItemNode>()
         while (!eof()) {
             items.add(parseItem())
-            println("now parsed ${items.last()}")
+            println("now parsed \n ${items.last().dumpToString(0)}")
         }
-        return CrateNode(items.toList())
+        crate = CrateNode(items.toList())
+        return crate
     }
 //TODO:Check all commas
 
@@ -66,8 +69,8 @@ class RParser(val input: MutableList<Token>) {
             Keyword.ENUM -> parseEnumItem()
             Keyword.CONST -> {
                 if (nextToken?.type == Keyword.FN) parseFunctionItem()
-                else if(nextToken?.type== Identifier) parseConstItem()
-                else throw CompileError("Parser:Encounter invalid const item begin with :${input[position+1]}")
+                else if (nextToken?.type == Identifier) parseConstItem()
+                else throw CompileError("Parser:Encounter invalid const item begin with :${input[position + 1]}")
             }
 
             Keyword.TRAIT -> parseTraitItem()
@@ -230,13 +233,13 @@ class RParser(val input: MutableList<Token>) {
         }
 
         while (peek(1)?.type in precedence && (precedence[peek(1)?.type]?.first ?: -1) > pre) {
-            left = when (peek(1)?.type) {
+            left = when (peek(1)?.type as TokenType) {
                 in binaryOp -> parseBinaryExpr(left)
                 Punctuation.LEFT_PAREN -> parseCallExpr(left)
                 Punctuation.DOT -> {
                     if (peek(2)?.type == Keyword.SELF || peek(2)?.type == Keyword.SELF_UPPER || peek(3)?.type == Punctuation.LEFT_PAREN) {
                         parseMethodCallExpr(left)
-                    } else parseCallExpr(left)
+                    } else parseFieldAccessExpr(left)
                 }
 
                 else -> throw CompileError("Parser:Expect right-side pattern, met ${peek(1)}")
@@ -478,10 +481,11 @@ class RParser(val input: MutableList<Token>) {
                     val pattern = parsePattern()
                     expectAndConsume(Punctuation.EQUAL)
                     val expr = parseExpr()
+                    println(input.subList(position,input.size))
                     CondExprNode(pattern, expr)
                 } else CondExprNode(null, parseExpr())
             )
-            tryConsume(Punctuation.AND_AND)
+            if (peek(1)?.type != Punctuation.LEFT_BRACE) expectAndConsume(Punctuation.AND_AND)
         }
         return conds
     }
