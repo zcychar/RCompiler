@@ -563,7 +563,10 @@ class RParser(val input: MutableList<Token>) {
 
     private fun parseExprStmt(): ExprStmtNode {
         val expr = parseExpr()
-        if (expr is ExprWOBlock) expectAndConsume(Punctuation.SEMICOLON) else tryConsume(Punctuation.SEMICOLON)
+        if (expr is ExprWOBlock) {
+            if (peek(1)?.type != Punctuation.RIGHT_BRACE)
+                expectAndConsume(Punctuation.SEMICOLON)
+        } else tryConsume(Punctuation.SEMICOLON)
         return ExprStmtNode(expr)
     }
 

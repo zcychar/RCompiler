@@ -246,7 +246,7 @@ class RParserTest {
            }
         """
         val fields = (parse(src).items[0] as StructItemNode).fields
-        assertEquals(fields.size, 5)
+        assertEquals(fields.size, 4)
         assertTrue(fields[0].type is TypePathNode)
         assertTrue(fields[1].type is RefTypeNode)
         assertTrue(fields[2].type is ArrayTypeNode)
