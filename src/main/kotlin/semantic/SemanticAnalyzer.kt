@@ -14,6 +14,7 @@ class SemanticAnalyzer {
     private val errors = mutableListOf<SemanticError>()
     private var currentReturnType: SemanticType = PrimitiveType.UNIT
     private var inLoop = false
+    private var hasExplicitReturn = false
     
     fun analyze(crate: CrateNode): AnalysisResult {
         errors.clear()
@@ -156,6 +157,7 @@ class SemanticAnalyzer {
         
         // Set current function return type
         currentReturnType = function.returnType?.let { convertTypeNodeToSemanticType(it) } ?: PrimitiveType.UNIT
+        hasExplicitReturn = false
         
         // Declare parameters in function scope
         function.funParams.forEach { param ->
@@ -174,7 +176,8 @@ class SemanticAnalyzer {
         // Analyze function body
         if (function.body != null) {
             val bodyType = analyzeBlockExpression(function.body)
-            if (!TypeUtils.canAssign(bodyType, currentReturnType)) {
+            // If the function has explicit returns, don't check block return type
+            if (!hasExplicitReturn && !TypeUtils.canAssign(bodyType, currentReturnType)) {
                 errors.add(SemanticError(SemanticErrorType.InvalidReturnType(currentReturnType.getName(), bodyType.getName()).message))
             }
         }
@@ -356,6 +359,7 @@ class SemanticAnalyzer {
     }
     
     private fun analyzeReturnExpression(expr: ReturnExprNode): SemanticType {
+        hasExplicitReturn = true
         val returnType = if (expr.expr != null) {
             analyzeExpression(expr.expr)
         } else {
@@ -513,7 +517,7 @@ class SemanticAnalyzer {
         return when (pattern) {
             is IdentifierPatternNode -> pattern.id
             is LiteralPatternNode -> "_literal" // Placeholder for literal patterns
-            is PathPatternNode -> "_path" // Placeholder for path patterns
+            is PathPatternNode -> pattern.path.seg1.id ?: "_path" // Extract identifier from path
             is WildcardPatternNode -> "_"
             is RefPatternNode -> extractPatternName(pattern.pattern)
         }
