@@ -1,4 +1,6 @@
 import frontend.*
+import semantic.SemanticAnalyzer
+import semantic.SemanticAnalysisDumper
 import utils.CompileError
 import utils.dumpToString
 
@@ -15,8 +17,22 @@ fun main(args: Array<String>) {
         println("--------tokens---------")
         val parser= RParser(lexer.process())
         println(lexer.dumpToString())
-        parser.process()
+        val ast = parser.process()
+        println("--------AST---------")
         println(parser.dumpToString())
+        
+        // Add semantic analysis
+        println("----semantic analysis----")
+        val semanticAnalyzer = SemanticAnalyzer()
+        val analysisResult = semanticAnalyzer.analyze(ast)
+        println(SemanticAnalysisDumper.dumpAnalysisResult(analysisResult))
+        
+        if (analysisResult.hasErrors) {
+            println("Compilation failed due to semantic errors.")
+        } else {
+            println("Semantic analysis completed successfully!")
+        }
+        
     }catch(e: CompileError) {
         println(e.message)
     }

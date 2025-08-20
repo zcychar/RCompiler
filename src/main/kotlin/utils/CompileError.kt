@@ -1,5 +1,5 @@
 package utils
 
-class CompileError(message: String): Exception(message){
+open class CompileError(message: String): Exception(message){
 
 }
