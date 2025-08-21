@@ -41,6 +41,5 @@ interface ASTVisitor<T> {
     fun visit(node: TypePathNode): T
     fun visit(node: RefTypeNode): T
     fun visit(node: ArrayTypeNode): T
-    fun visit(node: SliceTypeNode): T
     fun visit(node: UnitTypeNode): T
 }

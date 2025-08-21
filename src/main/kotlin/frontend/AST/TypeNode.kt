@@ -18,10 +18,6 @@ data class ArrayTypeNode(val type: TypeNode, val expr: ExprNode) : TypeNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class SliceTypeNode(val type: TypeNode) : TypeNode {
-    override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
-}
-
 data object UnitTypeNode : TypeNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }

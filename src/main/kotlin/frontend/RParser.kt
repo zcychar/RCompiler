@@ -573,7 +573,7 @@ class RParser(val input: MutableList<Token>) {
     //-----------------------ParseType------------------------------
     private fun parseType(): TypeNode = when (peek(1)?.type) {
         Punctuation.AMPERSAND -> parseRefType()
-        Punctuation.LEFT_BRACKET -> parseArrayOrSliceType()
+        Punctuation.LEFT_BRACKET -> parseArrayType()
         Identifier, Keyword.SELF, Keyword.SELF_UPPER -> parseTypePath()
         else -> throw CompileError("Parser:Expect type, met ${peek(1)}")
     }
@@ -589,17 +589,13 @@ class RParser(val input: MutableList<Token>) {
         return RefTypeNode(tryConsume(Keyword.MUT), parseType())
     }
 
-    private fun parseArrayOrSliceType(): TypeNode {
+    private fun parseArrayType(): TypeNode {
         expectAndConsume(Punctuation.LEFT_BRACKET)
         val type = parseType()
-        if (tryConsume(Punctuation.SEMICOLON)) {
-            val expr = parseExpr()
-            expectAndConsume(Punctuation.RIGHT_BRACKET)
-            return ArrayTypeNode(type, expr)
-        } else {
-            expectAndConsume(Punctuation.RIGHT_BRACKET)
-            return SliceTypeNode(type)
-        }
+        expectAndConsume(Punctuation.SEMICOLON)
+        val expr = parseExpr()
+        expectAndConsume(Punctuation.RIGHT_BRACKET)
+        return ArrayTypeNode(type, expr)
     }
 
 

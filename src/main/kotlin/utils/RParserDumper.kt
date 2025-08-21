@@ -480,7 +480,6 @@ fun TypeNode.dumpToString(indent: Int): String {
         is TypePathNode -> this.dumpToString(indent)
         is RefTypeNode -> this.dumpToString(indent)
         is ArrayTypeNode -> this.dumpToString(indent)
-        is SliceTypeNode -> this.dumpToString(indent)
         is UnitTypeNode -> this.dumpToString(indent)
     }
 }
@@ -505,15 +504,6 @@ fun ArrayTypeNode.dumpToString(indent: Int): String {
     builder.append("${padding}ArrayTypeNode {\n")
     builder.append(this.type.dumpToString(indent + 2))
     builder.append(this.expr.dumpToString(indent + 2))
-    builder.append("${padding}}\n")
-    return builder.toString()
-}
-
-fun SliceTypeNode.dumpToString(indent: Int): String {
-    val builder = StringBuilder()
-    val padding = " ".repeat(indent)
-    builder.append("${padding}SliceTypeNode {\n")
-    builder.append(this.type.dumpToString(indent + 2))
     builder.append("${padding}}\n")
     return builder.toString()
 }

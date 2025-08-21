@@ -242,15 +242,14 @@ class RParserTest {
     fun testVariousTypes() {
         val src = """
            struct Me {
-                 a : i32 , b : & a , c : [ i32 ; true ] , d : [ char ] 
+                 a : i32 , b : & a , c : [ i32 ; true ] 
            }
         """
         val fields = (parse(src).items[0] as StructItemNode).fields
-        assertEquals(fields.size, 4)
+        assertEquals(fields.size, 3)
         assertTrue(fields[0].type is TypePathNode)
         assertTrue(fields[1].type is RefTypeNode)
         assertTrue(fields[2].type is ArrayTypeNode)
-        assertTrue(fields[3].type is SliceTypeNode)
     }
 
 
