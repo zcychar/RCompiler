@@ -575,6 +575,7 @@ class RParser(val input: MutableList<Token>) {
         Punctuation.AMPERSAND -> parseRefType()
         Punctuation.LEFT_BRACKET -> parseArrayType()
         Identifier, Keyword.SELF, Keyword.SELF_UPPER -> parseTypePath()
+        Punctuation.LEFT_PAREN -> parseUnitType()
         else -> throw CompileError("Parser:Expect type, met ${peek(1)}")
     }
 
@@ -589,7 +590,7 @@ class RParser(val input: MutableList<Token>) {
         return RefTypeNode(tryConsume(Keyword.MUT), parseType())
     }
 
-    private fun parseArrayType(): TypeNode {
+    private fun parseArrayType(): ArrayTypeNode {
         expectAndConsume(Punctuation.LEFT_BRACKET)
         val type = parseType()
         expectAndConsume(Punctuation.SEMICOLON)
@@ -598,6 +599,11 @@ class RParser(val input: MutableList<Token>) {
         return ArrayTypeNode(type, expr)
     }
 
+    private fun parseUnitType(): UnitTypeNode {
+        expectAndConsume(Punctuation.LEFT_PAREN)
+        expectAndConsume(Punctuation.RIGHT_PAREN)
+        return UnitTypeNode
+    }
 
     //----------------------support---------------------------------
 
