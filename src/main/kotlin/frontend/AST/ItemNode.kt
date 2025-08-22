@@ -9,7 +9,7 @@ data class FunctionItemNode(
     val name: String,
     val selfParam: SelfParamNode?,
     val funParams: List<FunParamNode>,
-    val returnType: TypeNode?,
+    val returnType: TypeNode,
     val body: BlockExprNode?
 ) : ItemNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)

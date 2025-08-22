@@ -2,22 +2,24 @@ package frontend.semantic
 
 import frontend.AST.*
 
-class RSymbolCollector : ASTVisitor<Unit>{
+class RSymbolCollector(val gScope: globalScope, val crate: CrateNode) : ASTVisitor<Unit> {
 
-    override fun visit(node: CrateNode) {
-        TODO("Not yet implemented")
-    }
+    var currentScope: Scope? = gScope
+
+    fun process() = visit(crate)
+
+    override fun visit(node: CrateNode)= node.items.forEach { it.accept(this) }
 
     override fun visit(node: FunctionItemNode) {
-        TODO("Not yet implemented")
+
     }
 
     override fun visit(node: StructItemNode) {
-        TODO("Not yet implemented")
+        currentScope?.define(node.name, StructType)
     }
 
     override fun visit(node: EnumItemNode) {
-        TODO("Not yet implemented")
+        currentScope?.define(node.name, StructType)
     }
 
     override fun visit(node: TraitItemNode) {
@@ -33,7 +35,9 @@ class RSymbolCollector : ASTVisitor<Unit>{
     }
 
     override fun visit(node: BlockExprNode) {
-        TODO("Not yet implemented")
+        currentScope= Scope(currentScope)
+        node.stmts.forEach { it.accept(this) }
+        currentScope= currentScope?.parentScope()
     }
 
     override fun visit(node: LoopExprNode) {
@@ -52,9 +56,7 @@ class RSymbolCollector : ASTVisitor<Unit>{
         TODO("Not yet implemented")
     }
 
-    override fun visit(node: ContinueExprNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: ContinueExprNode) {}
 
     override fun visit(node: IfExprNode) {
         TODO("Not yet implemented")

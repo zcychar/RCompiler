@@ -114,7 +114,7 @@ class RParser(val input: MutableList<Token>) {
             tryConsume(Punctuation.COMMA)
         }
         expectAndConsume(Punctuation.RIGHT_PAREN)
-        val returnType = if (tryConsume(Punctuation.RIGHT_ARROW)) parseType() else null
+        val returnType = if (tryConsume(Punctuation.RIGHT_ARROW)) parseType() else UnitTypeNode
 
         val blockExpr = if (!tryConsume(Punctuation.SEMICOLON)) parseBlockExpr() else null
         return FunctionItemNode(isConst, id, selfParam, params, returnType, blockExpr)
