@@ -17,24 +17,25 @@ open class Scope {
       throw CompileError("Semantic:duplicated variable: $name")
     }
     members.put(name, symbol)
+    types.put(name,symbol.type)
   }
 
   fun contain(name: String, lookup: Boolean): Boolean {
     if (members.containsKey(name)) return true
-    if (lookup) return parentScope?.contain(name, lookup) ?: false
-    else return false
+    return if (lookup) parentScope?.contain(name, true) ?: false
+    else false
   }
 
   fun getSymbol(name: String, lookup: Boolean): Symbol? {
     if (members.containsKey(name)) return members[name]
-    if (lookup) return parentScope?.getSymbol(name, lookup)
-    else return null
+    return if (lookup) parentScope?.getSymbol(name, true)
+    else null
   }
 
   fun getTypefromName(name: String, lookup: Boolean): Type? {
     if (types.containsKey(name)) return types[name]
-    if (lookup) return parentScope?.getTypefromName(name, lookup)
-    else return null
+    return if (lookup) parentScope?.getTypefromName(name, true)
+    else null
   }
 
   fun modifyType(name: String, type: Type) {

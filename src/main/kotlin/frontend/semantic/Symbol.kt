@@ -1,11 +1,10 @@
 package frontend.semantic
 
-sealed interface  Symbol
+sealed interface Symbol {
+    val name: String
+    val type: Type
+}
 
-data class FunctionSymbol(val name:String,val type:Type): Symbol
+data class TypeSymbol(override val name: String, override val type: Type) : Symbol
 
-data class ConstItemSymbol(val name:String,val type:Type,val value:Any?): Symbol
-
-data class StructSymbol(val name:String,val type:Type): Symbol
-
-data class EnumVarSymbol(val name:String,val type:Type): Symbol
+data class ValueSymbol(val mutable: Boolean, override val name: String, override val type: Type, val value: Any?) : Symbol
