@@ -1,6 +1,7 @@
 package frontend.AST
 
 import frontend.TokenType
+import frontend.semantic.Scope
 
 sealed interface ExprNode {
     fun <T> accept(visitor: ASTVisitor<T>): T
@@ -12,6 +13,7 @@ sealed interface ExprWOBlock : ExprNode
 
 data class BlockExprNode(val hasConst: Boolean, val stmts: List<StmtNode>) : ExprWIBlock {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
+    var scope: Scope? = null
 }
 
 data class LoopExprNode(val expr: BlockExprNode) : ExprWIBlock {

@@ -15,11 +15,12 @@ class RSymbolCollector(val gScope: globalScope, val crate: CrateNode) : ASTVisit
     }
 
     override fun visit(node: StructItemNode) {
-        currentScope?.define(node.name, StructType)
+
+        currentScope?.define(node.name, StructType(node.name,))
     }
 
     override fun visit(node: EnumItemNode) {
-        currentScope?.define(node.name, StructType)
+        currentScope?.define(node.name, )
     }
 
     override fun visit(node: TraitItemNode) {
@@ -35,6 +36,7 @@ class RSymbolCollector(val gScope: globalScope, val crate: CrateNode) : ASTVisit
     }
 
     override fun visit(node: BlockExprNode) {
+
         currentScope= Scope(currentScope)
         node.stmts.forEach { it.accept(this) }
         currentScope= currentScope?.parentScope()

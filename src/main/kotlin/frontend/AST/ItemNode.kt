@@ -1,5 +1,7 @@
 package frontend.AST
 
+import frontend.semantic.Scope
+
 sealed interface ItemNode {
     fun <T> accept(visitor: ASTVisitor<T>): T
 }
@@ -15,6 +17,8 @@ data class FunctionItemNode(
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
     data class SelfParamNode(val hasBorrow: Boolean, val hasMut: Boolean, val type: TypeNode?)
     data class FunParamNode(val pattern: PatternNode, val type: TypeNode)
+
+    var scope: Scope? = null
 }
 
 data class StructItemNode(val name: String, val fields: List<StructField>) : ItemNode {
