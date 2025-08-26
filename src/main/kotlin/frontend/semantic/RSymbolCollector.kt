@@ -2,33 +2,31 @@ package frontend.semantic
 
 import frontend.AST.*
 
-class RSymbolCollector(val gScope: globalScope, val crate: CrateNode) : ASTVisitor<Unit> {
+class RSymbolCollector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> {
 
     var currentScope: Scope? = gScope
 
     fun process() = visit(crate)
 
-    override fun visit(node: CrateNode)= node.items.forEach { it.accept(this) }
+    override fun visit(node: CrateNode) = node.items.forEach { it.accept(this) }
 
     override fun visit(node: FunctionItemNode) {
 
     }
 
     override fun visit(node: StructItemNode) {
-
-        currentScope?.define(node.name, StructType(node.name,))
+        currentScope?.define(node.name, StructSymbol(node.name, StructType(node.name, listOf())))
     }
 
     override fun visit(node: EnumItemNode) {
-        currentScope?.define(node.name, )
+        currentScope?.define(node.name, EnumSymbol(node.name, EnumType(node.name, node.variants)))
     }
 
     override fun visit(node: TraitItemNode) {
-        TODO("Not yet implemented")
+        currentScope?.define(node.name, TraitSymbol(node.name, TraitType, listOf()))
     }
 
-    override fun visit(node: ImplItemNode) {
-        TODO("Not yet implemented")
+    override fun visit(node: ImplItemNode){
     }
 
     override fun visit(node: ConstItemNode) {
@@ -37,9 +35,9 @@ class RSymbolCollector(val gScope: globalScope, val crate: CrateNode) : ASTVisit
 
     override fun visit(node: BlockExprNode) {
 
-        currentScope= Scope(currentScope)
+        currentScope = Scope(currentScope)
         node.stmts.forEach { it.accept(this) }
-        currentScope= currentScope?.parentScope()
+        currentScope = currentScope?.parentScope()
     }
 
     override fun visit(node: LoopExprNode) {

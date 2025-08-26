@@ -1,4 +1,5 @@
 import frontend.*
+import frontend.semantic.globalScope
 import utils.CompileError
 import utils.dumpToString
 
@@ -17,6 +18,7 @@ fun main(args: Array<String>) {
         println(lexer.dumpToString())
         parser.process()
         println(parser.dumpToString())
+        val gScope = globalScope()
     }catch(e: CompileError) {
         println(e.message)
     }

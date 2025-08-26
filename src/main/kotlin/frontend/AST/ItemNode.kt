@@ -34,7 +34,7 @@ data class ConstItemNode(val id: String, val type: TypeNode, val expr: ExprNode?
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class TraitItemNode(val id: String, val items: List<ItemNode>) : ItemNode {
+data class TraitItemNode(val name: String, val items: List<ItemNode>) : ItemNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 

@@ -105,7 +105,7 @@ fun ConstItemNode.dumpToString(indent: Int): String {
 fun TraitItemNode.dumpToString(indent: Int): String {
     val builder = StringBuilder()
     val padding = " ".repeat(indent)
-    builder.append("${padding}TraitItemNode (id=$id) {\n")
+    builder.append("${padding}TraitItemNode (id=$name) {\n")
     for (item in this.items) {
         builder.append(item.dumpToString(indent + 2))
     }

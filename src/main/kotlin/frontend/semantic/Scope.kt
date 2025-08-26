@@ -1,10 +1,13 @@
 package frontend.semantic
 
 import utils.CompileError
+import java.util.Vector
 import kotlin.system.exitProcess
 
 open class Scope {
     private val members = hashMapOf<String, Symbol>()
+
+    //the difference between types and named_types lies in the process of reference types
     private val types = hashMapOf<String, Type>()
     private var parentScope: Scope? = null
 
@@ -20,6 +23,7 @@ open class Scope {
         members.put(name, symbol)
         types.put(name, symbol.type)
     }
+
 
     fun contain(name: String, lookup: Boolean): Boolean {
         if (members.containsKey(name)) return true
@@ -50,6 +54,10 @@ open class Scope {
             ?: throw CompileError("Semantic:trying to add a method $methodName to undefined type $name")
     }
 
+    fun getCertainType(name: String): Type {
+        return getTypeFromName(name, true) ?: throw CompileError("Semantic:Refering to unknown type $name")
+    }
+
 }
 
 fun globalScope(): Scope {
@@ -69,27 +77,80 @@ fun globalScope(): Scope {
     gScope.addMethodToType(
         "u32",
         "toString",
-        FunctionType(listOf(ReferenceType(true, UnsignedIntType)), gScope.getTypeFromName("String", true)!!)
+        FunctionType(
+            FunctionType.SelfParam(ref = true, mutable = false, type = null),
+            listOf(),
+            gScope.getCertainType("String")
+        )
     )
     gScope.addMethodToType(
         "usize",
         "toString",
-        FunctionType(listOf(ReferenceType(true, UnsignedIntType)), gScope.getTypeFromName("String", true)!!)
+        FunctionType(
+            FunctionType.SelfParam(ref = true, mutable = false, type = null),
+            listOf(),
+            gScope.getCertainType("String")
+        )
     )
 
-
-
-
-    gScope.define("print", FunctionSymbol("print", FunctionType(listOf(StrType), UnitType)))
-    gScope.define("println", FunctionSymbol("println", FunctionType(listOf(StrType), UnitType)))
-    gScope.define("printInt", FunctionSymbol("printInt", FunctionType(listOf(IntType), UnitType)))
+    gScope.define("print", FunctionSymbol("print", FunctionType(null, listOf(StrType), UnitType)))
+    gScope.define("println", FunctionSymbol("println", FunctionType(null, listOf(StrType), UnitType)))
+    gScope.define("printInt", FunctionSymbol("printInt", FunctionType(null, listOf(IntType), UnitType)))
 
     gScope.define(
-        "getString", FunctionSymbol("getString", FunctionType(listOf(), gScope.getTypeFromName("String", true)!!))
+        "getString", FunctionSymbol("getString", FunctionType(null, listOf(), gScope.getCertainType("String")))
     )
-    gScope.define("getInt", FunctionSymbol("getString", FunctionType(listOf(), IntType)))
-    gScope.define("exit", FunctionSymbol("exit", FunctionType(listOf(IntType), UnitType)))
+    gScope.define("getInt", FunctionSymbol("getString", FunctionType(null, listOf(), IntType)))
+    gScope.define("exit", FunctionSymbol("exit", FunctionType(null, listOf(IntType), UnitType)))
 
-
+    gScope.addMethodToType(
+        "String",
+        "len",
+        FunctionType(
+            FunctionType.SelfParam(ref = true, mutable = false, type = null), listOf(),
+            UnsignedIntType
+        )
+    )
+    gScope.addMethodToType(
+        "String",
+        "as_str",
+        FunctionType(
+            FunctionType.SelfParam(ref = true, mutable = false, type = null),
+            listOf(), ReferenceType(false, StrType)
+        )
+    )
+    gScope.addMethodToType(
+        "String",
+        "as_mut_str",
+        FunctionType(
+            FunctionType.SelfParam(ref = true, mutable = true, type = null),
+            listOf(), ReferenceType(true, StrType)
+        )
+    )
+    gScope.addMethodToType(
+        "String",
+        "from",
+        FunctionType(
+            null, listOf(ReferenceType(false, StrType)),
+            gScope.getCertainType("String")
+        )
+    )
+    gScope.addMethodToType(
+        "String",
+        "from",
+        FunctionType(
+            null, listOf(ReferenceType(true, StrType)),
+            gScope.getCertainType("String")
+        )
+    )
+    gScope.addMethodToType(
+        "String",
+        "append",
+        FunctionType(
+            FunctionType.SelfParam(ref = true, mutable = true, type = null),
+            listOf(ReferenceType(false, StrType)),
+            UnitType
+        )
+    )
     return gScope
 }

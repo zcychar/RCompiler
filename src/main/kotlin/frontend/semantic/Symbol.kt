@@ -11,4 +11,7 @@ data class EnumSymbol(override val name: String, override val type: EnumType) : 
 
 data class FunctionSymbol(override val name: String, override val type: FunctionType) : Symbol
 
-data class ValueSymbol(val mutable: Boolean, override val name: String, override val type: Type, val value: Any?) : Symbol
+data class ValueSymbol(val mutable: Boolean, override val name: String, override val type: Type, val value: Any?) :
+    Symbol
+
+data class TraitSymbol(override val name: String, override val type: TraitType,val associates:List<Type>) : Symbol
