@@ -11,7 +11,13 @@ class RSymbolCollector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Uni
     override fun visit(node: CrateNode) = node.items.forEach { it.accept(this) }
 
     override fun visit(node: FunctionItemNode) {
-
+        val scope = Scope(currentScope)
+        val symbol = FunctionSymbol(
+            node.name, FunctionType(
+                null, listOf(), UnitType
+            )
+        )
+        node.body?.accept(this)
     }
 
     override fun visit(node: StructItemNode) {
@@ -26,148 +32,132 @@ class RSymbolCollector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Uni
         currentScope?.define(node.name, TraitSymbol(node.name, TraitType, listOf()))
     }
 
-    override fun visit(node: ImplItemNode){
+    override fun visit(node: ImplItemNode) {
     }
 
     override fun visit(node: ConstItemNode) {
-        TODO("Not yet implemented")
     }
 
     override fun visit(node: BlockExprNode) {
-
         currentScope = Scope(currentScope)
         node.stmts.forEach { it.accept(this) }
+        node.scope = currentScope
         currentScope = currentScope?.parentScope()
     }
 
     override fun visit(node: LoopExprNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
     }
 
     override fun visit(node: WhileExprNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
     }
 
     override fun visit(node: BreakExprNode) {
-        TODO("Not yet implemented")
+        node.expr?.accept(this)
     }
 
     override fun visit(node: ReturnExprNode) {
-        TODO("Not yet implemented")
+        node.expr?.accept(this)
     }
 
     override fun visit(node: ContinueExprNode) {}
 
     override fun visit(node: IfExprNode) {
-        TODO("Not yet implemented")
+        node.conds.forEach { it.accept(this) }
+        node.expr.accept(this)
+        node.elseExpr?.accept(this)
+        node.elseIf?.accept(this)
     }
 
     override fun visit(node: FieldAccessExprNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
     }
 
     override fun visit(node: MethodCallExprNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
+        node.params.forEach { it.accept(this) }
     }
 
-    override fun visit(node: MatchExprNode) {
-        TODO("Not yet implemented")
-    }
+//    override fun visit(node: MatchExprNode) {
+//    }
 
     override fun visit(node: CallExprNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
+        node.params.forEach { it.accept(this) }
     }
 
     override fun visit(node: CondExprNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
     }
 
-    override fun visit(node: LiteralExprNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: LiteralExprNode) {}
 
-    override fun visit(node: IdentifierExprNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: IdentifierExprNode) {}
 
-    override fun visit(node: PathExprNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: PathExprNode) {}
 
     override fun visit(node: ArrayExprNode) {
-        TODO("Not yet implemented")
+        node.elements?.forEach { it.accept(this) }
+        node.lengthOp?.accept(this)
+        node.repeatOp?.accept(this)
     }
 
     override fun visit(node: IndexExprNode) {
-        TODO("Not yet implemented")
+        node.first.accept(this)
+        node.second.accept(this)
     }
 
     override fun visit(node: StructExprNode) {
-        TODO("Not yet implemented")
+        node.fields.forEach { it.expr?.accept(this) }
     }
 
-    override fun visit(node: UnderscoreExprNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: UnderscoreExprNode) {}
 
     override fun visit(node: UnaryExprNode) {
-        TODO("Not yet implemented")
+        node.rhs.accept(this)
     }
 
     override fun visit(node: BinaryExprNode) {
-        TODO("Not yet implemented")
+        node.lhs.accept(this)
+        node.rhs.accept(this)
     }
 
     override fun visit(node: ItemStmtNode) {
-        TODO("Not yet implemented")
+        node.item.accept(this)
     }
 
     override fun visit(node: LetStmtNode) {
-        TODO("Not yet implemented")
+        node.expr?.accept(this)
     }
 
     override fun visit(node: ExprStmtNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
     }
 
-    override fun visit(node: NullStmtNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: NullStmtNode) {}
 
-    override fun visit(node: LiteralPatternNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: LiteralPatternNode) {}
 
-    override fun visit(node: IdentifierPatternNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: IdentifierPatternNode) {}
 
-    override fun visit(node: RefPatternNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: RefPatternNode) {}
 
-    override fun visit(node: PathPatternNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: PathPatternNode) {}
 
-    override fun visit(node: WildcardPatternNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: WildcardPatternNode) {}
 
-    override fun visit(node: TypePathNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: TypePathNode) {}
 
     override fun visit(node: RefTypeNode) {
-        TODO("Not yet implemented")
+        node.type.accept(this)
     }
 
     override fun visit(node: ArrayTypeNode) {
-        TODO("Not yet implemented")
+        node.type.accept(this)
+        node.expr.accept(this)
     }
 
-    override fun visit(node: UnitTypeNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: UnitTypeNode) {}
 
 }

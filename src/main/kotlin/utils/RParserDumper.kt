@@ -179,7 +179,7 @@ fun ExprNode.dumpToString(indent: Int): String {
         is IfExprNode -> this.dumpToString(indent)
         is FieldAccessExprNode -> this.dumpToString(indent)
         is MethodCallExprNode -> this.dumpToString(indent)
-        is MatchExprNode -> this.dumpToString(indent)
+//        is MatchExprNode -> this.dumpToString(indent)
         is CallExprNode -> this.dumpToString(indent)
         is CondExprNode -> this.dumpToString(indent)
         is LiteralExprNode -> this.dumpToString(indent)
@@ -286,30 +286,30 @@ fun MethodCallExprNode.dumpToString(indent: Int): String {
     return builder.toString()
 }
 
-fun MatchExprNode.dumpToString(indent: Int): String {
-    val builder = StringBuilder()
-    val padding = " ".repeat(indent)
-    builder.append("${padding}MatchExprNode {\n")
-    builder.append(this.scur.dumpToString(indent + 2))
-    builder.append("${padding}  arms: [\n")
-    for ((arm, expr) in this.arms) {
-        builder.append(arm.dumpToString(indent + 4))
-        builder.append(expr.dumpToString(indent + 4))
-    }
-    builder.append("${padding}  ]\n")
-    builder.append("${padding}}\n")
-    return builder.toString()
-}
-
-fun MatchExprNode.MatchArmNode.dumpToString(indent: Int): String {
-    val builder = StringBuilder()
-    val padding = " ".repeat(indent)
-    builder.append("${padding}MatchArmNode {\n")
-    builder.append(this.pattern.dumpToString(indent + 2))
-    this.guard?.let { builder.append(it.dumpToString(indent + 2)) }
-    builder.append("${padding}}\n")
-    return builder.toString()
-}
+//fun MatchExprNode.dumpToString(indent: Int): String {
+//    val builder = StringBuilder()
+//    val padding = " ".repeat(indent)
+//    builder.append("${padding}MatchExprNode {\n")
+//    builder.append(this.scur.dumpToString(indent + 2))
+//    builder.append("${padding}  arms: [\n")
+//    for ((arm, expr) in this.arms) {
+//        builder.append(arm.dumpToString(indent + 4))
+//        builder.append(expr.dumpToString(indent + 4))
+//    }
+//    builder.append("${padding}  ]\n")
+//    builder.append("${padding}}\n")
+//    return builder.toString()
+//}
+//
+//fun MatchExprNode.MatchArmNode.dumpToString(indent: Int): String {
+//    val builder = StringBuilder()
+//    val padding = " ".repeat(indent)
+//    builder.append("${padding}MatchArmNode {\n")
+//    builder.append(this.pattern.dumpToString(indent + 2))
+//    this.guard?.let { builder.append(it.dumpToString(indent + 2)) }
+//    builder.append("${padding}}\n")
+//    return builder.toString()
+//}
 
 fun CallExprNode.dumpToString(indent: Int): String {
     val builder = StringBuilder()

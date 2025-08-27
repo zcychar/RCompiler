@@ -1,7 +1,6 @@
 package frontend
 
 import frontend.AST.*
-import frontend.AST.MatchExprNode.MatchArmNode
 import utils.CompileError
 import utils.dumpToString
 
@@ -227,7 +226,7 @@ class RParser(val input: MutableList<Token>) {
             Keyword.CONTINUE -> parseContinueExpr()
             Keyword.LOOP -> parseLoopExpr()
             Keyword.WHILE -> parseWhileExpr()
-            Keyword.MATCH -> parseMatchExpr()
+//            Keyword.MATCH -> parseMatchExpr()
             Punctuation.UNDERSCORE -> parseUnderscoreExpr()
             in unaryOp -> parseUnaryExpr()
             else -> throw CompileError("Parser:Expect expression, met ${peek(1)}")
@@ -404,24 +403,24 @@ class RParser(val input: MutableList<Token>) {
         } else IfExprNode(conds, block, null, null)
     }
 
-    private fun parseMatchExpr(): MatchExprNode {
-        expectAndConsume(Keyword.MATCH)
-        val scru = parseExpr()
-        expectAndConsume(Punctuation.LEFT_BRACE)
-        val arms = mutableListOf<Pair<MatchArmNode, ExprNode>>()
-        while (!tryConsume(Punctuation.RIGHT_BRACE)) {
-            val pattern = parsePattern()
-            val guard = if (tryConsume(Keyword.IF)) parseExpr() else null
-            expectAndConsume(Punctuation.FAT_ARROW)
-            val expr = parseExpr()
-            arms.add(Pair(MatchArmNode(pattern, guard), expr))
-            if (peek(1)?.type != Punctuation.COMMA && peek(1)?.type != Punctuation.RIGHT_BRACE && expr !is ExprWOBlock) {
-                throw CompileError("Parser:Expect comma in not-end match arm, met ${peek(1)}")
-            }
-            tryConsume(Punctuation.COMMA)
-        }
-        return MatchExprNode(scru, arms)
-    }
+//    private fun parseMatchExpr(): MatchExprNode {
+//        expectAndConsume(Keyword.MATCH)
+//        val scru = parseExpr()
+//        expectAndConsume(Punctuation.LEFT_BRACE)
+//        val arms = mutableListOf<Pair<MatchArmNode, ExprNode>>()
+//        while (!tryConsume(Punctuation.RIGHT_BRACE)) {
+//            val pattern = parsePattern()
+//            val guard = if (tryConsume(Keyword.IF)) parseExpr() else null
+//            expectAndConsume(Punctuation.FAT_ARROW)
+//            val expr = parseExpr()
+//            arms.add(Pair(MatchArmNode(pattern, guard), expr))
+//            if (peek(1)?.type != Punctuation.COMMA && peek(1)?.type != Punctuation.RIGHT_BRACE && expr !is ExprWOBlock) {
+//                throw CompileError("Parser:Expect comma in not-end match arm, met ${peek(1)}")
+//            }
+//            tryConsume(Punctuation.COMMA)
+//        }
+//        return MatchExprNode(scru, arms)
+//    }
 
     private fun parseReturnExpr(): ReturnExprNode {
         expectAndConsume(Keyword.RETURN)

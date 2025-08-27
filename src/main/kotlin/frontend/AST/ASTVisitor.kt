@@ -17,7 +17,7 @@ interface ASTVisitor<T> {
     fun visit(node: IfExprNode): T
     fun visit(node: FieldAccessExprNode): T
     fun visit(node: MethodCallExprNode): T
-    fun visit(node: MatchExprNode): T
+//    fun visit(node: MatchExprNode): T
     fun visit(node: CallExprNode): T
     fun visit(node: CondExprNode): T
     fun visit(node: LiteralExprNode): T

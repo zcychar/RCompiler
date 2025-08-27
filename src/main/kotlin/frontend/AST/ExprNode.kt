@@ -51,10 +51,10 @@ data class MethodCallExprNode(val expr: ExprNode, val pathSeg: PathExprNode.Path
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class MatchExprNode(val scur: ExprNode, val arms: List<Pair<MatchArmNode, ExprNode>>) : ExprWIBlock {
-    override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
-    data class MatchArmNode(val pattern: PatternNode, val guard: ExprNode?)
-}
+//data class MatchExprNode(val scur: ExprNode, val arms: List<Pair<MatchArmNode, ExprNode>>) : ExprWIBlock {
+//    override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
+//    data class MatchArmNode(val pattern: PatternNode, val guard: ExprNode?)
+//}
 
 data class CallExprNode(val expr: ExprNode, val params: List<ExprNode>) : ExprWOBlock {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
