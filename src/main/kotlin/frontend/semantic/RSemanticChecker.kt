@@ -4,7 +4,7 @@ import frontend.AST.*
 
 class RSemanticChecker: ASTVisitor<Unit> {
     override fun visit(node: CrateNode) {
-        TODO("Not yet implemented")
+        node.items.forEach { it.accept(this) }
     }
 
     override fun visit(node: FunctionItemNode) {
