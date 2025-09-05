@@ -2,9 +2,15 @@ package frontend.semantic
 
 import frontend.AST.*
 
-class RSymbolBuilder: ASTVisitor<Unit> {
+class RSymbolBuilder(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> {
+  var currentScope: Scope? = gScope
+
+  fun process() = visit(crate)
+
   override fun visit(node: CrateNode) {
+    currentScope = node.scope
     node.items.forEach { it.accept(this) }
+    currentScope=currentScope?.parentScope()
   }
 
   override fun visit(node: FunctionItemNode) {
