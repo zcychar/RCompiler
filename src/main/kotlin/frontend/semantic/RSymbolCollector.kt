@@ -8,28 +8,22 @@ class RSymbolCollector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Uni
 
     fun process() = visit(crate)
 
-    override fun visit(node: CrateNode) = node.items.forEach { it.accept(this) }
+    override fun visit(node: CrateNode) {
+
+    }
 
     override fun visit(node: FunctionItemNode) {
-        val scope = Scope(currentScope)
-        val symbol = FunctionSymbol(
-            node.name, FunctionType(
-                null, listOf(), UnitType
-            )
-        )
-        node.body?.accept(this)
+
     }
 
     override fun visit(node: StructItemNode) {
-        currentScope?.define(node.name, StructSymbol(node.name, StructType(node.name, listOf())))
+
     }
 
     override fun visit(node: EnumItemNode) {
-        currentScope?.define(node.name, EnumSymbol(node.name, EnumType(node.name, node.variants)))
     }
 
     override fun visit(node: TraitItemNode) {
-        currentScope?.define(node.name, TraitSymbol(node.name, TraitType, listOf()))
     }
 
     override fun visit(node: ImplItemNode) {
@@ -39,10 +33,6 @@ class RSymbolCollector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Uni
     }
 
     override fun visit(node: BlockExprNode) {
-        currentScope = Scope(currentScope)
-        node.stmts.forEach { it.accept(this) }
-        node.scope = currentScope
-        currentScope = currentScope?.parentScope()
     }
 
     override fun visit(node: LoopExprNode) {

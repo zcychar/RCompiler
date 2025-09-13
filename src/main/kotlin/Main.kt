@@ -1,25 +1,24 @@
 import frontend.*
-import frontend.semantic.globalScope
+import frontend.semantic.RSymbolCollector
 import utils.CompileError
 import utils.dumpToString
 
 fun main(args: Array<String>) {
 
-    val resourcePath = if(args.isEmpty()) readln() else args[0]
+    val resourcePath = if (args.isEmpty()) readln() else args[0]
     val inputStream = object {}.javaClass.getResourceAsStream(resourcePath)
     val rawText = inputStream?.bufferedReader()!!.readText()
-    try{
+    try {
         println("-----preprocessed-----")
         val preprocessor = RPreprocessor(rawText)
         val lexer = RLexer(preprocessor.process())
         println(preprocessor.dumpToString())
         println("--------tokens---------")
-        val parser= RParser(lexer.process())
+        val parser = RParser(lexer.process())
         println(lexer.dumpToString())
-        parser.process()
+        val crate = parser.process()
         println(parser.dumpToString())
-        val gScope = globalScope()
-    }catch(e: CompileError) {
+    } catch (e: CompileError) {
         println(e.message)
     }
 
