@@ -5,39 +5,31 @@ sealed interface Symbol {
 }
 
 interface MethodHolder {
-    val inherentItems: MutableMap<String, Symbol>
-    val traitImpls: MutableMap<TraitType, Map<String, Symbol>>
+    val inherentItems: MutableMap<String, Function>
+    val traitImpls: MutableMap<TraitType, Map<String, Function>>
 }
 
-data class VariableSymbol(override val name: String, val type: Type, val isMutable: Boolean) : Symbol
-data class ConstantSymbol(override val name: String, var type: Type, var value: Any? = null) : Symbol
+data class Variable(override val name: String, val type: Type, val isMutable: Boolean) : Symbol
 
-data class FunctionSymbol(
+data class Constant(override val name: String, var type: Type, var value: Any? = null) : Symbol
+
+data class Function(
     override val name: String,
     var params: List<Type> = emptyList(),
     var returnType: Type = UnitType,
-    val selfParam: Type? = null // For methods
+    val selfParam: Type? = null
 ) : Symbol
 
-data class StructSymbol(override val name: String, val type: StructType) : Symbol, MethodHolder {
-    override val inherentItems = mutableMapOf<String, Symbol>()
-    override val traitImpls = mutableMapOf<TraitType, Map<String, Symbol>>()
+data class Struct(override val name: String, val type: StructType) : Symbol, MethodHolder {
+    override val inherentItems = mutableMapOf<String, Function>()
+    override val traitImpls = mutableMapOf<TraitType, Map<String, Function>>()
 }
 
-data class EnumSymbol(override val name: String, val type: EnumType) : Symbol, MethodHolder {
-    override val inherentItems = mutableMapOf<String, Symbol>()
-    override val traitImpls = mutableMapOf<TraitType, Map<String, Symbol>>()
+data class Enum(override val name: String, val type: EnumType) : Symbol, MethodHolder {
+    override val inherentItems = mutableMapOf<String, Function>()
+    override val traitImpls = mutableMapOf<TraitType, Map<String, Function>>()
 }
 
-data class TraitSymbol(override val name: String, val type: TraitType, var associatedItems: Map<String, Symbol> = emptyMap()) : Symbol
+data class Trait(override val name: String, val type: TraitType) : Symbol
 
-data class BuiltinTypeSymbol(override val name: String) : Symbol, MethodHolder {
-    override val inherentItems = mutableMapOf<String, Symbol>()
-    override val traitImpls = mutableMapOf<TraitType, Map<String, Symbol>>()
-}
-
-data class ConstructorSymbol(
-    override val name: String,
-    val constructedType: Type,
-    val params: Map<String, Type>
-) : Symbol
+data class BuiltIn(override val name: String, val type: Type) : Symbol

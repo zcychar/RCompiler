@@ -95,7 +95,7 @@ fun EnumItemNode.dumpToString(indent: Int): String {
 fun ConstItemNode.dumpToString(indent: Int): String {
     val builder = StringBuilder()
     val padding = " ".repeat(indent)
-    builder.append("${padding}ConstItemNode (id=$id) {\n")
+    builder.append("${padding}ConstItemNode (id=$name) {\n")
     builder.append(type.dumpToString(indent + 2))
     this.expr?.let { builder.append(it.dumpToString(indent + 2)) }
     builder.append("${padding}}\n")
@@ -116,7 +116,7 @@ fun TraitItemNode.dumpToString(indent: Int): String {
 fun ImplItemNode.dumpToString(indent: Int): String {
     val builder = StringBuilder()
     val padding = " ".repeat(indent)
-    builder.append("${padding}ImplItemNode (id=$id) {\n")
+    builder.append("${padding}ImplItemNode (id=$name) {\n")
     builder.append(type.dumpToString(indent + 2))
     for (item in this.items) {
         builder.append(item.dumpToString(indent + 2))

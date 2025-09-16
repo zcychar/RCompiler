@@ -2,37 +2,75 @@ package frontend.semantic
 
 import frontend.AST.*
 
-class RSymbolCollector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> {
+class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> {
 
-    var currentScope: Scope? = gScope
+    var currentScope: Scope? = preludeScope
 
     fun process() = visit(crate)
 
     override fun visit(node: CrateNode) {
-
+        currentScope = Scope(currentScope, "global")
+        node.scope = currentScope
+        node.items.forEach { it.accept(this) }
+        currentScope = currentScope?.parentScope()
     }
 
     override fun visit(node: FunctionItemNode) {
-
+        val function = Function(
+            name = node.name,
+            params = listOf(),
+            returnType = UnitType,
+            selfParam = null
+        )
+        currentScope?.declare(function, Namespace.VALUE)
+        currentScope = Scope(currentScope, currentScope?.description + "::FUN-${node.name}")
+        node.body?.scope = currentScope
+        node.body?.accept(this)
+        currentScope = currentScope?.parentScope()
     }
 
     override fun visit(node: StructItemNode) {
-
+        val struct = Struct(
+            name = node.name,
+            type = StructType(name = node.name, fields = mapOf())
+        )
+        currentScope?.declare(struct, Namespace.TYPE)
     }
 
     override fun visit(node: EnumItemNode) {
+        val enum = Enum(
+            name = node.name,
+            type = EnumType(name = node.name, variants = setOf())
+        )
+        currentScope?.declare(enum, Namespace.TYPE)
     }
 
     override fun visit(node: TraitItemNode) {
+        val trait = Trait(
+            name = node.name,
+            type = TraitType(name = node.name, associatedItems = mapOf())
+        )
+        currentScope?.declare(trait, Namespace.TYPE)
     }
 
-    override fun visit(node: ImplItemNode) {
-    }
+    override fun visit(node: ImplItemNode) {}
 
     override fun visit(node: ConstItemNode) {
+        val constItem = Constant(
+            name = node.name,
+            type = UnitType,
+            value = null
+        )
+        currentScope?.declare(constItem, Namespace.VALUE)
     }
 
     override fun visit(node: BlockExprNode) {
+        node.scope?:{
+            currentScope= Scope(currentScope,currentScope?.description+"::BLK")
+            node.scope=currentScope
+        }
+        node.stmts.forEach { it.accept(this) }
+        currentScope=currentScope?.parentScope()
     }
 
     override fun visit(node: LoopExprNode) {
@@ -69,8 +107,6 @@ class RSymbolCollector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Uni
         node.params.forEach { it.accept(this) }
     }
 
-//    override fun visit(node: MatchExprNode) {
-//    }
 
     override fun visit(node: CallExprNode) {
         node.expr.accept(this)

@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import utils.CompileError
-import java.nio.file.Path
 
 
 class RParserTest {
@@ -112,7 +111,7 @@ class RParserTest {
         val src = "const MAX_POINTS: u32 = 100_000;"
         val crate = parse(src)
         val constItem = crate.items[0] as ConstItemNode
-        assertEquals("MAX_POINTS", constItem.id)
+        assertEquals("MAX_POINTS", constItem.name)
         assertEquals("u32", (constItem.type as TypePathNode).id)
         assertEquals("100_000", (constItem.expr as LiteralExprNode).value)
     }
