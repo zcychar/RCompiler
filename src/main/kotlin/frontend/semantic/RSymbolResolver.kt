@@ -1,20 +1,39 @@
 package frontend.semantic
 
 import frontend.AST.*
+import frontend.Keyword
+import utils.CompileError
 
-class RSymbolBuilder(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> {
+
+class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> {
   var currentScope: Scope? = gScope
+  var currentSelfType: Type? = null
 
   fun process() = visit(crate)
 
+  //---------------Type Resolution------------------
+  fun resolveType(node: TypeNode):Type{
+    when(node){
+      is ArrayTypeNode -> TODO()
+      is RefTypeNode -> TODO()
+      is TypePathNode -> {
+        if(node.type == Keyword.SELF_UPPER){
+          return currentSelfType?:throw CompileError("Semantic:Invalid usage of 'Self'")
+        }
+
+      }
+      UnitTypeNode -> TODO()
+    }
+  }
+  //------------------Visitors----------------------
   override fun visit(node: CrateNode) {
     currentScope = node.scope
     node.items.forEach { it.accept(this) }
-    currentScope=currentScope?.parentScope()
+    currentScope = currentScope?.parentScope()
   }
 
   override fun visit(node: FunctionItemNode) {
-    TODO("Not yet implemented")
+
   }
 
   override fun visit(node: StructItemNode) {
