@@ -486,7 +486,7 @@ fun TypeNode.dumpToString(indent: Int): String {
 
 fun TypePathNode.dumpToString(indent: Int): String {
     val padding = " ".repeat(indent)
-    return "${padding}TypePathNode (id=$id, type=$type)\n"
+    return "${padding}TypePathNode (id=$name, type=$type)\n"
 }
 
 fun RefTypeNode.dumpToString(indent: Int): String {

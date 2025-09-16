@@ -6,7 +6,7 @@ sealed interface TypeNode {
     fun <T> accept(visitor: ASTVisitor<T>): T
 }
 
-data class TypePathNode(val id: String?, val type: TokenType?) : TypeNode {
+data class TypePathNode(val name: String?, val type: TokenType?) : TypeNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 

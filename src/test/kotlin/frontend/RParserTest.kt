@@ -62,9 +62,9 @@ class RParserTest {
         assertEquals("add", func.name)
         assertEquals(2, func.funParams.size)
         assertEquals("x", (func.funParams[0].pattern as PathPatternNode).path.seg1.id)
-        assertEquals("i32", (func.funParams[0].type as TypePathNode).id)
+        assertEquals("i32", (func.funParams[0].type as TypePathNode).name)
         assertNotNull(func.returnType)
-        assertEquals("i32", (func.returnType as TypePathNode).id)
+        assertEquals("i32", (func.returnType as TypePathNode).name)
         assertEquals(1, func.body!!.stmts.size)
     }
 
@@ -85,7 +85,7 @@ class RParserTest {
         assertEquals("Point", struct.name)
         assertEquals(2, struct.fields.size, "Struct should have two fields.")
         assertEquals("x", struct.fields[0].name)
-        assertEquals("f64", (struct.fields[0].type as TypePathNode).id)
+        assertEquals("f64", (struct.fields[0].type as TypePathNode).name)
     }
 
     @Test
@@ -112,7 +112,7 @@ class RParserTest {
         val crate = parse(src)
         val constItem = crate.items[0] as ConstItemNode
         assertEquals("MAX_POINTS", constItem.name)
-        assertEquals("u32", (constItem.type as TypePathNode).id)
+        assertEquals("u32", (constItem.type as TypePathNode).name)
         assertEquals("100_000", (constItem.expr as LiteralExprNode).value)
     }
 
