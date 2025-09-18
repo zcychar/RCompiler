@@ -189,5 +189,8 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
   }
 
   override fun visit(node: UnitTypeNode) {}
+  override fun visit(node: GroupedExprNode) {
+    node.expr.accept(this)
+  }
 
 }

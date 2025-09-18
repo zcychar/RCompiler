@@ -36,15 +36,41 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
     }
 
     is PathExprNode -> {
-      val name = expr.seg1.id ?: throw CompileError("Semantic:Const path with no identified found")
+      val name = expr.seg1.name ?: throw CompileError("Semantic:Const path with no identified found")
       val symbol = currentScope?.resolve(name, Namespace.VALUE)
         ?: throw CompileError("Semantic: cannot find value $name in this scope")
       when (symbol) {
         is Constant -> {
           val resolvedConst = resolveConst(name)
+          resolvedConst.value ?: throw CompileError("Semantic:constant $name has no value")
         }
 
-        else -> TODO()
+        is Struct -> {
+          if (symbol.type.fields.isNotEmpty()) {
+            throw CompileError("Semantic:paths to non-unit struct is not allowed to be const")
+          }
+          ConstValue.Struct(symbol.type, emptyMap())
+        }
+
+        else -> throw CompileError("Semantic:Invalid path $name in const expression")
+      }
+    }
+
+    is GroupedExprNode -> evaluateConstExpr(expr.expr, expectType)
+    is StructExprNode -> {
+      (expr.path as PathExprNode).seg2 ?: throw CompileError("Semantic:${expr.path} is not a SIMPLE type path")
+      val structType = resolveType((expr.path).seg1) as? StructType
+        ?: throw CompileError("Semantic:Path ${expr.path.seg1.name} does not resolve to a struct type")
+      val fields = mutableMapOf<String, ConstValue>()
+
+      expr.fields.forEach { fieldNode ->
+        val fieldType = structType.fields[fieldNode.id] ?: throw CompileError("Semantic:")
+        val fieldExpr = fieldNode.expr ?: PathExprNode(TypePathNode(fieldNode.id, null), null)
+        val fieldNames = expr.fields.map { it.id }.toSet()
+        structType.fields.keys.forEach {
+          if (it !in fieldNames) throw CompileError("Semantic:Field  $it is missing in initializer for struct $structType")
+        }
+        ConstValue.Struct(structType, fields)
       }
 
       TODO()
@@ -259,6 +285,10 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
   }
 
   override fun visit(node: UnitTypeNode) {
+    TODO("Not yet implemented")
+  }
+
+  override fun visit(node: GroupedExprNode) {
     TODO("Not yet implemented")
   }
 }

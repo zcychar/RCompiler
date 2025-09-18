@@ -314,11 +314,11 @@ class RParser(val input: MutableList<Token>) {
         expectAndConsume(Punctuation.DOT)
         val pathSeg = when (peek(1)?.type) {
             Identifier -> {
-                PathExprNode.PathExprSeg(consume().value, null)
+                TypePathNode(consume().value, null)
             }
 
             Keyword.SELF_UPPER, Keyword.SELF -> {
-                PathExprNode.PathExprSeg(null, consume().type)
+                TypePathNode(null, consume().type)
             }
 
             else -> throw CompileError("Parser:expect path-segment, met ${peek(1)}")
@@ -348,7 +348,7 @@ class RParser(val input: MutableList<Token>) {
         expectAndConsume(Punctuation.LEFT_PAREN)
         val expr = parseExpr()
         expectAndConsume(Punctuation.RIGHT_PAREN)
-        return expr
+        return GroupedExprNode(expr)
     }
 
     private fun parseCallExpr(left: ExprNode): CallExprNode {
@@ -362,14 +362,14 @@ class RParser(val input: MutableList<Token>) {
     }
 
     private fun parsePathExpr(): PathExprNode {
-        val exe: () -> PathExprNode.PathExprSeg = {
+        val exe: () -> TypePathNode = {
             when (peek(1)?.type) {
                 Identifier -> {
-                    PathExprNode.PathExprSeg(consume().value, null)
+                    TypePathNode(consume().value, null)
                 }
 
                 Keyword.SELF_UPPER, Keyword.SELF -> {
-                    PathExprNode.PathExprSeg(null, consume().type)
+                    TypePathNode(null, consume().type)
                 }
 
                 else -> throw CompileError("Parser:expect path-segment, met ${peek(1)}")

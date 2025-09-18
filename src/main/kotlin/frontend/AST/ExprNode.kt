@@ -46,7 +46,7 @@ data class FieldAccessExprNode(val expr: ExprNode, val id: String) : ExprWOBlock
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class MethodCallExprNode(val expr: ExprNode, val pathSeg: PathExprNode.PathExprSeg, val params: List<ExprNode>) :
+data class MethodCallExprNode(val expr: ExprNode, val pathSeg: TypePathNode, val params: List<ExprNode>) :
     ExprWOBlock {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
@@ -72,9 +72,8 @@ data class IdentifierExprNode(val value: String) : ExprWOBlock {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class PathExprNode(val seg1: PathExprSeg, val seg2: PathExprSeg?) : ExprWOBlock {
+data class PathExprNode(val seg1: TypePathNode, val seg2: TypePathNode?) : ExprWOBlock {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
-    data class PathExprSeg(val id: String?, val keyword: TokenType?)
 }
 
 data class ArrayExprNode(val elements: List<ExprNode>?, val repeatOp: ExprNode?, val lengthOp: ExprNode?) :
@@ -100,5 +99,9 @@ data class UnaryExprNode(val op: TokenType, val hasMut: Boolean, val rhs: ExprNo
 }
 
 data class BinaryExprNode(val op: TokenType, val lhs: ExprNode, val rhs: ExprNode) : ExprWOBlock {
+    override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
+}
+
+data class GroupedExprNode(val expr: ExprNode) : ExprWOBlock {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }

@@ -191,6 +191,7 @@ fun ExprNode.dumpToString(indent: Int): String {
         is UnderscoreExprNode -> this.dumpToString(indent)
         is UnaryExprNode -> this.dumpToString(indent)
         is BinaryExprNode -> this.dumpToString(indent)
+      is GroupedExprNode -> TODO()
     }
 }
 
@@ -275,7 +276,7 @@ fun FieldAccessExprNode.dumpToString(indent: Int): String {
 fun MethodCallExprNode.dumpToString(indent: Int): String {
     val builder = StringBuilder()
     val padding = " ".repeat(indent)
-    builder.append("${padding}MethodCallExprNode (pathSeg=${pathSeg.id ?: pathSeg.keyword}) {\n")
+    builder.append("${padding}MethodCallExprNode (pathSeg=${pathSeg.name ?: pathSeg.type}) {\n")
     builder.append(this.expr.dumpToString(indent + 2))
     builder.append("${padding}  params: [\n")
     for (param in this.params) {
@@ -347,7 +348,7 @@ fun IdentifierExprNode.dumpToString(indent: Int): String {
 
 fun PathExprNode.dumpToString(indent: Int): String {
     val padding = " ".repeat(indent)
-    return "${padding}PathExprNode (seg1=${seg1.id ?: seg1.keyword}, seg2=${seg2?.id ?: seg2?.keyword})\n"
+    return "${padding}PathExprNode (seg1=${seg1.name ?: seg1.type}, seg2=${seg2?.name ?: seg2?.type})\n"
 }
 
 fun ArrayExprNode.dumpToString(indent: Int): String {
