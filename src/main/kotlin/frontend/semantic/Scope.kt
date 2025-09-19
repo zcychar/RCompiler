@@ -33,7 +33,7 @@ class Scope(val parent: Scope? = null, val description: String) {
 }
 
 fun toPrelude(): Scope {
-    val preludeScope = Scope(null,"prelude")
+    val preludeScope = Scope(null, "prelude")
     preludeScope.declare(BuiltIn("i32", Int32Type), Namespace.TYPE)
     preludeScope.declare(BuiltIn("u32", UInt32Type), Namespace.TYPE)
     preludeScope.declare(BuiltIn("isize", Int32Type), Namespace.TYPE)
@@ -43,41 +43,64 @@ fun toPrelude(): Scope {
     preludeScope.declare(BuiltIn("String", StringType), Namespace.TYPE)
     preludeScope.declare(BuiltIn("str", StrType), Namespace.TYPE)
 
-    preludeScope.declare(Function("printlnInt", params = listOf(Int32Type), returnType = UnitType), Namespace.VALUE)
-    preludeScope.declare(Function("getInt", params = emptyList(), returnType = Int32Type), Namespace.VALUE)
-    preludeScope.declare(Function("print", params = listOf(RefType(StrType, false)), returnType = UnitType), Namespace.VALUE)
-    preludeScope.declare(Function("println", params = listOf(RefType(StrType, false)), returnType = UnitType), Namespace.VALUE)
-    preludeScope.declare(Function("getString", params = emptyList(), returnType = StringType), Namespace.VALUE)
-    preludeScope.declare(Function("exit", params = listOf(Int32Type), returnType = UnitType), Namespace.VALUE)
+    preludeScope.declare(
+        Function("printlnInt", params = listOf(Int32Type), returnType = UnitType, node = null),
+        Namespace.VALUE
+    )
+    preludeScope.declare(Function("getInt", params = emptyList(), returnType = Int32Type, node = null), Namespace.VALUE)
+    preludeScope.declare(
+        Function(
+            "print",
+            params = listOf(RefType(StrType, false)),
+            returnType = UnitType,
+            node = null
+        ), Namespace.VALUE
+    )
+    preludeScope.declare(
+        Function(
+            "println",
+            params = listOf(RefType(StrType, false)),
+            returnType = UnitType,
+            node = null
+        ), Namespace.VALUE
+    )
+    preludeScope.declare(
+        Function("getString", params = emptyList(), returnType = StringType, node = null),
+        Namespace.VALUE
+    )
+    preludeScope.declare(
+        Function("exit", params = listOf(Int32Type), returnType = UnitType, node = null),
+        Namespace.VALUE
+    )
     return preludeScope
 }
 
-object BuiltInMethods{
+object BuiltInMethods {
     private val arrayMethods = mapOf(
-        "len" to Function("len", returnType = USizeType)
+        "len" to Function("len", returnType = UInt32Type, node = null)
     )
 
     private val strMethods = mapOf(
-        "len" to Function("len", returnType = USizeType)
+        "len" to Function("len", returnType = UInt32Type, node = null)
     )
 
     private val stringMethods = mapOf(
-        "len" to Function("len", returnType = USizeType),
-        "as_str" to Function("as_str", returnType = RefType(StrType, false)),
+        "len" to Function("len", returnType = UInt32Type, node = null),
+        "as_str" to Function("as_str", returnType = RefType(StrType, false), node = null),
     )
 
     private val i32Methods = mapOf(
-        "to_string" to Function("to_string", returnType = StringType)
+        "to_string" to Function("to_string", returnType = StringType, node = null)
     )
 
     private val u32Methods = mapOf(
-        "to_string" to Function("to_string", returnType = StringType)
+        "to_string" to Function("to_string", returnType = StringType, node = null)
     )
 
 
     fun findMethod(receiverType: Type, methodName: String): Function? {
         var baseType = receiverType
-        while(baseType is RefType)baseType= baseType.baseType
+        while (baseType is RefType) baseType = baseType.baseType
         return when (baseType) {
             is ArrayType -> arrayMethods[methodName]
             is StrType -> strMethods[methodName]

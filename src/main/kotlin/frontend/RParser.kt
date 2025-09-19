@@ -242,7 +242,11 @@ class RParser(val input: MutableList<Token>) {
                 val right = parseExpr(pre)
                 BinaryExprNode(operator, left, right)
             }
-
+            Keyword.AS->{
+                consume()
+                val targetType = parseType()
+                CastExprNode(left, targetType)
+            }
             Punctuation.LEFT_PAREN -> parseCallExpr(left)
             Punctuation.DOT -> {
                 if (peek(2)?.type == Identifier && peek(3)?.type == Punctuation.LEFT_PAREN) {

@@ -134,8 +134,8 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
   }
 
   override fun visit(node: IndexExprNode) {
-    node.first.accept(this)
-    node.second.accept(this)
+    node.base.accept(this)
+    node.index.accept(this)
   }
 
   override fun visit(node: StructExprNode) {
@@ -191,6 +191,10 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
   override fun visit(node: UnitTypeNode) {}
   override fun visit(node: GroupedExprNode) {
     node.expr.accept(this)
+  }
+
+  override fun visit(node: CastExprNode) {
+
   }
 
 }

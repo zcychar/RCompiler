@@ -162,4 +162,12 @@ class RSemanticChecker: ASTVisitor<Unit> {
     override fun visit(node: UnitTypeNode) {
         TODO("Not yet implemented")
     }
+
+    override fun visit(node: GroupedExprNode) {
+        TODO("Not yet implemented")
+    }
+
+    override fun visit(node: CastExprNode) {
+        TODO("Not yet implemented")
+    }
 }

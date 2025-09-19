@@ -155,7 +155,6 @@ val binaryOp = setOf(
     Punctuation.SLASH_EQUAL, Punctuation.PERCENT_EQUAL, Punctuation.CARET_EQUAL,
     Punctuation.AND_EQUAL, Punctuation.OR_EQUAL, Punctuation.LESS_LESS_EQUAL, Punctuation.GREATER_GREATER_EQUAL,
     Punctuation.RIGHT_ARROW, Punctuation.LEFT_ARROW, Punctuation.FAT_ARROW,
-    Keyword.AS
 )
 
 val precedence = mapOf<TokenType, Pair<Int, Int>>(

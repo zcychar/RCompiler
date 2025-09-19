@@ -191,7 +191,8 @@ fun ExprNode.dumpToString(indent: Int): String {
         is UnderscoreExprNode -> this.dumpToString(indent)
         is UnaryExprNode -> this.dumpToString(indent)
         is BinaryExprNode -> this.dumpToString(indent)
-      is GroupedExprNode -> TODO()
+        is GroupedExprNode -> this.dumpToString(indent)
+        is CastExprNode -> this.dumpToString(indent)
     }
 }
 
@@ -372,8 +373,8 @@ fun IndexExprNode.dumpToString(indent: Int): String {
     val builder = StringBuilder()
     val padding = " ".repeat(indent)
     builder.append("${padding}IndexExprNode {\n")
-    builder.append(this.first.dumpToString(indent + 2))
-    builder.append(this.second.dumpToString(indent + 2))
+    builder.append(this.base.dumpToString(indent + 2))
+    builder.append(this.index.dumpToString(indent + 2))
     builder.append("${padding}}\n")
     return builder.toString()
 }
@@ -513,4 +514,23 @@ fun ArrayTypeNode.dumpToString(indent: Int): String {
 fun UnitTypeNode.dumpToString(indent: Int): String {
     val padding = " ".repeat(indent)
     return "${padding}UnitTypeNode\n"
+}
+
+fun GroupedExprNode.dumpToString(indent: Int): String {
+    val builder = StringBuilder()
+    val padding = " ".repeat(indent)
+    builder.append("${padding}GroupedExprNode {\n")
+    builder.append(this.expr.dumpToString(indent + 2))
+    builder.append("${padding}}\n")
+    return builder.toString()
+}
+
+fun CastExprNode.dumpToString(indent: Int): String {
+    val builder = StringBuilder()
+    val padding = " ".repeat(indent)
+    builder.append("${padding}CaseExprNode {\n")
+    builder.append(this.expr.dumpToString(indent + 2))
+    builder.append(this.targetType.dumpToString(indent + 2))
+    builder.append("${padding}}\n")
+    return builder.toString()
 }

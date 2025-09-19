@@ -81,7 +81,11 @@ data class ArrayExprNode(val elements: List<ExprNode>?, val repeatOp: ExprNode?,
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class IndexExprNode(val first: ExprNode, val second: ExprNode) : ExprNode {
+data class IndexExprNode(val base: ExprNode, val index: ExprNode) : ExprNode {
+    override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
+}
+
+data class CastExprNode(val expr: ExprNode, val targetType: TypeNode) : ExprWOBlock {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 

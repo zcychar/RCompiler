@@ -9,8 +9,6 @@ object BoolType : Type { override fun isEquivalentTo(other: Type) = other is Boo
 object CharType : Type { override fun isEquivalentTo(other: Type) = other is CharType }
 object Int32Type : Type { override fun isEquivalentTo(other: Type) = other is Int32Type }
 object UInt32Type : Type { override fun isEquivalentTo(other: Type) = other is UInt32Type }
-object ISizeType : Type { override fun isEquivalentTo(other: Type) = other is ISizeType }
-object USizeType : Type { override fun isEquivalentTo(other: Type) = other is USizeType }
 object StringType : Type { override fun isEquivalentTo(other: Type) = other is StringType } // 代表语言内置的 String
 object StrType : Type { override fun isEquivalentTo(other: Type) = other is StrType }     // 代表 str 切片类型
 
