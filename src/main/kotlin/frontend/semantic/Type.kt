@@ -30,7 +30,7 @@ data class StructType(val name: String, var fields: Map<String, Type> = emptyMap
     override fun isEquivalentTo(other: Type): Boolean = other is StructType && this.name == other.name // 标称类型系统
 }
 
-data class EnumType(val name: String, val variants: Set<String>) : Type {
+data class EnumType(val name: String, var variants: Set<String>) : Type {
     override fun isEquivalentTo(other: Type): Boolean = other is EnumType && this.name == other.name
 }
 
