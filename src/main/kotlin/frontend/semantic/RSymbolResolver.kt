@@ -298,7 +298,7 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
 
     fun resolveFunction(name: String, trait: Trait? = null): Function {
         val symbol = (if (trait != null) trait.type.associatedItems[name]
-        else currentScope?.resolve(name, Namespace.TYPE)) as? Function
+        else currentScope?.resolve(name, Namespace.VALUE)) as? Function
             ?: throw CompileError("Semantic:undefined enumeration type $name")
         when (symbol.resolutionState) {
             ResolutionState.UNRESOLVED -> {}
@@ -310,7 +310,6 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
             symbol.node as? FunctionItemNode ?: throw CompileError("Semantic:invalid prelude usage")//TODO:CHECK PRELUDE
         symbol.params = node.funParams.map { resolveType(it.type) }
         symbol.returnType = resolveType(node.returnType)
-
         if (node.selfParam != null) {
             val selfType = currentSelfType
                 ?: throw CompileError("Semantic: 'self' parameter used outside of an impl or trait block.")
@@ -320,13 +319,29 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                 else -> selfType
             }
         }
-
         symbol.resolutionState = ResolutionState.RESOLVED
         return symbol
     }
 
     fun resolveConst(name: String): Constant {
-        TODO()
+        val symbol = currentScope?.resolve(name, Namespace.VALUE) as? Constant
+            ?: throw CompileError("Semantic:undefined enumeration type $name")
+        when (symbol.resolutionState) {
+            ResolutionState.UNRESOLVED -> {}
+            ResolutionState.RESOLVING -> throw CompileError("Semantic:recursive dependency of constant $name")
+            ResolutionState.RESOLVED -> return symbol
+        }
+        symbol.resolutionState = ResolutionState.RESOLVING
+        val node =
+            symbol.node as? ConstItemNode ?: throw CompileError("Semantic:invalid prelude usage")//TODO:CHECK PRELUDE
+        symbol.type = resolveType(node.type)
+        if (node.expr != null) {
+            symbol.value = evaluateConstExpr(node.expr,symbol.type)
+        }else if(currentScope?.description?.startsWith("TRAIT")!=true){
+            throw CompileError("Semantic: Constant $name does not have an initializer")
+        }
+        symbol.resolutionState = ResolutionState.RESOLVED
+        return symbol
     }
 
     //------------------Visitors----------------------
