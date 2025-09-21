@@ -34,10 +34,8 @@ interface ASTVisitor<T> {
     fun visit(node: LetStmtNode): T
     fun visit(node: ExprStmtNode): T
     fun visit(node: NullStmtNode): T
-    fun visit(node: LiteralPatternNode): T
     fun visit(node: IdentifierPatternNode): T
     fun visit(node: RefPatternNode): T
-    fun visit(node: PathPatternNode): T
     fun visit(node: WildcardPatternNode): T
     fun visit(node: TypePathNode): T
     fun visit(node: RefTypeNode): T

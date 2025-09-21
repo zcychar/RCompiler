@@ -183,7 +183,7 @@ class RParser(val input: MutableList<Token>) {
             items.add(parseAssociatedItem())
         }
         expectAndConsume(Punctuation.RIGHT_BRACE)
-        return TraitItemNode(id, items)
+        return TraitItemNode(id, items,null)
     }
 
     private fun parseImplItem(): ImplItemNode {
@@ -491,24 +491,12 @@ class RParser(val input: MutableList<Token>) {
         return when (peek(1)?.type) {
             Punctuation.UNDERSCORE -> parseWildcardPattern()
             Punctuation.AMPERSAND, Punctuation.AND_AND -> parseRefPattern()
-            Punctuation.MINUS, is Literal -> parseLiteralPattern()
-            Keyword.SELF_UPPER, Keyword.SELF -> parsePathPattern()
             Keyword.REF, Keyword.MUT -> parseIdentifierPattern()
-            Identifier -> {
-                if (peek(2)?.type == Punctuation.AT) {
-                    parseIdentifierPattern()
-                } else parsePathPattern()
-            }
-
+            Identifier -> parseIdentifierPattern()
             else -> throw CompileError("Parser:Expect pattern, met ${peek(1)}")
-        }
+            }
     }
 
-    private fun parseLiteralPattern(): LiteralPatternNode {
-        val hasMinus = tryConsume(Punctuation.MINUS)
-        val expr = parseLiteralExpr()
-        return LiteralPatternNode(hasMinus, expr)
-    }
 
     private fun parseIdentifierPattern(): IdentifierPatternNode {
         val hasRef = tryConsume(Keyword.REF)
@@ -536,9 +524,6 @@ class RParser(val input: MutableList<Token>) {
         expectAndConsume(Punctuation.UNDERSCORE)
         return WildcardPatternNode
     }
-
-    private fun parsePathPattern(): PathPatternNode = PathPatternNode(parsePathExpr())
-
 
     //---------------------ParseStatement---------------------------
     //TODO:may have ambiguous expr and item

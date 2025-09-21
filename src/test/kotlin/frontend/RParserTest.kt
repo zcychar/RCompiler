@@ -61,7 +61,6 @@ class RParserTest {
         val func = crate.items[0] as FunctionItemNode
         assertEquals("add", func.name)
         assertEquals(2, func.funParams.size)
-        assertEquals("x", (func.funParams[0].pattern as PathPatternNode).path.seg1.id)
         assertEquals("i32", (func.funParams[0].type as TypePathNode).name)
         assertNotNull(func.returnType)
         assertEquals("i32", (func.returnType as TypePathNode).name)
@@ -217,9 +216,9 @@ class RParserTest {
         """
         val stmts = (parse(src).items[0] as FunctionItemNode).body!!.stmts
         val ifLet = (stmts[0] as ExprStmtNode).expr as IfExprNode
-        assertTrue(ifLet.conds[0].pattern is PathPatternNode)
+        assertTrue(ifLet.conds[0].pattern is IdentifierPatternNode)
         val whileLet = (stmts[1] as ExprStmtNode).expr as WhileExprNode
-        assertTrue(whileLet.conds[0].pattern is PathPatternNode)
+        assertTrue(whileLet.conds[0].pattern is IdentifierPatternNode)
     }
 
     @Test

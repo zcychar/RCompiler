@@ -337,7 +337,7 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
         symbol.type = resolveType(node.type)
         if (node.expr != null) {
             symbol.value = evaluateConstExpr(node.expr,symbol.type)
-        }else if(currentScope?.description?.startsWith("TRAIT")!=true){
+        }else if(currentScope?.kind!= ScopeKind.TRAIT){
             throw CompileError("Semantic: Constant $name does not have an initializer")
         }
         symbol.resolutionState = ResolutionState.RESOLVED
@@ -352,7 +352,15 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
     }
 
     override fun visit(node: FunctionItemNode) {
-
+        val symbol = resolveFunction(node.name)
+        currentScope = node.body?.scope?:return
+        node.funParams.zip(symbol.params).forEach {
+            (paramNode,paramType)->
+            if(paramNode.pattern is IdentifierPatternNode){
+                val name = paramNode.pattern.id
+                val isMut = paramNode.pattern.hasMut
+            }
+        }
     }
 
     override fun visit(node: StructItemNode) {
@@ -471,19 +479,11 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
         TODO("Not yet implemented")
     }
 
-    override fun visit(node: LiteralPatternNode) {
-        TODO("Not yet implemented")
-    }
-
     override fun visit(node: IdentifierPatternNode) {
         TODO("Not yet implemented")
     }
 
     override fun visit(node: RefPatternNode) {
-        TODO("Not yet implemented")
-    }
-
-    override fun visit(node: PathPatternNode) {
         TODO("Not yet implemented")
     }
 

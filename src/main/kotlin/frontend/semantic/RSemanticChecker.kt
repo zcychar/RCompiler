@@ -127,9 +127,6 @@ class RSemanticChecker: ASTVisitor<Unit> {
         TODO("Not yet implemented")
     }
 
-    override fun visit(node: LiteralPatternNode) {
-        TODO("Not yet implemented")
-    }
 
     override fun visit(node: IdentifierPatternNode) {
         TODO("Not yet implemented")
@@ -139,9 +136,6 @@ class RSemanticChecker: ASTVisitor<Unit> {
         TODO("Not yet implemented")
     }
 
-    override fun visit(node: PathPatternNode) {
-        TODO("Not yet implemented")
-    }
 
     override fun visit(node: WildcardPatternNode) {
         TODO("Not yet implemented")

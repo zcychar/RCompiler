@@ -428,22 +428,12 @@ fun BinaryExprNode.dumpToString(indent: Int): String {
 
 fun PatternNode.dumpToString(indent: Int): String {
     return when (this) {
-        is LiteralPatternNode -> this.dumpToString(indent)
         is IdentifierPatternNode -> this.dumpToString(indent)
         is RefPatternNode -> this.dumpToString(indent)
-        is PathPatternNode -> this.dumpToString(indent)
         is WildcardPatternNode -> this.dumpToString(indent)
     }
 }
 
-fun LiteralPatternNode.dumpToString(indent: Int): String {
-    val builder = StringBuilder()
-    val padding = " ".repeat(indent)
-    builder.append("${padding}LiteralPatternNode (hasMinus=$hasMinus) {\n")
-    builder.append(this.expr.dumpToString(indent + 2))
-    builder.append("${padding}}\n")
-    return builder.toString()
-}
 
 fun IdentifierPatternNode.dumpToString(indent: Int): String {
     val builder = StringBuilder()
@@ -459,15 +449,6 @@ fun RefPatternNode.dumpToString(indent: Int): String {
     val padding = " ".repeat(indent)
     builder.append("${padding}RefPatternNode (isDouble=$isDouble, hasMut=$hasMut) {\n")
     builder.append(this.pattern.dumpToString(indent + 2))
-    builder.append("${padding}}\n")
-    return builder.toString()
-}
-
-fun PathPatternNode.dumpToString(indent: Int): String {
-    val builder = StringBuilder()
-    val padding = " ".repeat(indent)
-    builder.append("${padding}PathPatternNode {\n")
-    builder.append(this.path.dumpToString(indent + 2))
     builder.append("${padding}}\n")
     return builder.toString()
 }

@@ -179,13 +179,10 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
 
     override fun visit(node: NullStmtNode) {}
 
-    override fun visit(node: LiteralPatternNode) {}
-
     override fun visit(node: IdentifierPatternNode) {}
 
     override fun visit(node: RefPatternNode) {}
 
-    override fun visit(node: PathPatternNode) {}
 
     override fun visit(node: WildcardPatternNode) {}
 
