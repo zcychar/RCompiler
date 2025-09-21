@@ -1,5 +1,7 @@
 package frontend.AST
 
+import frontend.semantic.Scope
+
 sealed interface ItemNode {
     fun <T> accept(visitor: ASTVisitor<T>): T
 }
@@ -30,7 +32,7 @@ data class ConstItemNode(val name: String, val type: TypeNode, val expr: ExprNod
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class TraitItemNode(val name: String, val items: List<ItemNode>) : ItemNode {
+data class TraitItemNode(val name: String, val items: List<ItemNode>, var scope : Scope?) : ItemNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 

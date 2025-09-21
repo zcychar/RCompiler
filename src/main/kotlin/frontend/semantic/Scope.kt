@@ -4,7 +4,16 @@ import utils.CompileError
 
 enum class Namespace { TYPE, VALUE }
 
-class Scope(val parent: Scope? = null, val description: String) {
+enum class ScopeKind {
+    PRELUDE,
+    GLOBAL,
+    FUNCTION,
+    TRAIT,
+    IMPL,
+    BLOCK
+}
+
+class Scope(val parent: Scope? = null,val kind: ScopeKind) {
     private val typeNamespace = mutableMapOf<String, Symbol>()
     private val valueNamespace = mutableMapOf<String, Symbol>()
 
@@ -33,7 +42,7 @@ class Scope(val parent: Scope? = null, val description: String) {
 }
 
 fun toPrelude(): Scope {
-    val preludeScope = Scope(null, "prelude")
+    val preludeScope = Scope(null,  ScopeKind.PRELUDE)
     preludeScope.declare(BuiltIn("i32", Int32Type), Namespace.TYPE)
     preludeScope.declare(BuiltIn("u32", UInt32Type), Namespace.TYPE)
     preludeScope.declare(BuiltIn("isize", Int32Type), Namespace.TYPE)
