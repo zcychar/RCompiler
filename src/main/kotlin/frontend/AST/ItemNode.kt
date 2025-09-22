@@ -36,6 +36,6 @@ data class TraitItemNode(val name: String, val items: List<ItemNode>, var scope 
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class ImplItemNode(val name: String?, val type: TypeNode, val items: List<ItemNode>) : ItemNode {
+data class ImplItemNode(val name: String?, val type: TypeNode, val items: List<ItemNode>,var scope : Scope?) : ItemNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }

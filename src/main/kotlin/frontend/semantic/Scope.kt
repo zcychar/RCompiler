@@ -23,7 +23,7 @@ class Scope(val parent: Scope? = null,val kind: ScopeKind) {
             Namespace.VALUE -> valueNamespace
         }
         if (table.containsKey(symbol.name)) {
-            CompileError("Semantic Error: Symbol '${symbol.name}' already declared in the $namespace namespace of this scope '$description'.")
+            CompileError("Semantic Error: Symbol '${symbol.name}' already declared in the $namespace namespace of this scope.")
             return
         }
         table[symbol.name] = symbol
