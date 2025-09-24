@@ -58,7 +58,12 @@ data class Enum(
 }
 
 
-data class Trait(override val name: String, val type: TraitType) : Symbol
+data class Trait(
+    override val name: String,
+    val type: TraitType,
+    val node: ItemNode?,
+    var resolutionState: ResolutionState = ResolutionState.UNRESOLVED
+) : Symbol
 
 data class BuiltIn(override val name: String, val type: Type) : Symbol
 

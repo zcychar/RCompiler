@@ -183,7 +183,7 @@ class RParser(val input: MutableList<Token>) {
             items.add(parseAssociatedItem())
         }
         expectAndConsume(Punctuation.RIGHT_BRACE)
-        return TraitItemNode(id, items,null)
+        return TraitItemNode(id, items, null)
     }
 
     private fun parseImplItem(): ImplItemNode {
@@ -200,7 +200,7 @@ class RParser(val input: MutableList<Token>) {
             items.add(parseAssociatedItem())
         }
         expectAndConsume(Punctuation.RIGHT_BRACE)
-        return ImplItemNode(id, type, items)
+        return ImplItemNode(id, type, items, null)
     }
 
     //----------------------ParseExpr------------------------------
@@ -242,11 +242,13 @@ class RParser(val input: MutableList<Token>) {
                 val right = parseExpr(pre)
                 BinaryExprNode(operator, left, right)
             }
-            Keyword.AS->{
+
+            Keyword.AS -> {
                 consume()
                 val targetType = parseType()
                 CastExprNode(left, targetType)
             }
+
             Punctuation.LEFT_PAREN -> parseCallExpr(left)
             Punctuation.DOT -> {
                 if (peek(2)?.type == Identifier && peek(3)?.type == Punctuation.LEFT_PAREN) {
@@ -494,7 +496,7 @@ class RParser(val input: MutableList<Token>) {
             Keyword.REF, Keyword.MUT -> parseIdentifierPattern()
             Identifier -> parseIdentifierPattern()
             else -> throw CompileError("Parser:Expect pattern, met ${peek(1)}")
-            }
+        }
     }
 
 

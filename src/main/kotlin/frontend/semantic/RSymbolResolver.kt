@@ -265,7 +265,6 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
             fieldsMap[fieldNode.name] = resolveType(fieldNode.type)
         }
         symbol.type.fields = fieldsMap
-        currentScope?.declare(symbol, Namespace.VALUE)
         symbol.resolutionState = ResolutionState.RESOLVED
         return symbol.type
     }
@@ -296,18 +295,77 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
         return symbol.type
     }
 
-    fun resolveFunction(name: String, trait: Trait? = null): Function {
-        val symbol = (if (trait != null) trait.type.associatedItems[name]
-        else currentScope?.resolve(name, Namespace.VALUE)) as? Function
-            ?: throw CompileError("Semantic:undefined enumeration type $name")
+    fun resolveFunction(name: String): Function {
+
+    }
+
+
+
+    fun resolveConst(name: String): Constant {
+        val symbol = currentScope?.resolve(name, Namespace.VALUE) as? Constant
+            ?: throw CompileError("Semantic:undefined const type $name")
         when (symbol.resolutionState) {
             ResolutionState.UNRESOLVED -> {}
-            ResolutionState.RESOLVING -> throw CompileError("Semantic:recursive dependency of function $name")
+            ResolutionState.RESOLVING -> throw CompileError("Semantic:recursive dependency of constant $name")
             ResolutionState.RESOLVED -> return symbol
         }
         symbol.resolutionState = ResolutionState.RESOLVING
         val node =
-            symbol.node as? FunctionItemNode ?: throw CompileError("Semantic:invalid prelude usage")//TODO:CHECK PRELUDE
+            symbol.node as? ConstItemNode ?: throw CompileError("Semantic:invalid prelude usage")//TODO:CHECK PRELUDE
+        symbol.type = resolveType(node.type)
+        if (node.expr != null) {
+            symbol.value = evaluateConstExpr(node.expr, symbol.type)
+        } else if (currentScope?.kind != ScopeKind.TRAIT) {
+            throw CompileError("Semantic: Constant $name does not have an initializer")
+        }
+        symbol.resolutionState = ResolutionState.RESOLVED
+        return symbol
+    }
+
+    fun resolveTrait(name:String):Trait{
+        val symbol = currentScope?.resolve(name, Namespace.TYPE) as? Trait
+            ?: throw CompileError("Semantic:undefined trait $name")
+        when (symbol.resolutionState) {
+            ResolutionState.UNRESOLVED -> {}
+            ResolutionState.RESOLVING -> throw CompileError("Semantic:recursive dependency of trait $name")
+            ResolutionState.RESOLVED -> return symbol
+        }
+        symbol.resolutionState = ResolutionState.RESOLVING
+        val node =
+            symbol.node as? TraitItemNode ?: throw CompileError("Semantic:invalid prelude usage")
+        currentScope = node.scope
+        val associatedSymbols = node.items.associate< ItemNode,String, Symbol> { itemNode->
+            when(itemNode){
+                is FunctionItemNode->{
+                    Pair(itemNode.name,resolveFunction(itemNode.name))
+                }
+                is ConstItemNode->{
+                    Pair(itemNode.name,resolveConst(itemNode.name))
+                }
+                else ->throw CompileError("Semantic:invalid trait item in ${node.name}")
+            }
+        }
+        currentScope = currentScope?.parentScope()
+        symbol.resolutionState = ResolutionState.RESOLVED
+        symbol.type.associatedItems = associatedSymbols
+    }
+
+    //------------------Visitors----------------------
+    override fun visit(node: CrateNode) {
+        currentScope = node.scope
+        node.items.forEach { it.accept(this) }
+        currentScope = currentScope?.parentScope()
+    }
+
+    override fun visit(node: FunctionItemNode) {
+        val symbol = (currentScope?.resolve(node.name, Namespace.VALUE)) as? Function
+            ?: throw CompileError("Semantic:undefined function $node.name")
+        when (symbol.resolutionState) {
+            ResolutionState.UNRESOLVED -> {}
+            ResolutionState.RESOLVING -> throw CompileError("Semantic:recursive dependency of function $node.name")
+            ResolutionState.RESOLVED -> throw CompileError("Semantic:duplicate visit of function $node.name")
+        }
+        symbol.resolutionState = ResolutionState.RESOLVING
         symbol.params = node.funParams.map { resolveType(it.type) }
         symbol.returnType = resolveType(node.returnType)
         if (node.selfParam != null) {
@@ -321,197 +379,162 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
         }
         symbol.resolutionState = ResolutionState.RESOLVED
         return symbol
-    }
-
-    fun resolveConst(name: String): Constant {
-        val symbol = currentScope?.resolve(name, Namespace.VALUE) as? Constant
-            ?: throw CompileError("Semantic:undefined enumeration type $name")
-        when (symbol.resolutionState) {
-            ResolutionState.UNRESOLVED -> {}
-            ResolutionState.RESOLVING -> throw CompileError("Semantic:recursive dependency of constant $name")
-            ResolutionState.RESOLVED -> return symbol
-        }
-        symbol.resolutionState = ResolutionState.RESOLVING
-        val node =
-            symbol.node as? ConstItemNode ?: throw CompileError("Semantic:invalid prelude usage")//TODO:CHECK PRELUDE
-        symbol.type = resolveType(node.type)
-        if (node.expr != null) {
-            symbol.value = evaluateConstExpr(node.expr,symbol.type)
-        }else if(currentScope?.kind!= ScopeKind.TRAIT){
-            throw CompileError("Semantic: Constant $name does not have an initializer")
-        }
-        symbol.resolutionState = ResolutionState.RESOLVED
-        return symbol
-    }
-
-    //------------------Visitors----------------------
-    override fun visit(node: CrateNode) {
-        currentScope = node.scope
-        node.items.forEach { it.accept(this) }
+        currentScope = node.body?.scope ?: return
+        node.body.stmts.forEach { it.accept(this) }
         currentScope = currentScope?.parentScope()
     }
 
-    override fun visit(node: FunctionItemNode) {
-        val symbol = resolveFunction(node.name)
-        currentScope = node.body?.scope?:return
-        node.funParams.zip(symbol.params).forEach {
-            (paramNode,paramType)->
-            if(paramNode.pattern is IdentifierPatternNode){
-                val name = paramNode.pattern.id
-                val isMut = paramNode.pattern.hasMut
-            }
-        }
-    }
-
     override fun visit(node: StructItemNode) {
-        TODO("Not yet implemented")
+        resolveStruct(node.name)
     }
 
     override fun visit(node: EnumItemNode) {
-        TODO("Not yet implemented")
+        resolveEnum(node.name)
     }
 
     override fun visit(node: TraitItemNode) {
-        TODO("Not yet implemented")
+
+        node.items.forEach { it.accept(this) }
     }
 
     override fun visit(node: ImplItemNode) {
-        TODO("Not yet implemented")
+        node.type.accept(this)
+        node.items.forEach { it.accept(this) }
     }
 
     override fun visit(node: ConstItemNode) {
-        TODO("Not yet implemented")
+        node.type.accept(this)
+        node.expr?.accept(this)
     }
 
     override fun visit(node: BlockExprNode) {
-        TODO("Not yet implemented")
+        node.stmts.forEach { it.accept(this) }
     }
 
     override fun visit(node: LoopExprNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
     }
 
     override fun visit(node: WhileExprNode) {
-        TODO("Not yet implemented")
+        node.conds.forEach { it.accept(this) }
+        node.expr.accept(this)
     }
 
     override fun visit(node: BreakExprNode) {
-        TODO("Not yet implemented")
+        node.expr?.accept(this)
     }
 
     override fun visit(node: ReturnExprNode) {
-        TODO("Not yet implemented")
+        node.expr?.accept(this)
     }
 
-    override fun visit(node: ContinueExprNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: ContinueExprNode) {}
 
     override fun visit(node: IfExprNode) {
-        TODO("Not yet implemented")
+        node.conds.forEach { it.accept(this) }
+        node.expr.accept(this)
+        node.elseIf?.accept(this)
+        node.elseExpr?.accept(this)
     }
 
     override fun visit(node: FieldAccessExprNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
     }
 
     override fun visit(node: MethodCallExprNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
+        node.pathSeg.accept(this)
+        node.params.forEach { it.accept(this) }
     }
 
     override fun visit(node: CallExprNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
+        node.params.forEach { it.accept(this) }
     }
 
     override fun visit(node: CondExprNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
+        node.pattern?.accept(this)
     }
 
-    override fun visit(node: LiteralExprNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: LiteralExprNode) {}
 
-    override fun visit(node: IdentifierExprNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: IdentifierExprNode) {}
 
     override fun visit(node: PathExprNode) {
-        TODO("Not yet implemented")
+        node.seg1.accept(this)
+        node.seg2?.accept(this)
     }
 
     override fun visit(node: ArrayExprNode) {
-        TODO("Not yet implemented")
+        node.elements?.forEach { it.accept(this) }
+        node.lengthOp?.accept(this)
+        node.repeatOp?.accept(this)
     }
 
     override fun visit(node: IndexExprNode) {
-        TODO("Not yet implemented")
+        node.index.accept(this)
+        node.base.accept(this)
     }
 
     override fun visit(node: StructExprNode) {
-        TODO("Not yet implemented")
+        node.path.accept(this)
+        node.fields.forEach { it.expr?.accept(this) }
     }
 
-    override fun visit(node: UnderscoreExprNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: UnderscoreExprNode) {}
 
     override fun visit(node: UnaryExprNode) {
-        TODO("Not yet implemented")
+        node.rhs.accept(this)
     }
 
     override fun visit(node: BinaryExprNode) {
-        TODO("Not yet implemented")
+        node.lhs.accept(this)
+        node.rhs.accept(this)
     }
 
     override fun visit(node: ItemStmtNode) {
-        TODO("Not yet implemented")
+        node.item.accept(this)
     }
 
     override fun visit(node: LetStmtNode) {
-        TODO("Not yet implemented")
+        node.expr?.accept(this)
     }
 
     override fun visit(node: ExprStmtNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
     }
 
-    override fun visit(node: NullStmtNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: NullStmtNode) {}
 
     override fun visit(node: IdentifierPatternNode) {
-        TODO("Not yet implemented")
+        node.subPattern?.accept(this)
     }
 
     override fun visit(node: RefPatternNode) {
-        TODO("Not yet implemented")
+        node.pattern.accept(this)
     }
 
     override fun visit(node: WildcardPatternNode) {
-        TODO("Not yet implemented")
     }
 
-    override fun visit(node: TypePathNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: TypePathNode) {}
 
     override fun visit(node: RefTypeNode) {
-        TODO("Not yet implemented")
+        node.type.accept(this)
     }
 
     override fun visit(node: ArrayTypeNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
     }
 
-    override fun visit(node: UnitTypeNode) {
-        TODO("Not yet implemented")
-    }
+    override fun visit(node: UnitTypeNode) {}
 
     override fun visit(node: GroupedExprNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
     }
 
     override fun visit(node: CastExprNode) {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
     }
 }

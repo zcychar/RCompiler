@@ -37,6 +37,14 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
             node = node
         )
         currentScope?.declare(struct, Namespace.TYPE)
+        if (node.fields.isEmpty()) {
+            currentScope?.declare(
+                Constant(struct.name, struct.node, struct.type, null, ResolutionState.RESOLVED),
+                Namespace.VALUE
+            )
+        } else {
+            currentScope?.declare(struct, Namespace.VALUE)
+        }
     }
 
     override fun visit(node: EnumItemNode) {
@@ -51,14 +59,22 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
     override fun visit(node: TraitItemNode) {
         val trait = Trait(
             name = node.name,
-            type = TraitType(name = node.name, associatedItems = mapOf())
+            type = TraitType(name = node.name, associatedItems = mapOf()),
+            node = node,
         )
         currentScope?.declare(trait, Namespace.TYPE)
-        val traitScope = Scope(currentScope, ScopeKind.TRAIT)
-        node.scope = traitScope
+        currentScope = Scope(currentScope, ScopeKind.TRAIT)
+        node.scope = currentScope
+        node.items.forEach { it.accept(this) }
+        currentScope = currentScope?.parentScope()
     }
 
-    override fun visit(node: ImplItemNode) {}
+    override fun visit(node: ImplItemNode) {
+        currentScope = Scope(currentScope, ScopeKind.IMPL)
+        node.scope = currentScope
+        node.items.forEach { it.accept(this) }
+        currentScope = currentScope?.parentScope()
+    }
 
     override fun visit(node: ConstItemNode) {
         val constItem = Constant(

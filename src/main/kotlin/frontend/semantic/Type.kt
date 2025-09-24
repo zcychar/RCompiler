@@ -34,6 +34,6 @@ data class EnumType(val name: String, var variants: Set<String>) : Type {
     override fun isEquivalentTo(other: Type): Boolean = other is EnumType && this.name == other.name
 }
 
-data class TraitType(val name: String, var associatedItems: Map<String, Function> = emptyMap()) : Type {
+data class TraitType(val name: String, var associatedItems: Map<String, Symbol> = emptyMap()) : Type {
     override fun isEquivalentTo(other: Type): Boolean = other is TraitType && this.name == other.name
 }
