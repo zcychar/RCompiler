@@ -1,4 +1,4 @@
-package frontend.AST
+package frontend.ast
 
 import frontend.semantic.Scope
 

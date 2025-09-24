@@ -1,4 +1,4 @@
-package frontend.AST
+package frontend.ast
 
 interface ASTVisitor<T> {
     fun visit(node: CrateNode): T

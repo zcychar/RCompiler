@@ -1,6 +1,6 @@
 package frontend.semantic
 
-import frontend.AST.*
+import frontend.ast.*
 
 class RSemanticChecker: ASTVisitor<Unit> {
     override fun visit(node: CrateNode) {

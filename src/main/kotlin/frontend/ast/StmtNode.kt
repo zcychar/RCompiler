@@ -1,23 +1,21 @@
-package frontend.AST
+package frontend.ast
 
-import frontend.TokenType
-
-sealed interface TypeNode {
+sealed interface StmtNode {
     fun <T> accept(visitor: ASTVisitor<T>): T
 }
 
-data class TypePathNode(val name: String?, val type: TokenType?) : TypeNode {
+data class ItemStmtNode(val item: ItemNode) : StmtNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class RefTypeNode(val hasMut: Boolean, val type: TypeNode) : TypeNode {
+data class LetStmtNode(val pattern: PatternNode, val type: TypeNode?, val expr: ExprNode?) : StmtNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class ArrayTypeNode(val type: TypeNode, val expr: ExprNode) : TypeNode {
+data class ExprStmtNode(val expr: ExprNode) : StmtNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data object UnitTypeNode : TypeNode {
+data object NullStmtNode : StmtNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }

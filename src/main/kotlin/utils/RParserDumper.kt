@@ -1,6 +1,6 @@
 package utils
 
-import frontend.AST.*
+import frontend.ast.*
 import frontend.RParser
 
 fun RParser.dumpToString(): String {

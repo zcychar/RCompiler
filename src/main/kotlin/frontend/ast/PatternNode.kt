@@ -1,6 +1,4 @@
-package frontend.AST
-
-import frontend.Identifier
+package frontend.ast
 
 sealed interface PatternNode {
     fun <T> accept(visitor: ASTVisitor<T>): T

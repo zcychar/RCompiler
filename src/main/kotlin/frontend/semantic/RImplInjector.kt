@@ -1,101 +1,91 @@
 package frontend.semantic
 
 import frontend.ast.*
+import frontend.Keyword
+import frontend.Literal
+import frontend.Punctuation
+import utils.CompileError
 
-class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> {
 
-  var currentScope: Scope? = preludeScope
+class RImplInjector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> {
+  var currentScope: Scope? = gScope
 
   fun process() = visit(crate)
 
+
+  //------------------Visitors----------------------
   override fun visit(node: CrateNode) {
-    currentScope = Scope(currentScope, ScopeKind.GLOBAL)
-    node.scope = currentScope
+    currentScope = node.scope
     node.items.forEach { it.accept(this) }
     currentScope = currentScope?.parentScope()
   }
 
   override fun visit(node: FunctionItemNode) {
-    val function = Function(
-      name = node.name,
-      params = listOf(),
-      returnType = UnitType,
-      selfParam = null,
-      node = node
-    )
-    currentScope?.declare(function, Namespace.VALUE)
-    currentScope = Scope(currentScope, ScopeKind.FUNCTION)
-    node.body?.scope = currentScope
-    node.body?.accept(this)
+    currentScope = node.body?.scope ?: return
+    node.body.stmts.forEach { it.accept(this) }
     currentScope = currentScope?.parentScope()
   }
 
-  override fun visit(node: StructItemNode) {
-    val struct = Struct(
-      name = node.name,
-      type = StructType(name = node.name, fields = mapOf()),
-      node = node
-    )
-    currentScope?.declare(struct, Namespace.TYPE)
-    if (node.fields.isEmpty()) {
-      currentScope?.declare(
-        Constant(struct.name, struct.node, struct.type, null, ResolutionState.RESOLVED),
-        Namespace.VALUE
-      )
-    } else {
-      currentScope?.declare(struct, Namespace.VALUE)
-    }
-  }
+  override fun visit(node: StructItemNode) {}
 
-  override fun visit(node: EnumItemNode) {
-    val enum = Enum(
-      name = node.name,
-      type = EnumType(name = node.name, variants = setOf()),
-      node = node
-    )
-    currentScope?.declare(enum, Namespace.TYPE)
-  }
+  override fun visit(node: EnumItemNode) {}
 
-  override fun visit(node: TraitItemNode) {
-    val trait = Trait(
-      name = node.name,
-      type = TraitType(name = node.name, associatedItems = mapOf()),
-      node = node,
-    )
-    currentScope?.declare(trait, Namespace.TYPE)
-  }
+  override fun visit(node: TraitItemNode) {}
 
   override fun visit(node: ImplItemNode) {
-    node.scope = Scope(currentScope, ScopeKind.IMPL)
+    currentScope = node.scope
+    val trait = if (node.name != null) {
+      currentScope?.resolve(node.name, Namespace.TYPE) as? Trait
+        ?: throw CompileError("Semantic: implementing an invalid trait ${node.name}")
+    } else null
+    trait?.type?.associatedItems?.forEach {
+      when (it.value) {
+        is Constant -> {
+          if ((it.value as Constant).value == null) {
+            if (currentScope?.resolve(it.value.name, Namespace.VALUE) !is Constant) {
+              throw CompileError("Semantic: impl of trait missing associate item ${it.value}")
+            }
+          }
+        }
+
+        is Function -> {
+          if (currentScope?.resolve(it.value.name, Namespace.VALUE) !is Function) {
+            throw CompileError("Semantic: impl of trait missing associate item ${it.value}")
+          }
+        }
+
+        else -> throw CompileError("Semantic: invalid trait associate item for ${it.value}")
+      }
+    }
+    if (node.type is TypePathNode && node.type.name != null) {
+      val symbol = currentScope?.resolve(node.type.name, Namespace.TYPE)
+      when (symbol) {
+        is Enum -> {
+          val typedSelf = symbol.type
+          node.items.forEach { it ->
+
+          }
+
+        }
+
+        is Struct -> {
+
+        }
+
+        else -> throw CompileError("Semantic: impl target type ${node.type} not found")
+      }
+    } else throw CompileError("Semantic: impl target type ${node.type} not found")
+    currentScope = currentScope?.parentScope()
   }
 
   override fun visit(node: ConstItemNode) {
-    val constItem = Constant(
-      name = node.name,
-      type = UnitType,
-      value = null,
-      node = node
-    )
-    currentScope?.declare(constItem, Namespace.VALUE)
+    node.expr?.accept(this)
   }
 
   override fun visit(node: BlockExprNode) {
-    val needsNewScope = node.scope == null
-
-    if (needsNewScope) {
-      val blockScope = Scope(parent = currentScope, kind = ScopeKind.BLOCK)
-      node.scope = blockScope
-      currentScope = blockScope
-    } else {
-      currentScope = node.scope
-    }
-
+    currentScope = node.scope
     node.stmts.forEach { it.accept(this) }
-
-    if (needsNewScope) {
-      currentScope = currentScope?.parentScope()
-    }
-
+    currentScope = currentScope?.parentScope()
   }
 
   override fun visit(node: LoopExprNode) {
@@ -103,6 +93,7 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
   }
 
   override fun visit(node: WhileExprNode) {
+    node.conds.forEach { it.accept(this) }
     node.expr.accept(this)
   }
 
@@ -119,8 +110,8 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
   override fun visit(node: IfExprNode) {
     node.conds.forEach { it.accept(this) }
     node.expr.accept(this)
-    node.elseExpr?.accept(this)
     node.elseIf?.accept(this)
+    node.elseExpr?.accept(this)
   }
 
   override fun visit(node: FieldAccessExprNode) {
@@ -129,9 +120,9 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
 
   override fun visit(node: MethodCallExprNode) {
     node.expr.accept(this)
+    node.pathSeg.accept(this)
     node.params.forEach { it.accept(this) }
   }
-
 
   override fun visit(node: CallExprNode) {
     node.expr.accept(this)
@@ -140,13 +131,17 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
 
   override fun visit(node: CondExprNode) {
     node.expr.accept(this)
+    node.pattern?.accept(this)
   }
 
   override fun visit(node: LiteralExprNode) {}
 
   override fun visit(node: IdentifierExprNode) {}
 
-  override fun visit(node: PathExprNode) {}
+  override fun visit(node: PathExprNode) {
+    node.seg1.accept(this)
+    node.seg2?.accept(this)
+  }
 
   override fun visit(node: ArrayExprNode) {
     node.elements?.forEach { it.accept(this) }
@@ -155,11 +150,12 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
   }
 
   override fun visit(node: IndexExprNode) {
-    node.base.accept(this)
     node.index.accept(this)
+    node.base.accept(this)
   }
 
   override fun visit(node: StructExprNode) {
+    node.path.accept(this)
     node.fields.forEach { it.expr?.accept(this) }
   }
 
@@ -188,12 +184,16 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
 
   override fun visit(node: NullStmtNode) {}
 
-  override fun visit(node: IdentifierPatternNode) {}
+  override fun visit(node: IdentifierPatternNode) {
+    node.subPattern?.accept(this)
+  }
 
-  override fun visit(node: RefPatternNode) {}
+  override fun visit(node: RefPatternNode) {
+    node.pattern.accept(this)
+  }
 
-
-  override fun visit(node: WildcardPatternNode) {}
+  override fun visit(node: WildcardPatternNode) {
+  }
 
   override fun visit(node: TypePathNode) {}
 
@@ -202,11 +202,11 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
   }
 
   override fun visit(node: ArrayTypeNode) {
-    node.type.accept(this)
     node.expr.accept(this)
   }
 
   override fun visit(node: UnitTypeNode) {}
+
   override fun visit(node: GroupedExprNode) {
     node.expr.accept(this)
   }
@@ -214,5 +214,4 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
   override fun visit(node: CastExprNode) {
     node.expr.accept(this)
   }
-
 }

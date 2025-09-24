@@ -1,6 +1,6 @@
 package frontend
 
-import frontend.AST.*
+import frontend.ast.*
 import utils.CompileError
 import utils.dumpToString
 
@@ -183,7 +183,7 @@ class RParser(val input: MutableList<Token>) {
             items.add(parseAssociatedItem())
         }
         expectAndConsume(Punctuation.RIGHT_BRACE)
-        return TraitItemNode(id, items, null)
+        return TraitItemNode(id, items)
     }
 
     private fun parseImplItem(): ImplItemNode {

@@ -1,4 +1,4 @@
-package frontend.AST
+package frontend.ast
 
 import frontend.semantic.Scope
 
@@ -32,7 +32,7 @@ data class ConstItemNode(val name: String, val type: TypeNode, val expr: ExprNod
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class TraitItemNode(val name: String, val items: List<ItemNode>, var scope : Scope?) : ItemNode {
+data class TraitItemNode(val name: String, val items: List<ItemNode>) : ItemNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
