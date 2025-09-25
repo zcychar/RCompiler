@@ -13,15 +13,15 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
   fun process() = visit(crate)
 
   //---------------Const Evaluation-----------------
-  fun evaluateConstExpr(expr: ExprNode, expectType: Type): ConstValue {
+  fun evaluateConstExpr(expr: ExprNode, expectType: Type): Value {
     return when (expr) {
       is LiteralExprNode -> when (expr.type) {
-        Keyword.TRUE -> ConstValue.Bool(true)
-        Keyword.FALSE -> ConstValue.Bool(false)
+        Keyword.TRUE -> Value.Bool(true)
+        Keyword.FALSE -> Value.Bool(false)
         Literal.INTEGER -> {
           val value = expr.value?.replace("_", "")?.toLong()
             ?: throw CompileError("Semantic:Invalid interger in const expression")
-          ConstValue.Int(value)
+          Value.Int(value)
         }
 
         Literal.CHAR -> {
@@ -29,10 +29,10 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
           if (value.length != 1) {
             throw CompileError("Semantic:Invalid Char $expr")
           }
-          ConstValue.Char(value[0])
+          Value.Char(value[0])
         }
 
-        Literal.RAW_C_STRING, Literal.C_STRING, Literal.STRING, Literal.RAW_STRING -> ConstValue.Str(
+        Literal.RAW_C_STRING, Literal.C_STRING, Literal.STRING, Literal.RAW_STRING -> Value.Str(
           expr.value ?: ""
         )
 
@@ -53,7 +53,7 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
             if (symbol.type.fields.isNotEmpty()) {
               throw CompileError("Semantic:paths to non-unit struct is not allowed to be const")
             }
-            ConstValue.Struct(symbol.type, emptyMap())
+            Value.Struct(symbol.type, emptyMap())
           }
 
           else -> throw CompileError("Semantic:Invalid path $name in const expression")
@@ -66,7 +66,7 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
           ?: throw CompileError("Semantic:${expr.path} is not a SIMPLE type path")
         val structType = resolveType((expr.path).seg1) as? StructType
           ?: throw CompileError("Semantic:Path ${expr.path.seg1.name} does not resolve to a struct type")
-        val fields = mutableMapOf<String, ConstValue>()
+        val fields = mutableMapOf<String, Value>()
         expr.fields.forEach { fieldNode ->
           val fieldType = structType.fields[fieldNode.id] ?: throw CompileError("Semantic:")
           val fieldExpr = fieldNode.expr ?: PathExprNode(TypePathNode(fieldNode.id, null), null)
@@ -75,12 +75,12 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
             if (it !in fieldNames) throw CompileError("Semantic:Field  $it is missing in initializer for struct $structType")
           }
         }
-        ConstValue.Struct(structType, fields)
+        Value.Struct(structType, fields)
       }
 
       is FieldAccessExprNode -> {
         val inner_expr = evaluateConstExpr(expr.expr, ErrorType)
-        if (inner_expr !is ConstValue.Struct) throw CompileError("Semantic:Invalid field to a non-struct const value")
+        if (inner_expr !is Value.Struct) throw CompileError("Semantic:Invalid field to a non-struct const value")
         inner_expr.fields[expr.id]
           ?: throw CompileError("Semantic:Const struct ${inner_expr.type.name} has no field ${expr.id}")
       }
@@ -91,31 +91,31 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
           val elements = expr.elements.map { elementExpr ->
             evaluateConstExpr(elementExpr, arrayElementType)
           }
-          val elementType = if (elements.isNotEmpty()) getTypeFromConst(elements[0]) else UnitType
-          ConstValue.Array(elements, elementType)
+          val elementType = if (elements.isNotEmpty()) getTypeFromValue(elements[0]) else UnitType
+          Value.Array(elements, elementType)
         } else if (expr.repeatOp != null && expr.lengthOp != null) {
           val lengthValue = evaluateConstExpr(expr.lengthOp, UInt32Type)
-          val length = (lengthValue as? ConstValue.Int)?.value?.toInt()
+          val length = (lengthValue as? Value.Int)?.value?.toInt()
             ?: throw CompileError("Semantic:lengthOp of array $lengthValue, not const int")
           if (length < 0) {
             throw CompileError("Semantic:Array length cannot be negative")
           }
           val elemValue = evaluateConstExpr(expr.repeatOp, arrayElementType)
           val elements = List(length) { elemValue }
-          val elementType = getTypeFromConst(elemValue)
-          ConstValue.Array(elements, elementType)
+          val elementType = getTypeFromValue(elemValue)
+          Value.Array(elements, elementType)
         } else {
-          ConstValue.Array(emptyList(), UnitType)
+          Value.Array(emptyList(), UnitType)
         }
       }
 
       is IndexExprNode -> {
         val baseValue = evaluateConstExpr(expr.base, ErrorType)
         val indexValue = evaluateConstExpr(expr.index, UInt32Type)
-        if (baseValue !is ConstValue.Array) {
+        if (baseValue !is Value.Array) {
           throw CompileError("Semantic:Indexing of $expr, not a constant array")
         }
-        val index = (indexValue as? ConstValue.Int)?.value?.toInt()
+        val index = (indexValue as? Value.Int)?.value?.toInt()
           ?: throw CompileError("Semantic:Array index must be an constant int")
         if (index !in 0..baseValue.elements.size) {
           throw CompileError("Semantic:const index $index out of bound for $baseValue")
@@ -127,16 +127,16 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
         when (expr.op) {
           Punctuation.MINUS -> {
             val innerValue = evaluateConstExpr(expr.rhs, expectType)
-            val value = (innerValue as? ConstValue.Int)?.value
+            val value = (innerValue as? Value.Int)?.value
               ?: throw CompileError("Semantic:Unary minus followed by an non-int operand ${expr.rhs}")
-            ConstValue.Int(-value)
+            Value.Int(-value)
           }
 
           Punctuation.BANG -> {
             val innerValue = evaluateConstExpr(expr.rhs, expectType)
-            val value = (innerValue as? ConstValue.Bool)?.value
+            val value = (innerValue as? Value.Bool)?.value
               ?: throw CompileError("Semantic:Unary bang followed by an non-bool operand ${expr.rhs}")
-            ConstValue.Bool(!value)
+            Value.Bool(!value)
           }
 
           else -> throw CompileError("Semantic:Unsupported unary $expr")
@@ -146,63 +146,63 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
       is BinaryExprNode -> {
         if (expr.op == Punctuation.AND_AND) {
           val lhs = evaluateConstExpr(expr.lhs, BoolType)
-          if (lhs !is ConstValue.Bool) throw CompileError("Semantic: ${expr.op} requires boolean operands.")
-          return if (!lhs.value) ConstValue.Bool(false) else {
+          if (lhs !is Value.Bool) throw CompileError("Semantic: ${expr.op} requires boolean operands.")
+          return if (!lhs.value) Value.Bool(false) else {
             val rhs = evaluateConstExpr(expr.rhs, BoolType)
-            if (rhs !is ConstValue.Bool) throw CompileError("Semantic: ${expr.op} requires boolean operands.")
+            if (rhs !is Value.Bool) throw CompileError("Semantic: ${expr.op} requires boolean operands.")
             rhs
           }
         }
         if (expr.op == Punctuation.OR_OR) {
           val lhs = evaluateConstExpr(expr.lhs, BoolType)
-          if (lhs !is ConstValue.Bool) throw CompileError("Semantic: not boolean operand for ${expr.op}")
-          return if (lhs.value) ConstValue.Bool(true) else {
+          if (lhs !is Value.Bool) throw CompileError("Semantic: not boolean operand for ${expr.op}")
+          return if (lhs.value) Value.Bool(true) else {
             val rhs = evaluateConstExpr(expr.rhs, BoolType)
-            if (rhs !is ConstValue.Bool) throw CompileError("Semantic: ${expr.op} requires boolean operands.")
+            if (rhs !is Value.Bool) throw CompileError("Semantic: ${expr.op} requires boolean operands.")
             rhs
           }
         }
         val lhs = evaluateConstExpr(expr.lhs, expectType)
         val rhs = evaluateConstExpr(expr.rhs, expectType)
         when (lhs) {
-          is ConstValue.Int if rhs is ConstValue.Int -> {
+          is Value.Int if rhs is Value.Int -> {
             val l = lhs.value
             val r = rhs.value
             when (expr.op) {
-              Punctuation.PLUS -> ConstValue.Int(l + r)
-              Punctuation.MINUS -> ConstValue.Int(l - r)
-              Punctuation.STAR -> ConstValue.Int(l * r)
+              Punctuation.PLUS -> Value.Int(l + r)
+              Punctuation.MINUS -> Value.Int(l - r)
+              Punctuation.STAR -> Value.Int(l * r)
               Punctuation.SLASH -> {
                 if (r == 0L) throw CompileError("Semantic: Div by zero in const expression")
-                ConstValue.Int(l / r)
+                Value.Int(l / r)
               }
 
               Punctuation.PERCENT -> {
                 if (r == 0L) throw CompileError("Semantic: Div by zero in const expression")
-                ConstValue.Int(l % r)
+                Value.Int(l % r)
               }
 
-              Punctuation.AMPERSAND -> ConstValue.Int(l and r)
-              Punctuation.PIPE -> ConstValue.Int(l or r)
-              Punctuation.CARET -> ConstValue.Int(l xor r)
-              Punctuation.LESS_LESS -> ConstValue.Int(l shl r.toInt())
-              Punctuation.GREATER_GREATER -> ConstValue.Int(l shr r.toInt())
-              Punctuation.EQUAL_EQUAL -> ConstValue.Bool(l == r)
-              Punctuation.NOT_EQUAL -> ConstValue.Bool(l != r)
-              Punctuation.LESS -> ConstValue.Bool(l < r)
-              Punctuation.LESS_EQUAL -> ConstValue.Bool(l <= r)
-              Punctuation.GREATER -> ConstValue.Bool(l > r)
-              Punctuation.GREATER_EQUAL -> ConstValue.Bool(l >= r)
+              Punctuation.AMPERSAND -> Value.Int(l and r)
+              Punctuation.PIPE -> Value.Int(l or r)
+              Punctuation.CARET -> Value.Int(l xor r)
+              Punctuation.LESS_LESS -> Value.Int(l shl r.toInt())
+              Punctuation.GREATER_GREATER -> Value.Int(l shr r.toInt())
+              Punctuation.EQUAL_EQUAL -> Value.Bool(l == r)
+              Punctuation.NOT_EQUAL -> Value.Bool(l != r)
+              Punctuation.LESS -> Value.Bool(l < r)
+              Punctuation.LESS_EQUAL -> Value.Bool(l <= r)
+              Punctuation.GREATER -> Value.Bool(l > r)
+              Punctuation.GREATER_EQUAL -> Value.Bool(l >= r)
               else -> throw CompileError("Semantic: Unsupported binary operator ${expr.op} for integers")
             }
           }
 
-          is ConstValue.Bool if rhs is ConstValue.Bool -> {
+          is Value.Bool if rhs is Value.Bool -> {
             val l = lhs.value
             val r = rhs.value
             when (expr.op) {
-              Punctuation.EQUAL_EQUAL -> ConstValue.Bool(l == r)
-              Punctuation.NOT_EQUAL -> ConstValue.Bool(l != r)
+              Punctuation.EQUAL_EQUAL -> Value.Bool(l == r)
+              Punctuation.NOT_EQUAL -> Value.Bool(l != r)
               else -> throw CompileError("Semantic: Unsupported binary operator '${expr.op}' for booleans")
             }
           }
@@ -220,7 +220,7 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
     is ArrayTypeNode -> {
       val elementType = resolveType(node.type)
       val sizeValue = evaluateConstExpr(node.expr, UInt32Type)
-      val size = (sizeValue as? ConstValue.Int)?.value?.toInt()
+      val size = (sizeValue as? Value.Int)?.value?.toInt()
         ?: throw CompileError("Semantic: Array size must be a constant integer.")
       if (size < 0) throw CompileError("Semantic: Array size cannot be negative.")
       ArrayType(elementType, size)

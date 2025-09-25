@@ -1,67 +1,35 @@
 package frontend.semantic
 
 sealed interface Type {
-  fun isEquivalentTo(other: Type): Boolean
+  
 }
 
 object ErrorType : Type {
-  override fun isEquivalentTo(other: Type) = false
+  override fun equals(other: Any?): Boolean = false
 }
 
-object UnitType : Type {
-  override fun isEquivalentTo(other: Type) = other is UnitType
-}
+object UnitType : Type
 
-object BoolType : Type {
-  override fun isEquivalentTo(other: Type) = other is BoolType
-}
+object BoolType : Type
 
-object CharType : Type {
-  override fun isEquivalentTo(other: Type) = other is CharType
-}
+object CharType : Type
 
-object Int32Type : Type {
-  override fun isEquivalentTo(other: Type) = other is Int32Type
-}
+object Int32Type : Type
 
-object UInt32Type : Type {
-  override fun isEquivalentTo(other: Type) = other is UInt32Type
-}
+object UInt32Type : Type
 
-object StringType : Type {
-  override fun isEquivalentTo(other: Type) = other is StringType
-} // 代表语言内置的 String
+object StringType : Type
 
-object StrType : Type {
-  override fun isEquivalentTo(other: Type) = other is StrType
-}     // 代表 str 切片类型
+object StrType : Type
 
-data class RefType(val baseType: Type, val isMutable: Boolean) : Type {
-  override fun isEquivalentTo(other: Type): Boolean {
-    if (other !is RefType) return false
-    return this.baseType.isEquivalentTo(other.baseType)
-  }
-}
+data class RefType(val baseType: Type, val isMutable: Boolean) : Type
 
-data class ArrayType(val elementType: Type, val size: Int) : Type {
-  override fun isEquivalentTo(other: Type): Boolean {
-    if (other !is ArrayType) return false
-    return this.size == other.size && this.elementType.isEquivalentTo(other.elementType)
-  }
-}
+data class ArrayType(val elementType: Type, val size: Int) : Type
 
-data class StructType(val name: String, var fields: Map<String, Type> = emptyMap()) : Type {
-  override fun isEquivalentTo(other: Type): Boolean = other is StructType && this.name == other.name // 标称类型系统
-}
+data class StructType(val name: String, var fields: Map<String, Type> = emptyMap()) : Type
 
-data class EnumType(val name: String, var variants: Set<String>) : Type {
-  override fun isEquivalentTo(other: Type): Boolean = other is EnumType && this.name == other.name
-}
+data class EnumType(val name: String, var variants: Set<String>) : Type
 
-data class TraitType(val name: String, var associatedItems: Map<String, Symbol> = emptyMap()) : Type {
-  override fun isEquivalentTo(other: Type): Boolean = other is TraitType && this.name == other.name
-}
+data class TraitType(val name: String, var associatedItems: Map<String, Symbol> = emptyMap()) : Type
 
-data class SelfType(val isMut: Boolean, val isRef: Boolean, var type: Type? = null) : Type {
-  override fun isEquivalentTo(other: Type): Boolean = false
-}
+data class SelfType(val isMut: Boolean, val isRef: Boolean) : Type
