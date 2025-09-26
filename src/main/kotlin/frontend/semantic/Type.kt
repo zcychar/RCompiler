@@ -1,11 +1,9 @@
 package frontend.semantic
 
-sealed interface Type {
-  
-}
+sealed interface Type
 
 object ErrorType : Type {
-  override fun equals(other: Any?): Boolean = false
+    override fun equals(other: Any?): Boolean = false
 }
 
 object UnitType : Type
@@ -22,6 +20,8 @@ object StringType : Type
 
 object StrType : Type
 
+object NeverType : Type
+
 data class RefType(val baseType: Type, val isMutable: Boolean) : Type
 
 data class ArrayType(val elementType: Type, val size: Int) : Type
@@ -33,3 +33,5 @@ data class EnumType(val name: String, var variants: Set<String>) : Type
 data class TraitType(val name: String, var associatedItems: Map<String, Symbol> = emptyMap()) : Type
 
 data class SelfType(val isMut: Boolean, val isRef: Boolean) : Type
+
+fun isInt(type:Type) : Boolean = type is UInt32Type || type is Int32Type

@@ -553,11 +553,14 @@ class RParser(val input: MutableList<Token>) {
 
     private fun parseExprStmt(): ExprStmtNode {
         val expr = parseExpr()
+        var hasSemicolon = false
         if (expr is ExprWOBlock) {
-            if (peek(1)?.type != Punctuation.RIGHT_BRACE)
+            if (peek(1)?.type != Punctuation.RIGHT_BRACE) {
                 expectAndConsume(Punctuation.SEMICOLON)
-        } else tryConsume(Punctuation.SEMICOLON)
-        return ExprStmtNode(expr)
+                hasSemicolon = true
+            }
+        } else hasSemicolon = tryConsume(Punctuation.SEMICOLON)
+        return ExprStmtNode(expr, hasSemicolon)
     }
 
     //-----------------------ParseType------------------------------

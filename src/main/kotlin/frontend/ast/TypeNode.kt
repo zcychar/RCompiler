@@ -14,7 +14,7 @@ data class RefTypeNode(val hasMut: Boolean, val type: TypeNode) : TypeNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class ArrayTypeNode(val type: TypeNode, val expr: ExprNode) : TypeNode {
+data class ArrayTypeNode(val type: TypeNode, val expr: ExprNode, var evaluatedSize: Long = -1) : TypeNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 

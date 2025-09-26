@@ -24,7 +24,7 @@ data class Constant(
     override val name: String,
     val node: ItemNode?,
     var type: Type = ErrorType,
-    var value: Value? = null,
+    var value: ConstValue? = null,
     var resolutionState: ResolutionState = ResolutionState.UNRESOLVED
 ) : Symbol
 
@@ -66,23 +66,23 @@ data class Trait(
 
 data class BuiltIn(override val name: String, val type: Type) : Symbol
 
-sealed interface Value {
-    data class Int(val value: Long) : Value
-    data class Bool(val value: Boolean) : Value
-    data class Char(val value: kotlin.Char) : Value
-    data class Str(val value: String) : Value
-    data class Array(val elements: List<Value>, val elementType: Type) : Value
-    data class Struct(val type: StructType, val fields: Map<String, Value>) : Value
+sealed interface ConstValue {
+    data class Int(val value: Long) : ConstValue
+    data class Bool(val value: Boolean) : ConstValue
+    data class Char(val value: kotlin.Char) : ConstValue
+    data class Str(val value: String) : ConstValue
+    data class Array(val elements: List<ConstValue>, val elementType: Type) : ConstValue
+    data class Struct(val type: StructType, val fields: Map<String, ConstValue>) : ConstValue
 }
 
-fun getTypeFromValue(value: Value): Type {
+fun getTypeFromConst(value: ConstValue): Type {
     return when (value) {
-        is Value.Array -> ArrayType(value.elementType, value.elements.size)
-        is Value.Bool -> BoolType
-        is Value.Char -> CharType
-        is Value.Int -> Int32Type
-        is Value.Str -> RefType(StrType, false)
-        is Value.Struct -> value.type
+        is ConstValue.Array -> ArrayType(value.elementType, value.elements.size)
+        is ConstValue.Bool -> BoolType
+        is ConstValue.Char -> CharType
+        is ConstValue.Int -> Int32Type
+        is ConstValue.Str -> RefType(StrType, false)
+        is ConstValue.Struct -> value.type
     }
 }
 

@@ -12,7 +12,7 @@ data class LetStmtNode(val pattern: PatternNode, val type: TypeNode?, val expr: 
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class ExprStmtNode(val expr: ExprNode) : StmtNode {
+data class ExprStmtNode(val expr: ExprNode,val hasSemiColon: Boolean = false) : StmtNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 

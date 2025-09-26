@@ -13,6 +13,11 @@ sealed interface ExprWOBlock : ExprNode
 
 data class BlockExprNode(val hasConst: Boolean, val stmts: List<StmtNode>) : ExprWIBlock {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
+    fun hasFinal(): Boolean {
+        val last = stmts.last()
+        return last is ExprStmtNode && (last.expr is ExprWOBlock || !last.hasSemiColon)
+    }
+
     var scope: Scope? = null
 }
 
@@ -76,7 +81,12 @@ data class PathExprNode(val seg1: TypePathNode, val seg2: TypePathNode?) : ExprW
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class ArrayExprNode(val elements: List<ExprNode>?, val repeatOp: ExprNode?, val lengthOp: ExprNode?) :
+data class ArrayExprNode(
+    val elements: List<ExprNode>?,
+    val repeatOp: ExprNode?,
+    val lengthOp: ExprNode?,
+    var evaluatedSize: Long = -1
+) :
     ExprWOBlock {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
