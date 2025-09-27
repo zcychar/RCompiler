@@ -141,7 +141,7 @@ data object Identifier : TokenType
 data object ErrorToken : TokenType
 
 val unaryOp = setOf(
-    Punctuation.MINUS, Punctuation.STAR, Punctuation.BANG, Punctuation.AMPERSAND, Punctuation.AND_AND
+    Punctuation.MINUS, Punctuation.BANG,
 )
 
 val binaryOp = setOf(
@@ -155,6 +155,13 @@ val binaryOp = setOf(
     Punctuation.SLASH_EQUAL, Punctuation.PERCENT_EQUAL, Punctuation.CARET_EQUAL,
     Punctuation.AND_EQUAL, Punctuation.OR_EQUAL, Punctuation.LESS_LESS_EQUAL, Punctuation.GREATER_GREATER_EQUAL,
     Punctuation.RIGHT_ARROW, Punctuation.LEFT_ARROW, Punctuation.FAT_ARROW,
+)
+
+val assignOp = setOf(
+
+    Punctuation.EQUAL, Punctuation.PLUS_EQUAL, Punctuation.MINUS_EQUAL, Punctuation.STAR_EQUAL,
+    Punctuation.SLASH_EQUAL, Punctuation.PERCENT_EQUAL, Punctuation.CARET_EQUAL,
+    Punctuation.AND_EQUAL, Punctuation.OR_EQUAL, Punctuation.LESS_LESS_EQUAL, Punctuation.GREATER_GREATER_EQUAL,
 )
 
 val precedence = mapOf<TokenType, Pair<Int, Int>>(

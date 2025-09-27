@@ -215,4 +215,12 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
     node.expr.accept(this)
   }
 
+  override fun visit(node: BorrowExprNode) {
+    node.expr.accept(this)
+  }
+
+  override fun visit(node: DerefExprNode) {
+    node.expr.accept(this)
+  }
+
 }

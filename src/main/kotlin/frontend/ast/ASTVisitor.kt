@@ -43,4 +43,6 @@ interface ASTVisitor<T> {
     fun visit(node: UnitTypeNode): T
     fun visit(node: GroupedExprNode): T
     fun visit(node: CastExprNode): T
+    fun visit(node: BorrowExprNode): T
+    fun visit(node: DerefExprNode): T
 }
