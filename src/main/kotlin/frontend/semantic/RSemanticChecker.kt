@@ -3,12 +3,15 @@ package frontend.semantic
 import frontend.Keyword
 import frontend.Literal
 import frontend.Punctuation
+import frontend.TokenType
 import frontend.assignOp
 import frontend.ast.*
 import frontend.binaryOp
 import utils.CompileError
+import java.nio.file.Path
 import java.sql.Ref
 import kotlin.math.PI
+import kotlin.math.exp
 
 class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Type> {
     var currentScope: Scope? = gScope
@@ -132,7 +135,23 @@ class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Typ
     }
 
     override fun visit(node: FunctionItemNode): Type {
-        TODO("Not yet implemented")
+        if (node.body == null) {
+            throw CompileError("Semantic: invalid missing function body")
+        }
+        val function = currentScope?.resolve(node.name, Namespace.VALUE) as? Function
+            ?: throw CompileError("Semantic: missing function declaration ${node.name}")
+        currentScope = node.body.scope
+        returnStack.add(function.returnType)
+        node.funParams.forEach { it ->
+            currentScope?.declareVariable(getPatternBind(it.pattern, it.type.accept(this)))
+        }
+        val returnType = node.body.accept(this)
+        if (!assignable(returnType, returnStack.last())) {
+            throw CompileError("Semantic: function return type mismatch, expect ${returnStack.last()}, met $returnType")
+        }
+        currentScope = currentScope?.parentScope()
+        returnStack.removeLast()
+        return UnitType
     }
 
     override fun visit(node: StructItemNode): Type = UnitType
@@ -141,7 +160,11 @@ class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Typ
     override fun visit(node: TraitItemNode): Type = UnitType
 
     override fun visit(node: ImplItemNode): Type {
-        TODO("Not yet implemented")
+        currentScope = node.scope
+        currentScope?.declareVariable(Variable("self", node.type.accept(this), false))
+        node.items.forEach { it.accept(this) }
+        currentScope = currentScope?.parentScope()
+        return UnitType
     }
 
     override fun visit(node: ConstItemNode): Type = UnitType
@@ -150,22 +173,36 @@ class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Typ
         currentScope = node.scope
         val types = node.stmts.map { it.accept(this) }
         val retType = if (node.hasFinal()) {
-
-        } else {
-
-        }
+            types.last()
+        } else if (node.stmts.last() is ExprStmtNode && (node.stmts.last() as ExprStmtNode).expr is ReturnExprNode) {
+            NeverType
+        } else UnitType
         if (currentScope?.kind == ScopeKind.BLOCK) {
             currentScope = currentScope?.parentScope()
         }
-        return UnitType
+        return retType
     }
 
     override fun visit(node: LoopExprNode): Type {
-        TODO("Not yet implemented")
+        node.expr.accept(this)
+        if (breakStack.isEmpty()) {
+            throw CompileError("Semantic: encounter infinite loop")
+        }
+        return breakStack.removeLast()
     }
 
     override fun visit(node: WhileExprNode): Type {
-        TODO("Not yet implemented")
+        if (node.conds.isNotEmpty()) {
+            if (node.conds.size != 1) {
+                throw CompileError("Semantic: let binding in while condition is unsupported")
+            }
+            val condType = node.conds[0].accept(this)
+            if (condType !is BoolType) {
+                throw CompileError("Semantic: while condition require bool type, met $condType")
+            }
+        }
+        node.expr.accept(this)
+        return UnitType
     }
 
     override fun visit(node: BreakExprNode): Type {
@@ -189,19 +226,141 @@ class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Typ
     override fun visit(node: ContinueExprNode): Type = NeverType
 
     override fun visit(node: IfExprNode): Type {
-        TODO("Not yet implemented")
+        if (node.conds.isNotEmpty()) {
+            if (node.conds.size > 1) {
+                throw CompileError("Semantic: let bindings in condition is forbidden")
+            }
+            val condType = node.conds[0].accept(this)
+            if (condType !is BoolType) {
+                throw CompileError("Semantic: require bool type condition, met $condType")
+            }
+        }
+        val bodyType = node.expr.accept(this)
+        val elseType = node.elseExpr?.accept(this)
+        if (elseType == null) {
+            if (!assignable(bodyType, UnitType)) {
+                throw CompileError("Semantic: non-unit if expression without else branch is not allowed")
+            }
+            return bodyType
+        } else {
+            if (bodyType != elseType) {
+                throw CompileError("Semantic: different type for if-else branches, $bodyType and $elseType")
+            }
+            return bodyType
+        }
     }
 
     override fun visit(node: FieldAccessExprNode): Type {
-        TODO("Not yet implemented")
+        val receiverType = autoDeref(node.expr.accept(this))
+        if (receiverType !is StructType) {
+            throw CompileError("Semantic: field access to a non-struct type $receiverType")
+        }
+        val symbol = currentScope?.resolve(receiverType.name, Namespace.TYPE) as? Struct
+            ?: throw CompileError("Semantic: field access to a missing struct ${receiverType.name}")
+        return symbol.type.fields[node.id]
+            ?: throw CompileError("Semantic: field access to a missing field ${node.id} in ${receiverType.name}")
     }
 
     override fun visit(node: MethodCallExprNode): Type {
-        TODO("Not yet implemented")
+        var receiverType = node.expr.accept(this)
+        receiverType = autoDeref(receiverType)
+        if (node.pathSeg.name == null) {
+            throw CompileError("Semantic: invalid 'self' in method call")
+        }
+        val methodName = node.pathSeg.name
+        BuiltInMethods.findMethod(receiverType, methodName)?.let {
+            if (node.params.isNotEmpty()) {
+                throw CompileError("Semantic: method call of $methodName on $receiverType param size mismatch")
+            }
+            return it.returnType
+        }
+        val symbol = when (receiverType) {
+            is StructType -> {
+                currentScope?.resolve(receiverType.name, Namespace.TYPE) as? Struct
+                    ?: throw CompileError("Semantic: cannot find struct ${receiverType.name} in method call")
+            }
+
+            is EnumType -> {
+                currentScope?.resolve(receiverType.name, Namespace.TYPE) as? Enum
+                    ?: throw CompileError("Semantic: cannot find enum ${receiverType.name} in method call")
+            }
+
+            else -> throw CompileError("Semantic: invalid receiver type $receiverType in method call")
+        }
+        val method = symbol.methods[methodName]
+            ?: throw CompileError("Semantic: cannot find method $methodName in symbol ${symbol.name}")
+        if (method.selfParam != null && !assignable(receiverType, method.self!!)) {
+            throw CompileError("Semantic: self param of method $methodName in ${symbol.name} type mismatch, met $receiverType")
+        }
+        node.params.zip(method.params).forEach { (argument, expect) ->
+            val type = argument.accept(this)
+            if (!assignable(type, expect.type)) {
+                throw CompileError("Semantic: method call of $methodName param type mismatch on $expect")
+            }
+        }
+        return method.returnType
     }
 
     override fun visit(node: CallExprNode): Type {
-        TODO("Not yet implemented")
+        if (node.expr !is PathExprNode) {
+            throw CompileError("Semantic: leading expression for call must be path expression")
+        }
+        if (node.expr.seg2 == null) {
+            if (node.expr.seg1.name == null) {
+                throw CompileError("Semantic: direct call of 'self' is not possible")
+            } else {
+                val identifier = node.expr.seg1.name
+                val function = currentScope?.resolve(identifier, Namespace.VALUE) as? Function
+                    ?: throw CompileError("Semantic: cannot find function $identifier but called")
+                if (node.params.size != function.params.size) {
+                    throw CompileError("Semantic: call of function $identifier param size mismatch")
+                }
+                node.params.zip(function.params).forEach { (argument, expect) ->
+                    val type = argument.accept(this)
+                    if (!assignable(type, expect.type)) {
+                        throw CompileError("Semantic: call of function $identifier param type mismatch on $expect")
+                    }
+                }
+                return function.returnType
+            }
+        } else {
+            val symbol = if (node.expr.seg1.name == null) {
+                if (node.expr.seg1.type == Keyword.SELF || currentScope?.kind != ScopeKind.IMPL) {
+                    throw CompileError("Semantic: invalid 'self' in call expression")
+                }
+                val name = currentScope?.resolveVariable("self")?.name
+                    ?: throw CompileError("Semantic: can not find type for self")
+                currentScope?.resolve(name, Namespace.TYPE)
+                    ?: throw CompileError("Semantic: can not find type for ${name}")
+            } else {
+                currentScope?.resolve(node.expr.seg1.name, Namespace.TYPE)
+                    ?: throw CompileError("Semantic: can not find type for ${node.expr.seg1.name}")
+            }
+            if (node.expr.seg2.type != null) throw CompileError("Semantic: encounter unexpected self")
+            val identifier = node.expr.seg2.name
+            when (symbol) {
+                is Enum, is Struct -> {
+                    if (symbol.associateItems[identifier] is Function && !symbol.methods.containsKey(identifier)) {
+                        val function = symbol.associateItems[identifier] as Function
+                        if (node.params.size != function.params.size) {
+                            throw CompileError("Semantic: call of function $identifier param size mismatch")
+                        }
+                        node.params.zip(function.params).forEach { (argument, expect) ->
+                            val type = argument.accept(this)
+                            if (!assignable(type, expect.type)) {
+                                throw CompileError("Semantic: call of function $identifier param type mismatch on $expect")
+                            }
+                        }
+                        return function.returnType
+                    } else {
+                        throw CompileError("Semantic: can not find associate function $identifier in type ${symbol.name}")
+                    }
+
+                }
+
+                else -> throw CompileError("Semantic: unexpected base type for  path $node")
+            }
+        }
     }
 
     override fun visit(node: CondExprNode): Type {

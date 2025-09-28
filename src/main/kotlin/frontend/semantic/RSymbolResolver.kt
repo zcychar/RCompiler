@@ -468,7 +468,6 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
   override fun visit(node: IfExprNode) {
     node.conds.forEach { it.accept(this) }
     node.expr.accept(this)
-    node.elseIf?.accept(this)
     node.elseExpr?.accept(this)
   }
 

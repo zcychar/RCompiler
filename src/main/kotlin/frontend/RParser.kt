@@ -419,11 +419,11 @@ class RParser(val input: MutableList<Token>) {
         val block = parseBlockExpr()
         return if (tryConsume(Keyword.ELSE)) {
             when (peek(1)?.type) {
-                Punctuation.LEFT_BRACE -> IfExprNode(conds, block, parseBlockExpr(), null)
-                Keyword.IF -> IfExprNode(conds, block, null, parseIfExpr())
+                Punctuation.LEFT_BRACE -> IfExprNode(conds, block, parseBlockExpr())
+                Keyword.IF -> IfExprNode(conds, block, parseIfExpr())
                 else -> throw CompileError("Parser:Expect else-expression in if-expression, met ${peek(1)}")
             }
-        } else IfExprNode(conds, block, null, null)
+        } else IfExprNode(conds, block, null)
     }
 
 //    private fun parseMatchExpr(): MatchExprNode {

@@ -120,7 +120,6 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
     node.conds.forEach { it.accept(this) }
     node.expr.accept(this)
     node.elseExpr?.accept(this)
-    node.elseIf?.accept(this)
   }
 
   override fun visit(node: FieldAccessExprNode) {
