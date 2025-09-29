@@ -1,25 +1,95 @@
-import frontend.*
-import frontend.semantic.RSymbolCollector
+import frontend.RPreprocessor
+import frontend.RLexer
+import frontend.RParser
+import frontend.semantic.*
+import utils.*
 import utils.CompileError
-import utils.dumpToString
 
 fun main(args: Array<String>) {
+//  val isDebugMode = args.contains("--debug")
+  val isDebugMode = true
+  val filePath = args.firstOrNull { !it.startsWith("--") } ?: readln()
 
-    val resourcePath = if (args.isEmpty()) readln() else args[0]
-    val inputStream = object {}.javaClass.getResourceAsStream(resourcePath)
-    val rawText = inputStream?.bufferedReader()!!.readText()
-    try {
-        println("-----preprocessed-----")
-        val preprocessor = RPreprocessor(rawText)
-        val lexer = RLexer(preprocessor.process())
-        println(preprocessor.dumpToString())
-        println("--------tokens---------")
-        val parser = RParser(lexer.process())
-        println(lexer.dumpToString())
-        val crate = parser.process()
-        println(parser.dumpToString())
-    } catch (e: CompileError) {
-        println(e.message)
+//  if (filePath == null) {
+//    println("Usage: java -jar YourCompiler.jar <file_path> [--debug]")
+//    return
+//  }
+
+  val inputStream = object {}.javaClass.getResourceAsStream(filePath)
+  if (inputStream == null) {
+    println("Error: File not found at path '$filePath'")
+    return
+  }
+
+  val rawText = inputStream.bufferedReader().readText()
+
+  try {
+    if (isDebugMode) println("----- 1. Preprocessing -----")
+    val preprocessor = RPreprocessor(rawText)
+    val processedText = preprocessor.process()
+
+    if (isDebugMode) {
+      println(preprocessor.dumpToString())
+      println("\n----- 2. Lexing -----")
+    }
+    val lexer = RLexer(processedText)
+    val tokens = lexer.process()
+
+    if (isDebugMode) {
+      println(lexer.dumpToString())
+      println("\n----- 3. Parsing -----")
+    }
+    val parser = RParser(tokens)
+    val crate = parser.process()
+
+    if (isDebugMode) {
+      println(parser.dumpToString())
+      println("\n----- 4. Semantic Analysis -----")
     }
 
+    val preludeScope = toPrelude()
+
+    if (isDebugMode) println("\n--- Running Pass 1: Symbol Collector ---")
+    val symbolCollector = RSymbolCollector(preludeScope, crate)
+    symbolCollector.process()
+    if (isDebugMode) {
+      val collectorDumper = RSymbolTableDumper(crate)
+      collectorDumper.dump()
+    }
+
+//    if (isDebugMode) println("\n--- Running Pass 2: Symbol Resolver ---")
+//    val symbolResolver = RSymbolResolver(crate.scope!!, crate)
+//    symbolResolver.process()
+//    if (isDebugMode) {
+//      val resolverDumper = RResolvedSymbolDumper(crate)
+//      resolverDumper.dump()
+//    }
+//    if (isDebugMode) println("\n--- Running Pass 3: Impl Injector ---")
+//    val implInjector = RImplInjector(crate.scope!!, crate)
+//    implInjector.process()
+//    if (isDebugMode) {
+//      val injectionDumper = RImplInjectionDumper(crate)
+//      injectionDumper.dump()
+//    }
+//
+//    if (isDebugMode) println("\n--- Running Pass 4: Semantic Checker ---")
+//
+//    val checker: RSemanticChecker = if (isDebugMode) {
+//      TracedSemanticChecker(crate.scope!!, crate)
+//    } else {
+//      RSemanticChecker(crate.scope!!, crate)
+//    }
+//    checker.process()
+
+    println("\n✅ Compilation successful!")
+
+  } catch (e: CompileError) {
+
+    println("\n❌ Compilation failed:")
+    println("   ${e.message}")
+  } catch (e: Exception) {
+
+    println("\n💥 An internal compiler error occurred:")
+    e.printStackTrace()
+  }
 }

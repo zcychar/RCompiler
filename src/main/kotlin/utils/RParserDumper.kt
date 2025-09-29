@@ -280,7 +280,6 @@ fun IfExprNode.dumpToString(indent: Int): String {
   }
   builder.append(this.expr.dumpToString(indent + 2))
   this.elseExpr?.let { builder.append("${padding}  elseExpr: {\n${it.dumpToString(indent + 4)}${padding}  }\n") }
-  this.elseIf?.let { builder.append("${padding}  elseIf: {\n${it.dumpToString(indent + 4)}${padding}  }\n") }
   builder.append("${padding}}\n")
   return builder.toString()
 }
