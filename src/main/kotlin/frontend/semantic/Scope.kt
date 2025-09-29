@@ -9,8 +9,8 @@ enum class ScopeKind {
 }
 
 class Scope(val parent: Scope? = null, val kind: ScopeKind) {
-    private val typeNamespace = mutableMapOf<String, Symbol>()
-    private val valueNamespace = mutableMapOf<String, Symbol>()
+    val typeNamespace = mutableMapOf<String, Symbol>()
+    val valueNamespace = mutableMapOf<String, Symbol>()
     private val variables = mutableMapOf<String, Variable>()
 
 

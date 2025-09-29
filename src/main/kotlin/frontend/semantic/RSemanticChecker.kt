@@ -13,7 +13,7 @@ import java.sql.Ref
 import kotlin.math.PI
 import kotlin.math.exp
 
-class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Type> {
+open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Type> {
     var currentScope: Scope? = gScope
 
     val breakStack: MutableList<Type> = mutableListOf()
@@ -21,7 +21,7 @@ class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Typ
     val returnStack: MutableList<Type> = mutableListOf()
 
 
-    fun process() = visit(crate)
+    open fun process() = visit(crate)
 
     fun autoDeref(type: Type): Type {
         return if (type is RefType) type.baseType
