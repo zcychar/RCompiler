@@ -144,6 +144,21 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
     }
     currentScope = currentScope?.parentScope()
     returnStack.removeLast()
+    node.body.stmts.forEach {
+      if (it is ExprStmtNode) {
+        if (it.expr is CallExprNode) {
+          if (it.expr.expr is PathExprNode && it.expr.expr.seg2 == null && it.expr.expr.seg1.name == "exit") {
+            if (node.body.stmts.last() != it) {
+              throw CompileError("Semantic: invalid exit() usage in function ${node.name}")
+            }
+            if (node.name != "main") {
+              throw CompileError("Semantic: invalid exit() usage in main function")
+            }
+          }
+        }
+      }
+    }
+    
     return UnitType
   }
 
