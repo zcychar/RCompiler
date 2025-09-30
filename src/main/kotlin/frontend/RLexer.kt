@@ -113,18 +113,18 @@ class RLexer(private val input: String) {
     }
 
     private fun rawLiteral(type: TokenType) {
-        var prefix_end=position
-        while(prefix_end<input.length&&input[prefix_end]=='#')prefix_end++
-        if(input[prefix_end]!='\"')throw CompileError("Lexer:missing quotes in raw_string literal")
-        val prefix_length=prefix_end-position
-        val suffix='\"'+"#".repeat(prefix_length)
-        val suffix_begin=input.indexOf(suffix,prefix_end+1)
-        if(suffix_begin==-1){
+        var prefixEnd=position
+        while(prefixEnd<input.length&&input[prefixEnd]=='#')prefixEnd++
+        if(input[prefixEnd]!='\"')throw CompileError("Lexer:missing quotes in raw_string literal")
+        val prefixLength=prefixEnd-position
+        val suffix='\"'+"#".repeat(prefixLength)
+        val suffixBegin=input.indexOf(suffix,prefixEnd+1)
+        if(suffixBegin==-1){
             throw CompileError("Lexer:encounter no-end raw_string literal ${input.substring(position)}")
         }else{
-            val str= if(suffix_begin==prefix_end+1) "" else input.substring(prefix_end+1..suffix_begin-1)
+            val str= if(suffixBegin==prefixEnd+1) "" else input.substring(prefixEnd+1..suffixBegin-1)
             tokens.add(Token(type,str))
-            position=suffix_begin+suffix.length
+            position=suffixBegin+suffix.length
         }
     }
 
@@ -145,7 +145,16 @@ class RLexer(private val input: String) {
         while (fi < input.length && input[fi].isWord()) fi++
         val str = input.substring(position until fi)
         position = fi
+        checkNumber(str)
         tokens.add(Token(Literal.INTEGER, str))
+    }
+
+    private fun checkNumber(str:String){
+        val pattern = "^((0b[01_]+)|(0o[0-7_]+)|(0x[0-9a-fA-F_]+)|([0-9_]+))(i32|u32|isize|usize)$".toRegex()
+
+        if (!str.matches(pattern)) {
+            throw CompileError("Lexer Error: Invalid integer literal format: `$str`")
+        }
     }
 
     private fun punctuation() {

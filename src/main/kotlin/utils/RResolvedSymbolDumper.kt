@@ -42,7 +42,7 @@ class RResolvedSymbolDumper(private val crate: CrateNode) : ASTVisitor<Unit> {
   private fun formatConstValue(value: ConstValue?): String {
     return when (value) {
       null -> "<unresolved>"
-      is ConstValue.Int -> value.value.toString()
+      is ConstValue.Int -> value.toString()
       is ConstValue.Bool -> value.value.toString()
       is ConstValue.Char -> "'${value.value}'"
       is ConstValue.Str -> "\"${value.value}\""

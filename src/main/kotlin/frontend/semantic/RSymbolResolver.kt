@@ -19,9 +19,7 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
         Keyword.TRUE -> ConstValue.Bool(true)
         Keyword.FALSE -> ConstValue.Bool(false)
         Literal.INTEGER -> {
-          val value = expr.value?.replace("_", "")?.toLong()
-            ?: throw CompileError("Semantic:Invalid interger in const expression")
-          ConstValue.Int(value)
+          getInt(expr)
         }
 
         Literal.CHAR -> {
@@ -79,15 +77,15 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
       }
 
       is FieldAccessExprNode -> {
-        val inner_expr = evaluateConstExpr(expr.expr, ErrorType)
-        if (inner_expr !is ConstValue.Struct) throw CompileError("Semantic:Invalid field to a non-struct const value")
-        inner_expr.fields[expr.id]
-          ?: throw CompileError("Semantic:Const struct ${inner_expr.type.name} has no field ${expr.id}")
+        val innerExpr = evaluateConstExpr(expr.expr, ErrorType)
+        if (innerExpr !is ConstValue.Struct) throw CompileError("Semantic:Invalid field to a non-struct const value")
+        innerExpr.fields[expr.id]
+          ?: throw CompileError("Semantic:Const struct ${innerExpr.type.name} has no field ${expr.id}")
       }
 
       is ArrayExprNode -> {
         val arrayElementType = if (expectType is ArrayType) expectType.elementType else ErrorType
-        if (expr.elements != null) {
+        if (expr.elements.isNotEmpty()) {
           val elements = expr.elements.map { elementExpr ->
             evaluateConstExpr(elementExpr, arrayElementType)
           }
@@ -130,7 +128,7 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
             val innerValue = evaluateConstExpr(expr.rhs, expectType)
             val value = (innerValue as? ConstValue.Int)?.value
               ?: throw CompileError("Semantic:Unary minus followed by an non-int operand ${expr.rhs}")
-            ConstValue.Int(-value)
+            ConstValue.Int(-value, innerValue.actualType)
           }
 
           Punctuation.BANG -> {
@@ -167,27 +165,28 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
         val rhs = evaluateConstExpr(expr.rhs, expectType)
         when (lhs) {
           is ConstValue.Int if rhs is ConstValue.Int -> {
+            val type = unifyInt(lhs.actualType, rhs.actualType)
             val l = lhs.value
             val r = rhs.value
             when (expr.op) {
-              Punctuation.PLUS -> ConstValue.Int(l + r)
-              Punctuation.MINUS -> ConstValue.Int(l - r)
-              Punctuation.STAR -> ConstValue.Int(l * r)
+              Punctuation.PLUS -> ConstValue.Int(l + r, type)
+              Punctuation.MINUS -> ConstValue.Int(l - r, type)
+              Punctuation.STAR -> ConstValue.Int(l * r, type)
               Punctuation.SLASH -> {
                 if (r == 0L) throw CompileError("Semantic: Div by zero in const expression")
-                ConstValue.Int(l / r)
+                ConstValue.Int(l / r, type)
               }
 
               Punctuation.PERCENT -> {
                 if (r == 0L) throw CompileError("Semantic: Div by zero in const expression")
-                ConstValue.Int(l % r)
+                ConstValue.Int(l % r, type)
               }
 
-              Punctuation.AMPERSAND -> ConstValue.Int(l and r)
-              Punctuation.PIPE -> ConstValue.Int(l or r)
-              Punctuation.CARET -> ConstValue.Int(l xor r)
-              Punctuation.LESS_LESS -> ConstValue.Int(l shl r.toInt())
-              Punctuation.GREATER_GREATER -> ConstValue.Int(l shr r.toInt())
+              Punctuation.AMPERSAND -> ConstValue.Int(l and r, type)
+              Punctuation.PIPE -> ConstValue.Int(l or r, type)
+              Punctuation.CARET -> ConstValue.Int(l xor r, type)
+              Punctuation.LESS_LESS -> ConstValue.Int(l shl r.toInt(), type)
+              Punctuation.GREATER_GREATER -> ConstValue.Int(l shr r.toInt(), type)
               Punctuation.EQUAL_EQUAL -> ConstValue.Bool(l == r)
               Punctuation.NOT_EQUAL -> ConstValue.Bool(l != r)
               Punctuation.LESS -> ConstValue.Bool(l < r)

@@ -358,10 +358,10 @@ class RParser(val input: MutableList<Token>) {
 
     private fun parseLiteralExpr(): ExprNode {
         val token = consume()
-        if (token.type is Literal) {
-            return LiteralExprNode(token.value, token.type)
+        return if (token.type is Literal) {
+            LiteralExprNode(token.value, token.type)
         } else if (token.type == Keyword.TRUE || token.type == Keyword.FALSE) {
-            return LiteralExprNode(null, token.type)
+            LiteralExprNode(null, token.type)
         } else {
             throw CompileError("Parser:Expect literal-expression, met $token")
         }

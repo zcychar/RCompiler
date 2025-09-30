@@ -1,9 +1,12 @@
 package frontend.semantic
 
+import frontend.ast.LiteralExprNode
+import utils.CompileError
+
 sealed interface Type
 
 object ErrorType : Type {
-    override fun equals(other: Any?): Boolean = false
+  override fun equals(other: Any?): Boolean = false
 }
 
 object UnitType : Type
@@ -15,6 +18,13 @@ object CharType : Type
 object Int32Type : Type
 
 object UInt32Type : Type
+
+object ISizeType : Type
+
+object USizeType : Type
+
+
+object IntType : Type
 
 object StringType : Type
 
@@ -34,4 +44,49 @@ data class TraitType(val name: String, var associatedItems: Map<String, Symbol> 
 
 data class SelfType(val isMut: Boolean, val isRef: Boolean) : Type
 
-fun isInt(type:Type) : Boolean = type is UInt32Type || type is Int32Type
+fun isInt(type: Type): Boolean =
+  type is UInt32Type || type is Int32Type || type is USizeType || type is ISizeType || type is IntType
+
+fun getInt(expr: LiteralExprNode): ConstValue.Int {
+  if (expr.value == null) {
+    throw CompileError("Semantic:Invalid integer in const expression")
+  }
+  var (numeric, type) = when {
+    expr.value.endsWith("i32") -> Pair(expr.value.removeSuffix("i32"), Int32Type)
+    expr.value.endsWith("u32") -> Pair(expr.value.removeSuffix("u32"), UInt32Type)
+    expr.value.endsWith("isize") -> Pair(expr.value.removeSuffix("isize"), ISizeType)
+    expr.value.endsWith("usize") -> Pair(expr.value.removeSuffix("usize"), USizeType)
+    else -> Pair(expr.value, IntType)
+  }
+  numeric = numeric.replace("_", "")
+  val number = when {
+    numeric.startsWith("0x", ignoreCase = true) -> {
+      numeric.substring(2).toLong(16)
+    }
+
+    numeric.startsWith("0b", ignoreCase = true) -> {
+      numeric.substring(2).toLong(2)
+    }
+
+    numeric.startsWith("0o", ignoreCase = true) -> {
+      numeric.substring(2).toLong(8)
+    }
+
+    else -> {
+      numeric.toLong(10)
+    }
+  }
+  return ConstValue.Int(number, type)
+}
+
+fun unifyInt(lhs: Type, rhs: Type): Type {
+  if (!isInt(lhs) || !isInt(rhs)) {
+    throw CompileError("Semantic: invalid integer type")
+  }
+  return when {
+    lhs == rhs -> lhs
+    lhs is IntType -> rhs
+    rhs is IntType -> lhs
+    else -> throw CompileError("Semantic: cannot unify integer type $lhs and $rhs")
+  }
+}
