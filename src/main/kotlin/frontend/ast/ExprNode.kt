@@ -16,7 +16,7 @@ data class BlockExprNode(val hasConst: Boolean, val stmts: List<StmtNode>) : Exp
   fun hasFinal(): Boolean {
     if(stmts.isEmpty())return false
     val last = stmts.last()
-    return last is ExprStmtNode && (last.expr is ExprWOBlock || !last.hasSemiColon)
+    return last is ExprStmtNode && ( !last.hasSemiColon)
   }
 
   var scope: Scope? = null

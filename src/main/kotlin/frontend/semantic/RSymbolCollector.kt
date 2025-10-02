@@ -106,6 +106,7 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
   }
 
   override fun visit(node: WhileExprNode) {
+    node.conds.forEach { it.accept(this) }
     node.expr.accept(this)
   }
 

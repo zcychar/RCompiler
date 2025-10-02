@@ -206,7 +206,7 @@ fun getInfixPrecedence(op: TokenType?): Int {
     op == Punctuation.LEFT_PAREN -> 200
     op == Punctuation.LEFT_BRACKET -> 200
     op == Punctuation.LEFT_BRACE -> 200
-    op == Keyword.AS -> 200
+    op == Keyword.AS -> 180
     else -> 0
   }
 }

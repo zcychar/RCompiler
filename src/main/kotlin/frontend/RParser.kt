@@ -50,7 +50,6 @@ class RParser(val input: MutableList<Token>) {
     val items = mutableListOf<ItemNode>()
     while (!eof()) {
       items.add(parseItem())
-      println("now parsed \n ${items.last().dumpToString(0)}")
     }
     crate = CrateNode(items.toList())
     return crate

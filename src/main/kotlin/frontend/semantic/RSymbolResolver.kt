@@ -99,10 +99,10 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
             throw CompileError("Semantic:Array length cannot be negative")
           }
           expr.evaluatedSize = length.toLong()
-          val elemValue = evaluateConstExpr(expr.repeatOp, arrayElementType)
-          val elements = List(length) { elemValue }
-          val elementType = getTypeFromConst(elemValue)
-          ConstValue.Array(elements, elementType)
+
+          val elements = List(length) {  }
+          val elementType = ErrorType
+          ConstValue.Array(emptyList(), ErrorType)
         } else {
           ConstValue.Array(emptyList(), UnitType)
         }

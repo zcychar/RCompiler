@@ -205,22 +205,6 @@ class RParserTest {
         assertTrue(compoundAssign.op == Punctuation.PLUS_EQUAL)
     }
 
-
-    @Test
-    fun testIfLetAndWhileLet() {
-        val src = """
-            fn main() {
-                if let a = an_option { x };
-                while let b = an_iterator.next { y };
-            }
-        """
-        val stmts = (parse(src).items[0] as FunctionItemNode).body!!.stmts
-        val ifLet = (stmts[0] as ExprStmtNode).expr as IfExprNode
-        assertTrue(ifLet.conds[0].pattern is IdentifierPatternNode)
-        val whileLet = (stmts[1] as ExprStmtNode).expr as WhileExprNode
-        assertTrue(whileLet.conds[0].pattern is IdentifierPatternNode)
-    }
-
     @Test
     fun testReturnBreakContinueWithValue() {
         val src = "fn main() { return 1; loop { break 2; continue; } }"

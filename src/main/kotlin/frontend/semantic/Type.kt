@@ -6,7 +6,7 @@ import utils.CompileError
 sealed interface Type
 
 object ErrorType : Type {
-  override fun equals(other: Any?): Boolean = false
+    override fun equals(other: Any?): Boolean = false
 }
 
 object UnitType : Type
@@ -45,53 +45,58 @@ data class TraitType(val name: String, var associatedItems: Map<String, Symbol> 
 data class SelfType(val isMut: Boolean, val isRef: Boolean) : Type
 
 fun isInt(type: Type): Boolean =
-  type is UInt32Type || type is Int32Type || type is USizeType || type is ISizeType || type is IntType
+    type is UInt32Type || type is Int32Type || type is USizeType || type is ISizeType || type is IntType
 
 fun getInt(expr: LiteralExprNode): ConstValue.Int {
-  if (expr.value == null) {
-    throw CompileError("Semantic:Invalid integer in const expression")
-  }
-  var (numeric, type) = when {
-    expr.value.endsWith("i32") -> Pair(expr.value.removeSuffix("i32"), Int32Type)
-    expr.value.endsWith("u32") -> Pair(expr.value.removeSuffix("u32"), UInt32Type)
-    expr.value.endsWith("isize") -> Pair(expr.value.removeSuffix("isize"), ISizeType)
-    expr.value.endsWith("usize") -> Pair(expr.value.removeSuffix("usize"), USizeType)
-    else -> Pair(expr.value, IntType)
-  }
-  numeric = numeric.replace("_", "")
-  val number = when {
-    numeric.startsWith("0x", ignoreCase = true) -> {
-      numeric.substring(2).toLong(16)
+    if (expr.value == null) {
+        throw CompileError("Semantic:Invalid integer in const expression")
     }
+    var (numeric, type) = when {
+        expr.value.endsWith("i32") -> Pair(expr.value.removeSuffix("i32"), Int32Type)
+        expr.value.endsWith("u32") -> Pair(expr.value.removeSuffix("u32"), UInt32Type)
+        expr.value.endsWith("isize") -> Pair(expr.value.removeSuffix("isize"), ISizeType)
+        expr.value.endsWith("usize") -> Pair(expr.value.removeSuffix("usize"), USizeType)
+        else -> Pair(expr.value, IntType)
+    }
+    numeric = numeric.replace("_", "")
+    val number = when {
+        numeric.startsWith("0x", ignoreCase = true) -> {
+            numeric.substring(2).toLong(16)
+        }
 
-    numeric.startsWith("0b", ignoreCase = true) -> {
-      numeric.substring(2).toLong(2)
-    }
+        numeric.startsWith("0b", ignoreCase = true) -> {
+            numeric.substring(2).toLong(2)
+        }
 
-    numeric.startsWith("0o", ignoreCase = true) -> {
-      numeric.substring(2).toLong(8)
-    }
+        numeric.startsWith("0o", ignoreCase = true) -> {
+            numeric.substring(2).toLong(8)
+        }
 
-    else -> {
-      numeric.toLong(10)
+        else -> {
+            numeric.toLong(10)
+        }
     }
-  }
-  return ConstValue.Int(number, type)
+    if (number > 2147483648) {
+        throw CompileError("Semantic: Integer overflow")
+    } else if (number > 2147483647) {
+        type = UInt32Type
+    }
+    return ConstValue.Int(number, type)
 }
 
 fun unifyInt(lhs: Type, rhs: Type): Type {
-  if (!isInt(lhs) || !isInt(rhs)) {
-    throw CompileError("Semantic: invalid integer type")
-  }
-  return when {
-    lhs == rhs -> lhs
-    lhs is IntType -> rhs
-    rhs is IntType -> lhs
-    else -> throw CompileError("Semantic: cannot unify integer type $lhs and $rhs")
-  }
+    if (!isInt(lhs) || !isInt(rhs)) {
+        throw CompileError("Semantic: invalid integer type")
+    }
+    return when {
+        lhs == rhs -> lhs
+        lhs is IntType -> rhs
+        rhs is IntType -> lhs
+        else -> throw CompileError("Semantic: cannot unify integer type $lhs and $rhs")
+    }
 }
 
 fun canUnifyInt(lhs: Type, rhs: Type): Boolean {
-  unifyInt(lhs, rhs)
-  return true
+    unifyInt(lhs, rhs)
+    return true
 }
