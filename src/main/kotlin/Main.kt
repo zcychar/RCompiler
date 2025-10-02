@@ -57,29 +57,29 @@ fun main(args: Array<String>) {
       collectorDumper.dump()
     }
 
-//    if (isDebugMode) println("\n--- Running Pass 2: Symbol Resolver ---")
-//    val symbolResolver = RSymbolResolver(crate.scope!!, crate)
-//    symbolResolver.process()
-//    if (isDebugMode) {
-//      val resolverDumper = RResolvedSymbolDumper(crate)
-//      resolverDumper.dump()
-//    }
-//    if (isDebugMode) println("\n--- Running Pass 3: Impl Injector ---")
-//    val implInjector = RImplInjector(crate.scope!!, crate)
-//    implInjector.process()
-//    if (isDebugMode) {
-//      val injectionDumper = RImplInjectionDumper(crate)
-//      injectionDumper.dump()
-//    }
-//
-//    if (isDebugMode) println("\n--- Running Pass 4: Semantic Checker ---")
-//
-//    val checker: RSemanticChecker = if (isDebugMode) {
-//      TracedSemanticChecker(crate.scope!!, crate)
-//    } else {
-//      RSemanticChecker(crate.scope!!, crate)
-//    }
-//    checker.process()
+    if (isDebugMode) println("\n--- Running Pass 2: Symbol Resolver ---")
+    val symbolResolver = RSymbolResolver(crate.scope!!, crate)
+    symbolResolver.process()
+    if (isDebugMode) {
+      val resolverDumper = RResolvedSymbolDumper(crate)
+      resolverDumper.dump()
+    }
+    if (isDebugMode) println("\n--- Running Pass 3: Impl Injector ---")
+    val implInjector = RImplInjector(crate.scope!!, crate)
+    implInjector.process()
+    if (isDebugMode) {
+      val injectionDumper = RImplInjectionDumper(crate)
+      injectionDumper.dump()
+    }
+
+    if (isDebugMode) println("\n--- Running Pass 4: Semantic Checker ---")
+
+    val checker: RSemanticChecker = if (isDebugMode) {
+      TracedSemanticChecker(crate.scope!!, crate)
+    } else {
+      RSemanticChecker(crate.scope!!, crate)
+    }
+    checker.process()
 
     println("\n✅ Compilation successful!")
 

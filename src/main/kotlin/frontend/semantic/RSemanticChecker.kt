@@ -158,7 +158,12 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
         }
       }
     }
-    
+    if (node.name == "main") {
+      val last = node.body.stmts.last()
+      if (last !is ExprStmtNode || last.expr !is CallExprNode || last.expr.expr !is PathExprNode || last.expr.expr.seg1.name != "exit") {
+        throw CompileError("Semantic: missing exit() in main function")
+      }
+    }
     return UnitType
   }
 
