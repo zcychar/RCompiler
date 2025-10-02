@@ -90,3 +90,8 @@ fun unifyInt(lhs: Type, rhs: Type): Type {
     else -> throw CompileError("Semantic: cannot unify integer type $lhs and $rhs")
   }
 }
+
+fun canUnifyInt(lhs: Type, rhs: Type): Boolean {
+  unifyInt(lhs, rhs)
+  return true
+}

@@ -14,6 +14,7 @@ sealed interface ExprWOBlock : ExprNode
 data class BlockExprNode(val hasConst: Boolean, val stmts: List<StmtNode>) : ExprWIBlock {
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
   fun hasFinal(): Boolean {
+    if(stmts.isEmpty())return false
     val last = stmts.last()
     return last is ExprStmtNode && (last.expr is ExprWOBlock || !last.hasSemiColon)
   }

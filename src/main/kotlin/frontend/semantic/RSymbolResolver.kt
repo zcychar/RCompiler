@@ -231,15 +231,17 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
     is TypePathNode -> {
       if (node.type != null) {
         SelfType(isMut = false, isRef = false)
+      } else {
+        val name = node.name ?: throw CompileError("Semantic:TypePathNode has no ID and is not Self")
+        when (val symbol = currentScope?.resolve(name, Namespace.TYPE)) {
+          is Struct -> resolveStruct(symbol.name)
+          is Enum -> resolveEnum(symbol.name)
+          is BuiltIn -> symbol.type
+          null -> throw CompileError("Semantic:Type $name not found")
+          else -> throw CompileError("Semantic:'$name is not a type")
+        }
       }
-      val name = node.name ?: throw CompileError("Semantic:TypePathNode has no ID and is not Self")
-      when (val symbol = currentScope?.resolve(name, Namespace.TYPE)) {
-        is Struct -> resolveStruct(symbol.name)
-        is Enum -> resolveEnum(symbol.name)
-        is BuiltIn -> symbol.type
-        null -> throw CompileError("Semantic:Type $name not found")
-        else -> throw CompileError("Semantic:'$name is not a type")
-      }
+
     }
 
     UnitTypeNode -> UnitType
@@ -346,8 +348,12 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
             },
             returnType = resolveType(it.returnType)
           )
-          associates.put(function.name, function)
-            ?: throw CompileError("Semantic: duplicated associated item $it in trait/implementation")
+          currentScope = it.body?.scope ?: throw CompileError("Semantic: invalid associate function without a scope")
+          it.body.stmts.forEach { it.accept(this) }
+          currentScope = currentScope?.parentScope()
+          associates.put(function.name, function)?.let {
+            throw CompileError("Semantic: duplicated associated item $it in trait/implementation")
+          }
         }
 
         is ConstItemNode -> {
@@ -359,7 +365,7 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
           )
           if (it.expr != null) const.value = evaluateConstExpr(it.expr, const.type)
           associates.put(const.name, const)
-            ?: throw CompileError("Semantic: duplicated associated item $it in trait/implementation")
+            ?.let { throw CompileError("Semantic: duplicated associated item $it in trait/implementation") }
         }
 
         else -> throw CompileError("Semantic: invalid associate item $it of trait/implementation")
@@ -430,7 +436,27 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
       if (it.value is Constant && (it.value as Constant).value == null) {
         throw CompileError("Semantic: Invalid null constant in impl $node")
       }
-      currentScope?.declare(it.value, Namespace.VALUE)
+      val symbol = currentScope?.resolve(it.value.name, Namespace.VALUE)
+      when (it.value) {
+        is Function -> {
+          if (symbol is Function) {
+            symbol.returnType = (it.value as Function).returnType
+            symbol.params = (it.value as Function).params
+            symbol.selfParam = (it.value as Function).selfParam
+            symbol.self = (it.value as Function).self
+          } else throw CompileError("Semantic: invalid associate type in impl ${node.name}")
+        }
+
+        is Constant -> {
+          if (symbol is Constant) {
+            symbol.value = (it.value as Constant).value
+            symbol.type = (it.value as Constant).type
+            symbol.resolutionState = (it.value as Constant).resolutionState
+          } else throw CompileError("Semantic: invalid associate type in impl ${node.name}")
+        }
+
+        else -> throw CompileError("Semantic: invalid associate type in impl ${node.name}")
+      }
     }
     currentScope = currentScope?.parentScope()
   }
@@ -500,14 +526,16 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
   }
 
   override fun visit(node: ArrayExprNode) {
-    evaluateConstExpr(node, ErrorType)
-    node.elements?.forEach { it.accept(this) }
-    node.lengthOp?.accept(this)
-    node.repeatOp?.accept(this)
+    if (node.repeatOp != null) {
+      evaluateConstExpr(node, ErrorType)
+      node.lengthOp?.accept(this)
+      node.repeatOp.accept(this)
+    } else {
+      node.elements.forEach { it.accept(this) }
+    }
   }
 
   override fun visit(node: IndexExprNode) {
-    evaluateConstExpr(node, ErrorType)
     node.index.accept(this)
     node.base.accept(this)
   }

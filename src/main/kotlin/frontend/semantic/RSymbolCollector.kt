@@ -67,6 +67,9 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
 
   override fun visit(node: ImplItemNode) {
     node.scope = Scope(currentScope, ScopeKind.IMPL)
+    currentScope = node.scope
+    node.items.forEach { it.accept(this) }
+    currentScope = currentScope?.parentScope()
   }
 
   override fun visit(node: ConstItemNode) {

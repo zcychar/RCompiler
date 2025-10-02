@@ -4,6 +4,7 @@ import frontend.RParser
 import frontend.semantic.*
 import utils.*
 import utils.CompileError
+import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
 //  val isDebugMode = args.contains("--debug")
@@ -29,14 +30,14 @@ fun main(args: Array<String>) {
     val processedText = preprocessor.process()
 
     if (isDebugMode) {
-      println(preprocessor.dumpToString())
+//      println(preprocessor.dumpToString())
       println("\n----- 2. Lexing -----")
     }
     val lexer = RLexer(processedText)
     val tokens = lexer.process()
 
     if (isDebugMode) {
-      println(lexer.dumpToString())
+//      println(lexer.dumpToString())
       println("\n----- 3. Parsing -----")
     }
     val parser = RParser(tokens)
@@ -58,14 +59,14 @@ fun main(args: Array<String>) {
     }
 
     if (isDebugMode) println("\n--- Running Pass 2: Symbol Resolver ---")
-    val symbolResolver = RSymbolResolver(crate.scope!!, crate)
+    val symbolResolver = RSymbolResolver(preludeScope, crate)
     symbolResolver.process()
     if (isDebugMode) {
       val resolverDumper = RResolvedSymbolDumper(crate)
       resolverDumper.dump()
     }
     if (isDebugMode) println("\n--- Running Pass 3: Impl Injector ---")
-    val implInjector = RImplInjector(crate.scope!!, crate)
+    val implInjector = RImplInjector(preludeScope, crate)
     implInjector.process()
     if (isDebugMode) {
       val injectionDumper = RImplInjectionDumper(crate)
@@ -75,9 +76,9 @@ fun main(args: Array<String>) {
     if (isDebugMode) println("\n--- Running Pass 4: Semantic Checker ---")
 
     val checker: RSemanticChecker = if (isDebugMode) {
-      TracedSemanticChecker(crate.scope!!, crate)
+      TracedSemanticChecker(preludeScope, crate)
     } else {
-      RSemanticChecker(crate.scope!!, crate)
+      RSemanticChecker(preludeScope, crate)
     }
     checker.process()
 
@@ -87,9 +88,11 @@ fun main(args: Array<String>) {
 
     println("\n❌ Compilation failed:")
     println("   ${e.message}")
+    exitProcess(-1)
   } catch (e: Exception) {
 
     println("\n💥 An internal compiler error occurred:")
     e.printStackTrace()
+    exitProcess(-1)
   }
 }

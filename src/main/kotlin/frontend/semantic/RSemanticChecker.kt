@@ -10,11 +10,13 @@ import frontend.binaryOp
 import utils.CompileError
 import java.nio.file.Path
 import java.sql.Ref
+import kotlin.coroutines.Continuation
 import kotlin.math.PI
 import kotlin.math.exp
 
 open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Type> {
   var currentScope: Scope? = gScope
+  var currentSelfType: Type = UnitType
   val breakStack: MutableList<Type> = mutableListOf()
   val returnStack: MutableList<Type> = mutableListOf()
   open fun process() = visit(crate)
@@ -24,7 +26,10 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
   }
 
   fun assignable(from: Type, to: Type): Boolean {
-    return from == to || isInt(from) && isInt(to) || from is ArrayType && to is ArrayType && assignable(
+    return from == to || isInt(from) && isInt(to) && canUnifyInt(
+      from,
+      to
+    ) || from is ArrayType && to is ArrayType && assignable(
       from.elementType, to.elementType
     ) && from.size == to.size || from is RefType && to is RefType && (!to.isMutable || from.isMutable) && assignable(
       from.baseType, to.baseType
@@ -34,19 +39,26 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
   fun checkPlaceContext(node: ExprNode): Boolean {
     when (node) {
       is PathExprNode -> {
-        if (node.seg2 != null || node.seg1.name == null) {
+        if (node.seg2 != null) {
           throw CompileError("Semantic: expected a variable, but found a path expression `$node`")
         }
-        val variable = currentScope?.resolveVariable(node.seg1.name)
+        if (node.seg1.type == Keyword.SELF_UPPER) {
+          throw CompileError("Semantic: met unexpected `Self`")
+        }
+        val identifier = node.seg1.name ?: "self"
+        val variable = currentScope?.resolveVariable(identifier)
         if (variable != null) return variable.isMutable
-        val item = currentScope?.resolve(node.seg1.name, Namespace.VALUE)
-        if (item != null) throw CompileError("Semantic: cannot assign to `${node.seg1.name}` because it is an item (like a function or constant), not a variable")
-        throw CompileError("Semantic: cannot find value `${node.seg1.name}` in this scope")
+        val item = currentScope?.resolve(identifier, Namespace.VALUE)
+        if (item != null) throw CompileError("Semantic: cannot assign to `${identifier}` because it is an item (like a function or constant), not a variable")
+        throw CompileError("Semantic: cannot find value `${identifier}` in this scope")
       }
 
       is FieldAccessExprNode -> {
-        val baseIsMutable = checkPlaceContext(node.expr)
+        var baseIsMutable = checkPlaceContext(node.expr)
         var baseType = node.expr.accept(this)
+        if (baseType is RefType) {
+          baseIsMutable = baseType.isMutable
+        }
         baseType = autoDeref(baseType)
         when (baseType) {
           is StructType -> {
@@ -82,8 +94,11 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
       }
 
       is IndexExprNode -> {
-        val baseIsMutable = checkPlaceContext(node.base)
+        var baseIsMutable = checkPlaceContext(node.base)
         val baseType = node.base.accept(this)
+        if (baseType is RefType) {
+          baseIsMutable = baseType.isMutable
+        }
         if (autoDeref(baseType) !is ArrayType) {
           throw CompileError("Semantic: type `$baseType` cannot be indexed")
         }
@@ -138,8 +153,13 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
     node.funParams.forEach { it ->
       currentScope?.declareVariable(getPatternBind(it.pattern, it.type.accept(this)))
     }
+    if (function.selfParam != null) {
+      val self =
+        if (function.selfParam!!.isRef) RefType(currentSelfType, function.selfParam!!.isMut) else currentSelfType
+      currentScope?.declareVariable(Variable("self", self, false))
+    }
     val returnType = node.body.accept(this)
-    if (!assignable(returnType, returnStack.last())) {
+    if (returnType !is NeverType && !assignable(returnType, returnStack.last())) {
       throw CompileError("Semantic: mismatched return type for function `${node.name}`. Expected `${returnStack.last()}`, but found `$returnType`")
     }
     currentScope = currentScope?.parentScope()
@@ -159,6 +179,9 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
       }
     }
     if (node.name == "main") {
+      if (node.body.stmts.isEmpty()) {
+        throw CompileError("Semantic: missing exit() in main function")
+      }
       val last = node.body.stmts.last()
       if (last !is ExprStmtNode || last.expr !is CallExprNode || last.expr.expr !is PathExprNode || last.expr.expr.seg1.name != "exit") {
         throw CompileError("Semantic: missing exit() in main function")
@@ -172,7 +195,7 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
   override fun visit(node: TraitItemNode): Type = UnitType
   override fun visit(node: ImplItemNode): Type {
     currentScope = node.scope
-    currentScope?.declareVariable(Variable("self", node.type.accept(this), false))
+    currentSelfType = node.type.accept(this)
     node.items.forEach { it.accept(this) }
     currentScope = currentScope?.parentScope()
     return UnitType
@@ -184,7 +207,7 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
     val types = node.stmts.map { it.accept(this) }
     val retType = if (node.hasFinal()) {
       types.last()
-    } else if (node.stmts.last() is ExprStmtNode && (node.stmts.last() as ExprStmtNode).expr is ReturnExprNode) {
+    } else if (node.stmts.isNotEmpty() && node.stmts.last() is ExprStmtNode && (node.stmts.last() as ExprStmtNode).expr is ReturnExprNode) {
       NeverType
     } else UnitType
     if (currentScope?.kind == ScopeKind.BLOCK) {
@@ -194,11 +217,19 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
   }
 
   override fun visit(node: LoopExprNode): Type {
+    val breakNum = breakStack.size
     node.expr.accept(this)
     if (breakStack.isEmpty()) {
       throw CompileError("Semantic: this `loop` has no `break` and will never exit")
     }
-    return breakStack.removeLast()
+    val expectType = breakStack.last()
+    for (i in breakNum..(breakStack.size - 1)) {
+      if (breakStack[i] != expectType) {
+        throw CompileError("Semantic: type mismatch in `loop`, expect $expectType, met ${breakStack[i]}")
+      }
+    }
+    while (breakStack.size > breakNum) breakStack.removeLast()
+    return expectType
   }
 
   override fun visit(node: WhileExprNode): Type {
@@ -212,17 +243,18 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
       }
     }
     node.expr.accept(this)
+    if (breakStack.isNotEmpty() && breakStack.last() is NeverType) breakStack.removeLast()
     return UnitType
   }
 
   override fun visit(node: BreakExprNode): Type {
     val type = node.expr?.accept(this) ?: NeverType
     breakStack.add(type)
-    return type
+    return NeverType
   }
 
   override fun visit(node: ReturnExprNode): Type {
-    val type = node.expr?.accept(this) ?: NeverType
+    val type = node.expr?.accept(this) ?: UnitType
     if (returnStack.isEmpty()) {
       throw CompileError("Semantic: `return` can only be used inside a function")
     }
@@ -247,15 +279,19 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
     val bodyType = node.expr.accept(this)
     val elseType = node.elseExpr?.accept(this)
     if (elseType == null) {
-      if (!assignable(bodyType, UnitType)) {
+      if (!assignable(bodyType, UnitType) && !assignable(bodyType, NeverType)) {
         throw CompileError("Semantic: `if` expressions without an `else` block must return `()` (unit type)")
       }
-      return bodyType
+      return UnitType
     } else {
-      if (bodyType != elseType) {
-        throw CompileError("Semantic: `if` and `else` have incompatible types. Expected `$bodyType`, found `$elseType`")
+      if (bodyType == elseType || (isInt(bodyType) && isInt(elseType) && canUnifyInt(
+          bodyType,
+          elseType
+        )) || bodyType is NeverType || elseType is NeverType
+      ) {
+        return if (bodyType is NeverType) elseType else bodyType
       }
-      return bodyType
+      throw CompileError("Semantic: `if` and `else` have incompatible types. Expected `$bodyType`, found `$elseType`")
     }
   }
 
@@ -276,17 +312,19 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
       throw CompileError("Semantic: method calls must use a named identifier, not `self`")
     }
     val methodName = node.pathSeg.name
-    val symbol = when (receiverType) {
-      is StructType -> currentScope?.resolve(receiverType.name, Namespace.TYPE) as? Struct
-        ?: throw CompileError("Semantic: cannot find definition for struct `${receiverType.name}`")
+    val method = BuiltInMethods.findMethod(receiverType, methodName) ?: {
+      val symbol = when (receiverType) {
+        is StructType -> currentScope?.resolve(receiverType.name, Namespace.TYPE) as? Struct
+          ?: throw CompileError("Semantic: cannot find definition for struct `${receiverType.name}`")
 
-      is EnumType -> currentScope?.resolve(receiverType.name, Namespace.TYPE) as? Enum
-        ?: throw CompileError("Semantic: cannot find definition for enum `${receiverType.name}`")
+        is EnumType -> currentScope?.resolve(receiverType.name, Namespace.TYPE) as? Enum
+          ?: throw CompileError("Semantic: cannot find definition for enum `${receiverType.name}`")
 
-      else -> throw CompileError("Semantic: methods can only be called on structs and enums, not on type `$receiverType`")
-    }
-    val method = symbol.methods[methodName]
-      ?: throw CompileError("Semantic: no method named `${methodName}` found for type `${symbol.name}`")
+        else -> throw CompileError("Semantic: non-builtin methods can only be called on structs and enums, not on type `$receiverType`")
+      }
+      symbol.methods[methodName]
+        ?: throw CompileError("Semantic: no method named `${methodName}` found for type `${symbol.name}`")
+    }()
     if (method.selfParam != null && !assignable(receiverType, method.self!!)) {
       throw CompileError("Semantic: type mismatch for `self` parameter in method `${methodName}`. Expected `${method.self!!}`, found `$receiverType`")
     }
@@ -368,7 +406,7 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
       Literal.CHAR -> CharType
       Literal.STRING, Literal.C_STRING, Literal.RAW_STRING, Literal.RAW_C_STRING -> RefType(StrType, false)
 
-      Literal.INTEGER -> Int32Type
+      Literal.INTEGER -> IntType
       Keyword.TRUE, Keyword.FALSE -> BoolType
       else -> throw CompileError("Semantic: invalid literal expression type")
     }
@@ -381,8 +419,12 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
   override fun visit(node: PathExprNode): Type {
     if (node.seg2 == null) {
       if (node.seg1.name == null) {
-        return currentScope?.resolveVariable("self")?.type
-          ?: throw CompileError("Semantic: cannot find `self` in this scope")
+        return if (node.seg1.type == Keyword.SELF) {
+          currentScope?.resolveVariable("self")?.type
+            ?: throw CompileError("Semantic: cannot find `self` in this scope")
+        } else {
+          currentSelfType
+        }
       } else {
         val identifier = node.seg1.name
         val variable = currentScope?.resolveVariable(identifier)
@@ -531,6 +573,7 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
             if (!isInt(leftType) || !isInt(rightType)) {
               throw CompileError("Semantic: cannot apply assignment operator `${node.op}` to non-integer types `$leftType` and `$rightType`")
             }
+            unifyInt(leftType, rightType)
           }
         }
         return UnitType
@@ -544,24 +587,26 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
             if (!isInt(leftType) || !isInt(rightType)) {
               throw CompileError("Semantic: cannot apply binary operator `${node.op}` to non-integer types `$leftType` and `$rightType`")
             }
-            if (leftType != rightType) {
+            if (!canUnifyInt(leftType, rightType)) {
               throw CompileError("Semantic: cannot apply binary operator `${node.op}` to different integer types `$leftType` and `$rightType`")
             }
             return leftType
           }
 
           Punctuation.EQUAL_EQUAL, Punctuation.NOT_EQUAL -> {
-            if (leftType != rightType) {
-              throw CompileError("Semantic: cannot compare two different types: `$leftType` and `$rightType`")
-            }
-            return BoolType
+            if (leftType == rightType || (isInt(leftType) && isInt(rightType) && canUnifyInt(leftType, rightType))) {
+              return BoolType
+            } else throw CompileError("Semantic: cannot compare two different types: `$leftType` and `$rightType`")
           }
 
           Punctuation.LESS, Punctuation.LESS_EQUAL, Punctuation.GREATER, Punctuation.GREATER_EQUAL -> {
-            if (leftType != rightType || (!isInt(leftType) && leftType !is CharType)) {
-              throw CompileError("Semantic: binary operator `${node.op}` cannot be applied to types `$leftType` and `$rightType`")
-            }
-            return BoolType
+            if ((leftType is CharType && rightType is CharType) || (isInt(leftType) && isInt(rightType) && canUnifyInt(
+                leftType,
+                rightType
+              ))
+            ) {
+              return BoolType
+            } else throw CompileError("Semantic: binary operator `${node.op}` cannot be applied to types `$leftType` and `$rightType`")
           }
 
           Punctuation.AND_AND, Punctuation.OR_OR -> {
@@ -572,7 +617,7 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
           }
 
           Punctuation.AMPERSAND, Punctuation.PIPE, Punctuation.CARET -> {
-            if (!isInt(leftType) || !isInt(rightType) || leftType != rightType) {
+            if (!isInt(leftType) || !isInt(rightType) || !canUnifyInt(leftType, rightType)) {
               throw CompileError("Semantic: bitwise operator `${node.op}` cannot be applied to types `$leftType` and `$rightType`")
             }
             return leftType
@@ -634,11 +679,14 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
         is BuiltIn -> type.type
         is Enum -> type.type
         is Struct -> type.type
-        else -> throw CompileError("Semantic: cannot find type `${node.name}` in this scope")
+        else -> throw CompileError("Semantic: cannot find type `${node.name}` in this scope, found $type")
       }
     } else {
-      return currentScope?.resolveVariable("self")?.type
-        ?: throw CompileError("Semantic: cannot find `self` type in this scope")
+      if (node.type == Keyword.SELF) {
+        currentScope?.resolveVariable("self")?.type
+          ?: throw CompileError("Semantic: cannot find `self` type in this scope")
+
+      } else currentSelfType
     }
   }
 

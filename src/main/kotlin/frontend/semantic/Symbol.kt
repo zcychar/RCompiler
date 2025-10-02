@@ -34,7 +34,7 @@ data class Function(
   var self: Type? = null,
   var params: List<Variable> = emptyList(),
   var returnType: Type = UnitType,
-  var selfParam: Type? = null,
+  var selfParam: SelfType? = null,
 ) : Symbol
 
 data class Struct(

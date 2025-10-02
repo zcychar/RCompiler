@@ -150,7 +150,7 @@ class RLexer(private val input: String) {
     }
 
     private fun checkNumber(str:String){
-        val pattern = "^((0b[01_]+)|(0o[0-7_]+)|(0x[0-9a-fA-F_]+)|([0-9_]+))(i32|u32|isize|usize)$".toRegex()
+        val pattern = "^((0b[01_]+)|(0o[0-7_]+)|(0x[0-9a-fA-F_]+)|([0-9_]+))(i32|u32|isize|usize)?$".toRegex()
 
         if (!str.matches(pattern)) {
             throw CompileError("Lexer Error: Invalid integer literal format: `$str`")

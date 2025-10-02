@@ -175,7 +175,7 @@ val precedence = mapOf<TokenType, Pair<Int, Int>>(
   Punctuation.NOT_EQUAL to Pair(51, 50),
   Punctuation.LESS to Pair(51, 50),
   Punctuation.LESS_EQUAL to Pair(51, 50),
-  Punctuation.GREATER to Pair(511, 50),
+  Punctuation.GREATER to Pair(51, 50),
   Punctuation.GREATER_EQUAL to Pair(51, 50),
   Punctuation.AND_AND to Pair(41, 40),
   Punctuation.OR_OR to Pair(31, 30),
@@ -205,6 +205,8 @@ fun getInfixPrecedence(op: TokenType?): Int {
     op == Punctuation.DOT -> 200
     op == Punctuation.LEFT_PAREN -> 200
     op == Punctuation.LEFT_BRACKET -> 200
+    op == Punctuation.LEFT_BRACE -> 200
+    op == Keyword.AS -> 200
     else -> 0
   }
 }
