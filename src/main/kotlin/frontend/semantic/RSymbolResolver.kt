@@ -155,9 +155,15 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
 
                     Punctuation.BANG -> {
                         val innerValue = evaluateConstExpr(expr.rhs, expectType)
-                        val value = (innerValue as? ConstValue.Bool)?.value
-                            ?: throw CompileError("Semantic:Unary bang followed by an non-bool operand ${expr.rhs}")
-                        ConstValue.Bool(!value)
+                        when(innerValue){
+                            is ConstValue.Bool->{
+                                ConstValue.Bool(!innerValue.value)
+                            }
+                            is ConstValue.Int->{
+                                ConstValue.Int(innerValue.value,innerValue.actualType)
+                            }
+                            else->throw CompileError("Semantic:Unary bang followed by an non-bool non-int operand ${expr.rhs}")
+                        }
                     }
 
                     else -> throw CompileError("Semantic:Unsupported unary $expr")
