@@ -104,7 +104,8 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
                 }
                 return baseIsMutable
             }
-            is LiteralExprNode->{
+
+            is LiteralExprNode -> {
                 return false
             }
 
@@ -120,10 +121,10 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
     }
 
     fun isMut(node: ExprNode): Boolean {
-        try{
+        try {
             checkPlaceContext(node)
             return true
-        }catch (e: Exception){
+        } catch (e: Exception) {
             return false
         }
     }
@@ -590,10 +591,10 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
             }
 
             Punctuation.BANG -> {
-                if (rightType !is BoolType&&!isInt(rightType)) {
+                if (rightType !is BoolType && !isInt(rightType)) {
                     throw CompileError("Semantic: cannot apply unary operator `!` to type `$rightType`")
                 }
-                return BoolType
+                return rightType
             }
 
             else -> throw CompileError("Semantic: invalid unary operator `${node.op}`")
@@ -757,7 +758,7 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
     override fun visit(node: CastExprNode): Type {
         val exprType = node.expr.accept(this)
         val targetType = node.targetType.accept(this)
-        if ((isInt(exprType) && isInt(targetType))||(exprType is BoolType&&isInt(targetType))) {
+        if ((isInt(exprType) && isInt(targetType)) || (exprType is BoolType && isInt(targetType))) {
             return targetType
         } else {
             throw CompileError("Semantic: only integer types can be cast. Cannot cast from `$exprType` to `$targetType`")
