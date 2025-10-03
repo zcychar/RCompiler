@@ -21,7 +21,7 @@ kotlin {
 }
 
 // 1. 定义测试用例的根目录
-val testCasesDir = file("src/main/resources/RCompiler-Testcases/semantic-1")
+val testCasesDir = file("src/main/resources/RCompiler-Testcases/semantic-2")
 
 // 2. 检查目录是否存在
 if (testCasesDir.isDirectory) {

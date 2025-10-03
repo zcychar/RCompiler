@@ -119,7 +119,14 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
         }
     }
 
-    fun isMut(node: ExprNode): Boolean = checkPlaceContext(node)
+    fun isMut(node: ExprNode): Boolean {
+        try{
+            checkPlaceContext(node)
+            return true
+        }catch (e: Exception){
+            return false
+        }
+    }
 
     fun getPatternBind(pattern: PatternNode, type: Type): Variable {
         when (pattern) {
@@ -583,7 +590,7 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
             }
 
             Punctuation.BANG -> {
-                if (rightType !is BoolType) {
+                if (rightType !is BoolType&&!isInt(rightType)) {
                     throw CompileError("Semantic: cannot apply unary operator `!` to type `$rightType`")
                 }
                 return BoolType
@@ -750,7 +757,7 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
     override fun visit(node: CastExprNode): Type {
         val exprType = node.expr.accept(this)
         val targetType = node.targetType.accept(this)
-        if (isInt(exprType) && isInt(targetType)) {
+        if ((isInt(exprType) && isInt(targetType))||(exprType is BoolType&&isInt(targetType))) {
             return targetType
         } else {
             throw CompileError("Semantic: only integer types can be cast. Cannot cast from `$exprType` to `$targetType`")

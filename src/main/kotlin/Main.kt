@@ -8,7 +8,7 @@ import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
 //  val isDebugMode = args.contains("--debug")
-  val isDebugMode = false
+  val isDebugMode = true
   val filePath = args.firstOrNull { !it.startsWith("--") } ?: readln()
 
 //  if (filePath == null) {
