@@ -122,8 +122,8 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
 
     fun isMut(node: ExprNode): Boolean {
         try {
-            checkPlaceContext(node)
-            return true
+            val x = checkPlaceContext(node)
+            return x
         } catch (e: Exception) {
             return false
         }
