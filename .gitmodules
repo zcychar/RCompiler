@@ -4,3 +4,4 @@
 [submodule "src/main/resources/RCompiler-Testcases"]
 	path = src/main/resources/RCompiler-Testcases
 	url = https://github.com/RayZh-hs/RCompiler-Testcases.git
+	branch = main
