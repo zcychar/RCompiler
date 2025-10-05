@@ -1,102 +1,117 @@
 plugins {
-  kotlin("jvm") version "2.2.0"
+    kotlin("jvm") version "2.2.0"
 }
 
 group = "org.example"
 version = "1.0-SNAPSHOT"
 
 repositories {
-  mavenCentral()
+    mavenCentral()
 }
 
 dependencies {
-  testImplementation(kotlin("test"))
+    testImplementation(kotlin("test"))
 }
 
 tasks.test {
-  useJUnitPlatform()
+    useJUnitPlatform()
 }
 kotlin {
-  jvmToolchain(24)
+    jvmToolchain(24)
 }
 
-// 1. 定义测试用例的根目录
-val testCasesDir = file("src/main/resources/RCompiler-Testcases/semantic-2")
 
-// 2. 检查目录是否存在
-if (testCasesDir.isDirectory) {
-  // 3. 动态创建任务
-  testCasesDir.listFiles { file -> file.isDirectory }?.forEach { testDir ->
+val testCasesRoot = file("src/main/resources/RCompiler-Testcases")
 
-    val testCaseName = testDir.name.toCamelCase()
-    val taskName = testCaseName
+val allStageTasks = mutableListOf<TaskProvider<*>>()
 
-    tasks.register(taskName) {
-      group = "Compiler Tests"
-      description = "Runs the compiler test case '${testDir.name}'."
-      inputs.dir(testDir)
-      dependsOn(sourceSets.main.get().processResourcesTaskName)
-      // 将所有逻辑放入 doLast 块，它会在任务执行时运行
-      doLast {
-        val infoFile = testDir.resolve("testcase_info.json")
-        val sourceFile = testDir.resolve("${testDir.name}.rx")
+if (testCasesRoot.isDirectory) {
 
-        if (!infoFile.exists() || !sourceFile.exists()) {
-          throw GradleException("Test '${testDir.name}' is malformed: missing required files.")
+    testCasesRoot.listFiles { file -> file.isDirectory && !file.name.startsWith(".") }?.forEach { stageDir ->
+
+        val stageNameCamel = stageDir.name.toCamelCase().capitalize()
+        val stageTaskName = "${stageNameCamel}"
+        val stageTestTasks = mutableListOf<TaskProvider<*>>()
+
+        logger.lifecycle("Discovered stage: ${stageDir.name} -> Creating tasks with prefix '${stageNameCamel}'")
+
+        // 4. 遍历第二层目录，即阶段下的每个“测试点”（如 basic1）
+        stageDir.listFiles { file -> file.isDirectory && !file.name.startsWith(".") }?.forEach { testCaseDir ->
+
+            val caseNameCamel = testCaseDir.name.toCamelCase().capitalize()
+            val individualTaskName = "${stageNameCamel}${caseNameCamel}"
+
+            val individualTaskProvider = tasks.register<JavaExec>(individualTaskName) {
+                group = "Compiler Individual Tests"
+                description = "Runs compiler test '${testCaseDir.name}' from stage '${stageDir.name}'."
+
+                classpath = sourceSets.main.get().runtimeClasspath
+                mainClass.set("MainKt")
+
+                val sourceFile = testCaseDir.resolve("${testCaseDir.name}.rx")
+                val resourcesDir = sourceSets.main.get().resources.srcDirs.first()
+                val relativePath = sourceFile.relativeTo(resourcesDir).path
+
+                args = listOf(relativePath)
+                isIgnoreExitValue = true
+
+                inputs.dir(testCaseDir)
+                dependsOn(sourceSets.main.get().processResourcesTaskName)
+
+                doLast {
+                    val infoFile = testCaseDir.resolve("testcase_info.json")
+                    if (!infoFile.exists()) throw GradleException("testcase_info.json not found for test '${testCaseDir.name}'")
+
+                    val execResult = project.javaexec {
+                        classpath = sourceSets.main.get().runtimeClasspath
+                        mainClass.set("MainKt")
+                        args = listOf(relativePath)
+                        isIgnoreExitValue = true
+                    }
+
+                    val jsonText = infoFile.readText()
+                    val exitCodeString =
+                        """"compileexitcode"\s*:\s*(-?\d+)""".toRegex().find(jsonText)?.groups?.get(1)?.value
+                            ?: throw GradleException("Could not find 'compileexitcode' key in ${infoFile.path}")
+
+                    val expectedExitCode = exitCodeString.toInt()
+                    val actualExitCode = execResult.exitValue
+
+                    logger.lifecycle("\n--- Test '${testCaseDir.name}' from stage '${stageDir.name}' ---")
+                    logger.lifecycle("   > Expected exit code: $expectedExitCode")
+                    logger.lifecycle("   > Actual exit code:   $actualExitCode")
+
+                    val passed =
+                        (expectedExitCode == 0 && actualExitCode == 0) || (expectedExitCode != 0 && actualExitCode != 0)
+                    if (!passed) {
+                        logger.error("   ❌ FAILED")
+                        throw GradleException("Test case '${testCaseDir.name}' failed.")
+                    } else {
+                        logger.lifecycle("   ✅ PASSED")
+                    }
+                }
+            }
+            stageTestTasks.add(individualTaskProvider)
         }
 
-        logger.lifecycle("Executing compiler for test: ${testDir.name}...")
-
-        val execResult = project.javaexec {
-          classpath = sourceSets.main.get().runtimeClasspath
-          mainClass.set("MainKt")
-          val resourcesDir = sourceSets.main.get().resources.srcDirs.first()
-          val relativePath = sourceFile.relativeTo(resourcesDir).path
-          args = listOf(relativePath)
-          isIgnoreExitValue = true
+        // 6. 为每个阶段创建一个“总任务”，它依赖于该阶段下的所有单个测试任务
+        val stageTaskProvider = tasks.register(stageTaskName) {
+            group = "Compiler Stage Tests"
+            description = "Runs all tests for stage '${stageDir.name}'."
+            dependsOn(stageTestTasks)
         }
-
-        // 从返回的 execResult 对象中安全地获取退出码
-        val actualExitCode = execResult.exitValue
-
-        // --- 验证逻辑保持不变 ---
-        val jsonText = infoFile.readText()
-        val regex = """"compileexitcode"\s*:\s*(-?\d+)""".toRegex()
-        val match = regex.find(jsonText)
-        val exitCodeString = match?.groups?.get(1)?.value
-          ?: throw GradleException("Could not find 'compileexitcode' key in ${infoFile.path}")
-
-        val expectedExitCode = exitCodeString.toInt()
-
-        logger.lifecycle("\n--- Test '${testDir.name}' ---")
-        logger.lifecycle("   > Expected exit code: $expectedExitCode")
-        logger.lifecycle("   > Actual exit code:   $actualExitCode")
-
-        val passed = (expectedExitCode == 0 && actualExitCode == 0) ||
-            (expectedExitCode != 0 && actualExitCode != 0)
-
-        if (passed) {
-          logger.lifecycle("   ✅ PASSED")
-        } else {
-          logger.error("   ❌ FAILED")
-          throw GradleException("Test case '${testDir.name}' failed. Expected exit code: $expectedExitCode, but got: $actualExitCode")
-        }
-      }
+        allStageTasks.add(stageTaskProvider)
     }
-  }
 }
 
-// 辅助函数保持不变
 fun String.toCamelCase(): String {
-  return this.split('-', '_').mapIndexed { index, s ->
-    if (index == 0) s else s.capitalize()
-  }.joinToString("")
+    return this.split('-', '_').mapIndexed { index, s ->
+        if (index == 0) s else s.capitalize()
+    }.joinToString("")
 }
 
-// “运行所有测试”的任务也需要小幅修改
 tasks.register("allCompilerTests") {
-  group = "Compiler Tests"
-  description = "Runs all compiler verification tests."
-  // 依赖关系现在是基于任务名和组名，而不是类型
-  dependsOn(tasks.matching { it.group == "Compiler Tests" && it.name != "allCompilerTests" })
+    group = "Verification"
+    description = "Runs all compiler tests across all stages."
+    dependsOn(allStageTasks)
 }
