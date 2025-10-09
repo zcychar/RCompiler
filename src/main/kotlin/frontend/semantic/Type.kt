@@ -76,7 +76,7 @@ fun getInt(expr: LiteralExprNode): ConstValue.Int {
             numeric.toLong(10)
         }
     }
-    if (number > 2147483648) {
+    if (number > 4294967296) {
         throw CompileError("Semantic: Integer overflow")
     } else if (number > 2147483647) {
         type = UInt32Type
