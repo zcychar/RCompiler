@@ -326,7 +326,25 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
     }
 
     override fun visit(node: MethodCallExprNode): Type {
+        // 接收者必须是实例值，不能是类型名或 `Self`
+        when (val e = node.expr) {
+            is PathExprNode -> {
+                if (e.seg2 == null) {
+                    if (e.seg1.name != null) {
+                        val typeSym = currentScope?.resolve(e.seg1.name, Namespace.TYPE)
+                        if (typeSym is BuiltIn || typeSym is Struct || typeSym is Enum) {
+                            throw CompileError("Semantic: method receiver must be an instance, not a type `${e.seg1.name}`")
+                        }
+                    } else if (e.seg1.type == Keyword.SELF_UPPER) {
+                        throw CompileError("Semantic: method receiver must be an instance, not `Self`")
+                    }
+                }
+            }
+            else -> { /* 其他任意表达式作为接收者均可，例如索引/字段访问/解引用/分组等 */ }
+        }
+
         var receiverType = node.expr.accept(this)
+
         val isMutable = isMut(node.expr)
         if (receiverType is IntType) receiverType = UInt32Type
         val derefReceiverType = autoDeref(receiverType)
@@ -766,6 +784,20 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
     }
 
     override fun visit(node: BorrowExprNode): Type {
+        if (node.isMut) {
+            when (val e = node.expr) {
+                is PathExprNode -> {
+                    if (e.seg2 == null) {
+                        val identifier = e.seg1.name ?: "self"
+                        val v = currentScope?.resolveVariable(identifier)
+                        if (v != null && !v.isMutable) {
+                            throw CompileError("Semantic: cannot create a mutable reference to an immutable variable `${identifier}`")
+                        }
+                    }
+                }
+                else -> { }
+            }
+        }
         return RefType(node.expr.accept(this), node.isMut)
     }
 
