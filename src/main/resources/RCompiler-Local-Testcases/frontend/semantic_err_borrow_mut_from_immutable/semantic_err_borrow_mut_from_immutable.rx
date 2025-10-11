@@ -1,0 +1,3 @@
+/* Semantic error: borrow mut from immutable */
+fn main() { let a: i32 = 1; let p: & mut i32 = & mut a; exit(0); }
+

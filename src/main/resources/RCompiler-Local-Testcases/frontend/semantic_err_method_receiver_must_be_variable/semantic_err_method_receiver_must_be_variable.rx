@@ -1,0 +1,5 @@
+/* Semantic error: method receiver must be an instance */
+struct S { }
+impl S { fn m(self) -> i32 { 0 } }
+fn main() { let x: i32 = S.m(); exit(0); }
+

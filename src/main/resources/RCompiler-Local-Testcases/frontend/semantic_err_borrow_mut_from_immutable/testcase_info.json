@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_borrow_mut_from_immutable", "source_path":"src/semantic_err_borrow_mut_from_immutable/semantic_err_borrow_mut_from_immutable.rx", "stage_name":"ci-special" }
+

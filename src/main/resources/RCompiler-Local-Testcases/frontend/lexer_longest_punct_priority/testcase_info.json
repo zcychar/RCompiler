@@ -1,0 +1,9 @@
+{
+  "active": 1,
+  "cmp": ["compileexitcode"],
+  "compileexitcode": 1,
+  "name": "lexer_longest_punct_priority",
+  "source_path": "src/lexer_longest_punct_priority/lexer_longest_punct_priority.rx",
+  "stage_name": "ci-special"
+}
+

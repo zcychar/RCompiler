@@ -1,0 +1,5 @@
+/* Semantic error: non-unit struct cannot be const path */
+struct S { x: i32 }
+const C: S = S;
+fn main() { exit(0); }
+

@@ -1,0 +1,4 @@
+/* Semantic error: 'self' outside impl */
+fn f(self) -> i32 { 0 }
+fn main() { exit(0); }
+

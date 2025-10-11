@@ -1,0 +1,4 @@
+/* Parser success: various types */
+struct Me { a: i32, b: & i32, c: [i32; 3] }
+fn main(){ exit(0); }
+

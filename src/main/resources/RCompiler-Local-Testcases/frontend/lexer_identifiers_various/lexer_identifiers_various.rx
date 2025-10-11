@@ -1,0 +1,9 @@
+/* Lexer success: various identifiers */
+fn main() {
+  let x: i32 = 0;
+  let my_variable: i32 = 0;
+  let u____: i32 = 0;
+  let a123: i32 = 0;
+  exit(0);
+}
+

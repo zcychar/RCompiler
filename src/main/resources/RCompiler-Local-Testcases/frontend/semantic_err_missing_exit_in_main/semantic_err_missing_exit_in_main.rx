@@ -1,0 +1,3 @@
+/* Semantic error: missing exit() in main */
+fn main() { let x: i32 = 1; }
+

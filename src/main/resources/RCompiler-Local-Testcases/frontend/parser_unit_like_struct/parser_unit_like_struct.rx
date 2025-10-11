@@ -1,0 +1,4 @@
+/* Parser success: unit-like struct */
+struct Marker;
+fn main(){ exit(0); }
+

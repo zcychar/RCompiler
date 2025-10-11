@@ -1,0 +1,2 @@
+/* Parser error: unexpected EOF in let */
+fn main() { let x: i32 =

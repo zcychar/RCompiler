@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_recursive_struct_dependency", "source_path":"src/semantic_err_recursive_struct_dependency/semantic_err_recursive_struct_dependency.rx", "stage_name":"ci-special" }
+

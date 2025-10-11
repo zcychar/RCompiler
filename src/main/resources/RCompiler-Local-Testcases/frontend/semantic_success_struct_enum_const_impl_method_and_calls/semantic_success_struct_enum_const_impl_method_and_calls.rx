@@ -1,0 +1,27 @@
+/* Semantic success: struct/enum/const/impl and calls */
+struct Point { x: i32, y: u32 }
+enum E { A, B }
+impl Point { fn show(self) -> &str { "" } const Z: i32 = 7; }
+
+const A1: i32 = 1 + 2 * 3; // 7
+const B1: bool = true && false || !false; // true
+const C1: char = 'c';
+const S1: str = "hi";
+
+fn add(x: i32, y: i32) -> i32 { return x + y; }
+
+fn main() {
+  let mut p: Point = Point { x: 1, y: 2u32 };
+  let a: i32 = p.x;
+  let shown: &str = p.show();
+  let arr: [i32; 3] = [1, 2, 3];
+  let i: i32 = arr[1];
+  let s: i32 = add(1, 2);
+  let len1: usize = "hello".len();
+  let str: String = (1).to_string();
+  let b: bool = (1i32 < 2i32) && (3i32 == 3i32) || (4i32 >= 4i32);
+  let bit: i32 = (1i32 | 2i32) & 3i32;
+  let e: E = E::A;
+  exit(0);
+}
+

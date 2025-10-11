@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":0, "name":"parser_struct_with_fields", "source_path":"src/parser_struct_with_fields/parser_struct_with_fields.rx", "stage_name":"ci-special" }
+

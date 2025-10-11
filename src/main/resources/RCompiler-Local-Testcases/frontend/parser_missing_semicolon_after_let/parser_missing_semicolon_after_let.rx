@@ -1,0 +1,2 @@
+/* Parser error: missing semicolon after let */
+fn main() { let x: i32 = 1 }

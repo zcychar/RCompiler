@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_index_non_array", "source_path":"src/semantic_err_index_non_array/semantic_err_index_non_array.rx", "stage_name":"ci-special" }
+

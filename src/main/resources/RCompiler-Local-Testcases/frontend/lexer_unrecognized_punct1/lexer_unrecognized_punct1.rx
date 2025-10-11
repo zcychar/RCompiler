@@ -1,0 +1,7 @@
+/* Lexer error: unrecognized punctuation ` */
+fn main() {
+    let a: i32 = 1;
+    ` // should trigger lexer error
+    exit(0);
+}
+

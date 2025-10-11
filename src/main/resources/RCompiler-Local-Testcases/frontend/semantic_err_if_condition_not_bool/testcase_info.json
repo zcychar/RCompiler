@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_if_condition_not_bool", "source_path":"src/semantic_err_if_condition_not_bool/semantic_err_if_condition_not_bool.rx", "stage_name":"ci-special" }
+

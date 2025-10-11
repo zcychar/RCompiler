@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":0, "name":"lexer_identifiers_various", "source_path":"src/lexer_identifiers_various/lexer_identifiers_various.rx", "stage_name":"ci-special" }
+

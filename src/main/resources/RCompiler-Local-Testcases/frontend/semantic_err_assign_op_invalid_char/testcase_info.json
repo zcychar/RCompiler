@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_assign_op_invalid_char", "source_path":"src/semantic_err_assign_op_invalid_char/semantic_err_assign_op_invalid_char.rx", "stage_name":"ci-special" }
+

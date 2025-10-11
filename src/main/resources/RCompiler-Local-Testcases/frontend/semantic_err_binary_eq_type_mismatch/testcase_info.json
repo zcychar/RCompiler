@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_binary_eq_type_mismatch", "source_path":"src/semantic_err_binary_eq_type_mismatch/semantic_err_binary_eq_type_mismatch.rx", "stage_name":"ci-special" }
+

@@ -21,29 +21,37 @@ kotlin {
 }
 
 
-val testCasesRoot = file("src/main/resources/RCompiler-Testcases")
+// === Testcases roots ===
+val testCaseRoots = listOf(
+    file("src/main/resources/RCompiler-Testcases"),          // 远端克隆仓库（保持只读）
+    file("src/main/resources/RCompiler-Local-Testcases"),    // 本地自定义用例根     // 现有本地用例（兼容路径）
+)
 
 val allStageTasks = mutableListOf<TaskProvider<*>>()
+val localStageTasks = mutableListOf<TaskProvider<*>>()
 
-if (testCasesRoot.isDirectory) {
+// 扫描每个根目录下的阶段（stage）文件夹
+testCaseRoots.filter { it.isDirectory }.forEach { rootDir ->
 
-    testCasesRoot.listFiles { file -> file.isDirectory && !file.name.startsWith(".") }?.forEach { stageDir ->
+    rootDir.listFiles { file -> file.isDirectory && !file.name.startsWith(".") }?.forEach { stageDir ->
 
         val stageNameCamel = stageDir.name.toCamelCase().capitalize()
-        val stageTaskName = "${stageNameCamel}"
+        val rootPrefix = "local"
+        val isRemoteRoot = rootDir.name == "RCompiler-Testcases"
+        val stageTaskName = if (isRemoteRoot) stageNameCamel else "${rootPrefix}${stageNameCamel}"
         val stageTestTasks = mutableListOf<TaskProvider<*>>()
 
-        logger.lifecycle("Discovered stage: ${stageDir.name} -> Creating tasks with prefix '${stageNameCamel}'")
+        logger.lifecycle("Discovered stage: ${stageDir.name} in root '${rootDir.name}' -> Creating tasks with prefix '${stageTaskName}'")
 
-        // 4. 遍历第二层目录，即阶段下的每个“测试点”（如 basic1）
+        // 遍历第二层目录，即阶段下的每个“测试点”（如 basic1）
         stageDir.listFiles { file -> file.isDirectory && !file.name.startsWith(".") }?.forEach { testCaseDir ->
 
             val caseNameCamel = testCaseDir.name.toCamelCase().capitalize()
-            val individualTaskName = "${stageNameCamel}${caseNameCamel}"
+            val individualTaskName = "${stageTaskName}${caseNameCamel}"
 
             val individualTaskProvider = tasks.register<JavaExec>(individualTaskName) {
                 group = "Compiler Individual Tests"
-                description = "Runs compiler test '${testCaseDir.name}' from stage '${stageDir.name}'."
+                description = "Runs compiler test '${testCaseDir.name}' from stage '${stageDir.name}' (root='${rootDir.name}')."
 
                 classpath = sourceSets.main.get().runtimeClasspath
                 mainClass.set("MainKt")
@@ -77,7 +85,7 @@ if (testCasesRoot.isDirectory) {
                     val expectedExitCode = exitCodeString.toInt()
                     val actualExitCode = execResult.exitValue
 
-                    logger.lifecycle("\n--- Test '${testCaseDir.name}' from stage '${stageDir.name}' ---")
+                    logger.lifecycle("\n--- Test '${testCaseDir.name}' from stage '${stageDir.name}' (root='${rootDir.name}') ---")
                     logger.lifecycle("   > Expected exit code: $expectedExitCode")
                     logger.lifecycle("   > Actual exit code:   $actualExitCode")
 
@@ -94,13 +102,13 @@ if (testCasesRoot.isDirectory) {
             stageTestTasks.add(individualTaskProvider)
         }
 
-        // 6. 为每个阶段创建一个“总任务”，它依赖于该阶段下的所有单个测试任务
         val stageTaskProvider = tasks.register(stageTaskName) {
             group = "Compiler Stage Tests"
-            description = "Runs all tests for stage '${stageDir.name}'."
+            description = "Runs all tests for stage '${stageDir.name}' (root='${rootDir.name}')."
             dependsOn(stageTestTasks)
         }
         allStageTasks.add(stageTaskProvider)
+        if (!isRemoteRoot) localStageTasks.add(stageTaskProvider)
     }
 }
 
@@ -110,8 +118,14 @@ fun String.toCamelCase(): String {
     }.joinToString("")
 }
 
+tasks.register("localTests") {
+    group = "Verification"
+    description = "Runs all local test stages (non-remote roots)."
+    dependsOn(localStageTasks)
+}
+
 tasks.register("allCompilerTests") {
     group = "Verification"
-    description = "Runs all compiler tests across all stages."
+    description = "Runs all compiler tests across all roots and stages."
     dependsOn(allStageTasks)
 }

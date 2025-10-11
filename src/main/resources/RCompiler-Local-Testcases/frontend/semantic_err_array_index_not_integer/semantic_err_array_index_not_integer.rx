@@ -1,0 +1,3 @@
+/* Semantic error: array index must be integer */
+fn main() { let arr: [i32; 3] = [1, 2, 3]; let x: i32 = arr[true]; exit(0); }
+

@@ -1,0 +1,9 @@
+/* Lexer raw string corner cases */
+fn main() {
+    let a: &str = r"";
+    let b: &str = r"hello";
+    let c: &str = r#"hello"#;
+    let d: &str = r##"contains "#"##;
+    exit(0);
+}
+

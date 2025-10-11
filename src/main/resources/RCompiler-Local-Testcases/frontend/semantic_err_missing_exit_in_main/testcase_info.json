@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_missing_exit_in_main", "source_path":"src/semantic_err_missing_exit_in_main/semantic_err_missing_exit_in_main.rx", "stage_name":"ci-special" }
+

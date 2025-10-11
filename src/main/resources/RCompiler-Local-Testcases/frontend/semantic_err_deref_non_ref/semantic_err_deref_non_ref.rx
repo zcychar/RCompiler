@@ -1,0 +1,3 @@
+/* Semantic error: dereference non-reference */
+fn main() { let x: i32 = 1; let y: i32 = *x; exit(0); }
+

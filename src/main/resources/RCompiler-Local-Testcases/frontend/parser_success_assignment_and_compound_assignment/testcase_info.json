@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":0, "name":"parser_success_assignment_and_compound_assignment", "source_path":"src/parser_success_assignment_and_compound_assignment/parser_success_assignment_and_compound_assignment.rx", "stage_name":"ci-special" }
+

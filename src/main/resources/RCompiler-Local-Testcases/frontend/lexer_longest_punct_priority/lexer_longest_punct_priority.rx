@@ -1,0 +1,12 @@
+/* Parser should fail but lexer should choose longest punctuations */
+fn main() {
+    // tokens: <<= >>= ... ..=
+    let a: i32 = 0;
+    a <<= 1;
+    a >>= 1;
+    a ..= 3; // invalid in this language -> expect parse error
+    // standalone ... to ensure lexing
+    ...
+    exit(0);
+}
+
