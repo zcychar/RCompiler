@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_non_unit_struct_as_const_path", "source_path":"src/semantic_err_non_unit_struct_as_const_path/semantic_err_non_unit_struct_as_const_path.rx", "stage_name":"ci-special" }
+

@@ -1,0 +1,6 @@
+/* Lexer error: unterminated char */
+fn main() {
+    let c: char = 'a;
+    exit(0);
+}
+

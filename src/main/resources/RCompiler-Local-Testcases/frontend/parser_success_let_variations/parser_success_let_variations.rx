@@ -1,0 +1,8 @@
+/* Parser success: let variations */
+fn main() {
+  let b: i32 = 0;
+  let c: i32 = 1;
+  let d: i32 = 2;
+  let mut e: i32 = 3;
+  exit(0);
+}

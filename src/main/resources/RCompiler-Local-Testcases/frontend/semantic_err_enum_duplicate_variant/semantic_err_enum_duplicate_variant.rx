@@ -1,0 +1,4 @@
+/* Semantic error: duplicated enum variant */
+enum Bad { A, A }
+fn main() { exit(0); }
+

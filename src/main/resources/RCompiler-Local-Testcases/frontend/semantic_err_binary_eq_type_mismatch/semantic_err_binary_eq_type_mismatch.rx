@@ -1,0 +1,3 @@
+/* Semantic error: equality between different numeric types */
+fn main() { let b: bool = (1i32 == 1u32); exit(0); }
+

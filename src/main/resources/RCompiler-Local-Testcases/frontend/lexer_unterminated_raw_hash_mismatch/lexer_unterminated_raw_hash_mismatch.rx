@@ -1,0 +1,6 @@
+/* Lexer error: raw string hash mismatch */
+fn main() {
+    let s: str = r#"hello"##; // mismatch
+    exit(0);
+}
+

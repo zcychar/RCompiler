@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_impl_invalid_type_or_trait", "source_path":"src/semantic_err_impl_invalid_type_or_trait/semantic_err_impl_invalid_type_or_trait.rx", "stage_name":"ci-special" }
+

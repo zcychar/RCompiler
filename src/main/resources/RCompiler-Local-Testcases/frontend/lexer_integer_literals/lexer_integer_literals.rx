@@ -1,0 +1,8 @@
+/* Lexer success: integer literals */
+fn main() {
+  let a: i32 = 123;
+  let b: i32 = 0;
+  let c: i32 = 98765;
+  exit(0);
+}
+

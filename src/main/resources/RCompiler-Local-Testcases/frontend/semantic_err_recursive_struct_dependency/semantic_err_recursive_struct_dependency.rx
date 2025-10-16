@@ -1,0 +1,4 @@
+/* Semantic error: recursive struct dependency */
+struct A { x: A }
+fn main() { exit(0); }
+

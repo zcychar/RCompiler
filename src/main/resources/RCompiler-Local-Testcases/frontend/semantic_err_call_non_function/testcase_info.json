@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_call_non_function", "source_path":"src/semantic_err_call_non_function/semantic_err_call_non_function.rx", "stage_name":"ci-special" }
+

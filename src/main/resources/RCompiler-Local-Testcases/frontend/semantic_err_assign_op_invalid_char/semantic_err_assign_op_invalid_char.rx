@@ -1,0 +1,3 @@
+/* Semantic error: invalid assignment op for char */
+fn main() { let mut c: char = 'a'; c += 'b'; exit(0); }
+

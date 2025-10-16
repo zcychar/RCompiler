@@ -1,0 +1,8 @@
+/* Parser success: identifier pattern variations */
+fn main() {
+  let mut b: i32 = 2;
+  let c: & i32 = & 3;
+  let mut d: i32 = 4;
+  let e_: i32 = 5;
+  exit(0);
+}

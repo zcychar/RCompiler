@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_wrong_argument_count", "source_path":"src/semantic_err_wrong_argument_count/semantic_err_wrong_argument_count.rx", "stage_name":"ci-special" }
+

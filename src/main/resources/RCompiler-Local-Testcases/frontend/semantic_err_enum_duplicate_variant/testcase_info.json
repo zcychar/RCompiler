@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_enum_duplicate_variant", "source_path":"src/semantic_err_enum_duplicate_variant/semantic_err_enum_duplicate_variant.rx", "stage_name":"ci-special" }
+

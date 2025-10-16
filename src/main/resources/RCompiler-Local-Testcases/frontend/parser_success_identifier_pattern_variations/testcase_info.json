@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":0, "name":"parser_success_identifier_pattern_variations", "source_path":"src/parser_success_identifier_pattern_variations/parser_success_identifier_pattern_variations.rx", "stage_name":"ci-special" }
+

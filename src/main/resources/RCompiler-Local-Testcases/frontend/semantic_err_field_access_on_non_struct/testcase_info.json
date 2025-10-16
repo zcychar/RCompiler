@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_field_access_on_non_struct", "source_path":"src/semantic_err_field_access_on_non_struct/semantic_err_field_access_on_non_struct.rx", "stage_name":"ci-special" }
+

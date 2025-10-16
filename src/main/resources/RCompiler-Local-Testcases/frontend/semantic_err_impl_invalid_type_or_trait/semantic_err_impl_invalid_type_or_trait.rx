@@ -1,0 +1,4 @@
+/* Semantic error: impl invalid type or trait */
+impl T for i32 { }
+fn main() { exit(0); }
+

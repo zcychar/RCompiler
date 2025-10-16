@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"parser_missing_semicolon_after_let", "source_path":"src/parser_missing_semicolon_after_let/parser_missing_semicolon_after_let.rx", "stage_name":"ci-special" }
+

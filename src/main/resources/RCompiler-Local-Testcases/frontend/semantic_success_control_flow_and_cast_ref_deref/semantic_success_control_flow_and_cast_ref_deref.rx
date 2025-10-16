@@ -1,0 +1,15 @@
+/* Semantic success: control flow, cast, ref/deref */
+fn id(x: i32) -> i32 { return x; }
+fn main() {
+  let mut a: i32 = 1;
+  if (true) { a += 1; } else { a -= 1; }
+  while (true) { break; }
+  let v: i32 = loop { break 10; };
+  let x: i32 = id(1);
+  let mut b: i32 = 2;
+  let pb: & mut i32 = & mut b;
+  *pb = 3;
+  let c: i32 = (1u32 as i32);
+  exit(0);
+}
+

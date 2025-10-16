@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_no_such_field_on_struct", "source_path":"src/semantic_err_no_such_field_on_struct/semantic_err_no_such_field_on_struct.rx", "stage_name":"ci-special" }
+

@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_array_type_negative_size", "source_path":"src/semantic_err_array_type_negative_size/semantic_err_array_type_negative_size.rx", "stage_name":"ci-special" }
+

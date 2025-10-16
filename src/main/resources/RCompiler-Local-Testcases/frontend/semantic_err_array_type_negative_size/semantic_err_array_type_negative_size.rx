@@ -1,0 +1,4 @@
+/* Semantic error: array type negative size */
+struct S { a: [i32; -1] }
+fn main() { exit(0); }
+

@@ -1,0 +1,4 @@
+/* Semantic error: no such field on struct */
+struct P { x: i32 }
+fn main() { let p: P = P { x: 1 }; let y: i32 = p.y; exit(0); }
+

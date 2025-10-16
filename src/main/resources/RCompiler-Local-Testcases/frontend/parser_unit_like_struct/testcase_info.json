@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":0, "name":"parser_unit_like_struct", "source_path":"src/parser_unit_like_struct/parser_unit_like_struct.rx", "stage_name":"ci-special" }
+

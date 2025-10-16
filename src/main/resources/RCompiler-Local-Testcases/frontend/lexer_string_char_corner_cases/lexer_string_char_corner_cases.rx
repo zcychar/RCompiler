@@ -1,0 +1,7 @@
+/* Lexer corner cases: empty string/char, escaped quotes */
+fn main() {
+    let a: &str = "";
+    let b: char = 'c';
+    let c: &str = "\"escaped\"";
+    exit(0);
+}

@@ -1,0 +1,4 @@
+/* Parser success: const fn */
+const fn get_meaning_of_life() -> i32 { 42 }
+fn main(){ exit(0); }
+

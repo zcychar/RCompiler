@@ -1,0 +1,6 @@
+/* Lexer error: unterminated raw string */
+fn main() {
+    let s: str = r"hello;
+    exit(0);
+}
+

@@ -1,0 +1,4 @@
+/* Semantic error: wrong number of arguments */
+fn f(x: i32) -> i32 { return x; }
+fn main() { let k: i32 = 0; let m: i32 = f(k, k); exit(0); }
+

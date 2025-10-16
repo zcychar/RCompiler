@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"parser_missing_closing_paren_in_fn", "source_path":"src/parser_missing_closing_paren_in_fn/parser_missing_closing_paren_in_fn.rx", "stage_name":"ci-special" }
+

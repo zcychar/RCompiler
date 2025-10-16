@@ -1,0 +1,9 @@
+{
+  "active": 1,
+  "cmp": ["compileexitcode"],
+  "compileexitcode": 1,
+  "name": "lexer_unrecognized_punct1",
+  "source_path": "src/lexer_unrecognized_punct1/lexer_unrecognized_punct1.rx",
+  "stage_name": "ci-special"
+}
+

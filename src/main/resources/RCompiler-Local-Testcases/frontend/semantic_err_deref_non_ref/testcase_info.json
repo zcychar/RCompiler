@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_deref_non_ref", "source_path":"src/semantic_err_deref_non_ref/semantic_err_deref_non_ref.rx", "stage_name":"ci-special" }
+

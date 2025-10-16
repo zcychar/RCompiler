@@ -1,0 +1,4 @@
+/* Parser success: enum with trailing comma */
+enum Direction { North, South, East, West, }
+fn main(){ exit(0); }
+

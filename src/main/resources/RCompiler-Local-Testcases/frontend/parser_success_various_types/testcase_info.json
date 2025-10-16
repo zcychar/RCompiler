@@ -1,0 +1,2 @@
+{ "active":1, "cmp":["compileexitcode"], "compileexitcode":0, "name":"parser_success_various_types", "source_path":"src/parser_success_various_types/parser_success_various_types.rx", "stage_name":"ci-special" }
+

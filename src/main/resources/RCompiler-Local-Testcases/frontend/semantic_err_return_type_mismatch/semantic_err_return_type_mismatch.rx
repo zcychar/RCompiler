@@ -1,0 +1,4 @@
+/* Semantic error: return type mismatch */
+fn f() -> i32 { return true; }
+fn main() { exit(0); }
+
