@@ -35,7 +35,7 @@ testCaseRoots.filter { it.isDirectory }.forEach { rootDir ->
 
     rootDir.listFiles { file -> file.isDirectory && !file.name.startsWith(".") }?.forEach { stageDir ->
 
-        val stageNameCamel = stageDir.name.toCamelCase().capitalize()
+        val stageNameCamel = stageDir.name.toCamelCase().replaceFirstChar { it.uppercase() }
         val rootPrefix = "local"
         val isRemoteRoot = rootDir.name == "RCompiler-Testcases"
         val stageTaskName = if (isRemoteRoot) stageNameCamel else "${rootPrefix}${stageNameCamel}"
@@ -46,34 +46,35 @@ testCaseRoots.filter { it.isDirectory }.forEach { rootDir ->
         // 遍历第二层目录，即阶段下的每个“测试点”（如 basic1）
         stageDir.listFiles { file -> file.isDirectory && !file.name.startsWith(".") }?.forEach { testCaseDir ->
 
-            val caseNameCamel = testCaseDir.name.toCamelCase().capitalize()
+            val caseNameCamel = testCaseDir.name.toCamelCase().replaceFirstChar { it.uppercase() }
             val individualTaskName = "${stageTaskName}${caseNameCamel}"
 
-            val individualTaskProvider = tasks.register<JavaExec>(individualTaskName) {
+            val individualTaskProvider = tasks.register(individualTaskName) {
                 group = "Compiler Individual Tests"
                 description = "Runs compiler test '${testCaseDir.name}' from stage '${stageDir.name}' (root='${rootDir.name}')."
-
-                classpath = sourceSets.main.get().runtimeClasspath
-                mainClass.set("MainKt")
-
-                val sourceFile = testCaseDir.resolve("${testCaseDir.name}.rx")
-                val resourcesDir = sourceSets.main.get().resources.srcDirs.first()
-                val relativePath = sourceFile.relativeTo(resourcesDir).path
-
-                args = listOf(relativePath)
-                isIgnoreExitValue = true
 
                 inputs.dir(testCaseDir)
                 dependsOn(sourceSets.main.get().processResourcesTaskName)
 
                 doLast {
+                    val sourceFile = testCaseDir.resolve("${testCaseDir.name}.rx")
+                    val resourcesDir = sourceSets.main.get().resources.srcDirs.first()
+                    val relativePath = sourceFile.relativeTo(resourcesDir).path
+
                     val infoFile = testCaseDir.resolve("testcase_info.json")
                     if (!infoFile.exists()) throw GradleException("testcase_info.json not found for test '${testCaseDir.name}'")
+
+                    // 读取 Gradle 属性以控制是否开启 debug 模式（默认关闭）
+                    val debugProp = (project.findProperty("debug") as String?)?.lowercase()
+                    val enableDebug = debugProp == "true" || debugProp == "1" || debugProp == "yes" || debugProp == "y"
+
+                    val argsList = mutableListOf(relativePath)
+                    if (enableDebug) argsList.add("--debug")
 
                     val execResult = project.javaexec {
                         classpath = sourceSets.main.get().runtimeClasspath
                         mainClass.set("MainKt")
-                        args = listOf(relativePath)
+                        args = argsList
                         isIgnoreExitValue = true
                     }
 
@@ -114,7 +115,7 @@ testCaseRoots.filter { it.isDirectory }.forEach { rootDir ->
 
 fun String.toCamelCase(): String {
     return this.split('-', '_').mapIndexed { index, s ->
-        if (index == 0) s else s.capitalize()
+        if (index == 0) s else s.replaceFirstChar { it.uppercase() }
     }.joinToString("")
 }
 
