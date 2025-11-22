@@ -2,7 +2,7 @@ package frontend
 
 import utils.*
 
-
+private fun lexerError(message: String): Nothing = CompileError.fail("Lexer", message)
 
 class RLexer(private val input: String) {
     private val tokens: MutableList<Token> = mutableListOf()
@@ -109,18 +109,18 @@ class RLexer(private val input: String) {
             }
             fi++
         }
-        throw CompileError("Lexer:encounter no-end char/string literal ${input.substring(position)}")
+        lexerError("encounter no-end char/string literal ${input.substring(position)}")
     }
 
     private fun rawLiteral(type: TokenType) {
         var prefixEnd=position
         while(prefixEnd<input.length&&input[prefixEnd]=='#')prefixEnd++
-        if(input[prefixEnd]!='\"')throw CompileError("Lexer:missing quotes in raw_string literal")
+        if(input[prefixEnd]!='\"')lexerError("missing quotes in raw_string literal")
         val prefixLength=prefixEnd-position
         val suffix='\"'+"#".repeat(prefixLength)
         val suffixBegin=input.indexOf(suffix,prefixEnd+1)
         if(suffixBegin==-1){
-            throw CompileError("Lexer:encounter no-end raw_string literal ${input.substring(position)}")
+            lexerError("encounter no-end raw_string literal ${input.substring(position)}")
         }else{
             val str= if(suffixBegin==prefixEnd+1) "" else input.substring(prefixEnd+1..suffixBegin-1)
             tokens.add(Token(type,str))
@@ -153,7 +153,7 @@ class RLexer(private val input: String) {
         val pattern = "^((0b[01_]+)|(0o[0-7_]+)|(0x[0-9a-fA-F_]+)|([0-9_]+))(i32|u32|isize|usize)?$".toRegex()
 
         if (!str.matches(pattern)) {
-            throw CompileError("Lexer Error: Invalid integer literal format: `$str`")
+            lexerError("invalid integer literal format: `$str`")
         }
     }
 
@@ -167,7 +167,7 @@ class RLexer(private val input: String) {
                 return
             }
         }
-        throw CompileError("Lexer:encounter unrecognized punctuation ${span()}")
+        lexerError("encounter unrecognized punctuation ${span()}")
     }
 
 //    private fun wordspan(): String {

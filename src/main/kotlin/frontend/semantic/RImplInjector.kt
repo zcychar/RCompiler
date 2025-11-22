@@ -4,7 +4,6 @@ import frontend.ast.*
 import frontend.Keyword
 import frontend.Literal
 import frontend.Punctuation
-import utils.CompileError
 
 
 class RImplInjector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> {
@@ -19,7 +18,7 @@ class RImplInjector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> 
         function.self = typedSelf
         if (function.returnType is SelfType) function.returnType = typedSelf
         target.associateItems.put(function.name, function)
-          ?.let { throw CompileError("Semantic: duplicated associate item for enum ${target.name}, name ${function.name}") }
+          ?.let { semanticError("duplicated associate item for enum ${target.name}, name ${function.name}") }
         if (function.selfParam != null) {
           target.methods.put(function.name, function)
         }
@@ -30,14 +29,14 @@ class RImplInjector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> 
         function.self = typedSelf
         if (function.returnType is SelfType) function.returnType = typedSelf
         target.associateItems.put(function.name, function)
-          ?.let { throw CompileError("Semantic: duplicated associate item for struct ${target.name}, name ${function.name}") }
+          ?.let { semanticError("duplicated associate item for struct ${target.name}, name ${function.name}") }
         if (function.selfParam != null) {
           target.methods.put(function.name, function)
         }
       }
 
       else -> {
-        throw CompileError("Semantic: impl target type ${target.name} not found")
+        semanticError("impl target type ${target.name} not found")
       }
     }
   }
@@ -45,31 +44,31 @@ class RImplInjector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> 
   fun injectConstImpl(target: Symbol, const: Constant) {
     when (target) {
       is Enum, is Struct -> {
-        target.associateItems.put(const.name, const) ?.let { throw CompileError("Semantic: duplicated associate item for struct/enum $target, name $const") }
+        target.associateItems.put(const.name, const) ?.let { semanticError("duplicated associate item for struct/enum $target, name $const") }
       }
 
       else -> {
-        throw CompileError("Semantic: impl target type ${target.name} not found")
+        semanticError("impl target type ${target.name} not found")
       }
     }
   }
 
   fun checkTraitConstant(const: Constant, trait: Trait) {
     val constInTrait = trait.type.associatedItems[const.name] as? Constant
-      ?: throw CompileError("Semantic: implementing a trait with wrong constant ${const.name}")
+      ?: semanticError("implementing a trait with wrong constant ${const.name}")
     if (constInTrait.type != const.type) {
-      throw CompileError("Semantic: implementing a trait with wrong constant ${const.name}, expect ${constInTrait.name}")
+      semanticError("implementing a trait with wrong constant ${const.name}, expect ${constInTrait.name}")
     }
   }
 
   fun checkTraitFunction(function: Function, trait: Trait) {
     val functionInTrait = trait.type.associatedItems[function.name] as? Function
-      ?: throw CompileError("Semantic: implementing a trait with wrong function ${function.name}")
+      ?: semanticError("implementing a trait with wrong function ${function.name}")
     val isSame = functionInTrait.params == function.params
         && function.returnType == functionInTrait.returnType
         && function.selfParam == functionInTrait.selfParam
     if (!isSame) {
-      throw CompileError("Semantic: implementing a trait with wrong function ${function.name}, expect ${functionInTrait.name}")
+      semanticError("implementing a trait with wrong function ${function.name}, expect ${functionInTrait.name}")
     }
   }
 
@@ -96,18 +95,18 @@ class RImplInjector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> 
     currentScope = node.scope
     val trait = if (node.name != null) {
       currentScope?.resolve(node.name, Namespace.TYPE) as? Trait
-        ?: throw CompileError("Semantic: implementing an invalid trait ${node.name}")
+        ?: semanticError("implementing an invalid trait ${node.name}")
     } else null
     val symbol = if (node.type is TypePathNode && node.type.name != null) {
       currentScope?.resolve(node.type.name, Namespace.TYPE)
-        ?: throw CompileError("Semantic: impl target type ${node.type.name} not found")
-    } else throw CompileError("Semantic: impl target type ${node.type} not found")
+        ?: semanticError("impl target type ${node.type.name} not found")
+    } else semanticError("impl target type ${node.type} not found")
     val addedAssociates = mutableMapOf<String, Symbol>()
     node.items.forEach {
       when (it) {
         is ConstItemNode -> {
           val const = currentScope?.resolve(it.name, Namespace.VALUE) as? Constant
-            ?: throw CompileError("Semantic: impl associate does not found in ${node.name}")
+            ?: semanticError("impl associate does not found in ${node.name}")
           injectConstImpl(symbol, const)
           if (trait != null) checkTraitConstant(const, trait)
           addedAssociates.put(const.name, const)
@@ -115,13 +114,13 @@ class RImplInjector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> 
 
         is FunctionItemNode -> {
           val function = currentScope?.resolve(it.name, Namespace.VALUE) as? Function
-            ?: throw CompileError("Semantic: impl associate does not found in ${node.name}")
+            ?: semanticError("impl associate does not found in ${node.name}")
           injectFunctionImpl(symbol, function)
           if (trait != null) checkTraitFunction(function, trait)
           addedAssociates.put(function.name, function)
         }
 
-        else -> throw CompileError("Semantic: invalid impl ${node.name}")
+        else -> semanticError("invalid impl ${node.name}")
       }
     }
     trait?.type?.associatedItems?.forEach {
@@ -129,16 +128,16 @@ class RImplInjector(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> 
         is Constant -> {
           if ((it.value as Constant).value == null) {
             currentScope?.resolve(it.value.name, Namespace.VALUE) as? Constant
-              ?: throw CompileError("Semantic: impl for trait ${trait.name}, associate ${it.value.name} does not found in ${node.name}")
+              ?: semanticError("impl for trait ${trait.name}, associate ${it.value.name} does not found in ${node.name}")
           }
         }
 
         is Function -> {
           currentScope?.resolve(it.value.name, Namespace.VALUE) as? Function
-            ?: throw CompileError("Semantic: impl for trait ${trait.name}, associate ${it.value.name} does not found in ${node.name}")
+            ?: semanticError("impl for trait ${trait.name}, associate ${it.value.name} does not found in ${node.name}")
         }
 
-        else -> throw CompileError("Semantic: invalid associate item ${it.value.name} of trait")
+        else -> semanticError("invalid associate item ${it.value.name} of trait")
       }
     }
     currentScope = currentScope?.parentScope()

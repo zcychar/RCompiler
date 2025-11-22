@@ -4,6 +4,7 @@ import frontend.ast.*
 import utils.CompileError
 import utils.dumpToString
 
+private fun parserError(message: String): Nothing = CompileError.fail("Parser", message)
 
 class RParser(val input: MutableList<Token>) {
     private var position = 0
@@ -17,7 +18,7 @@ class RParser(val input: MutableList<Token>) {
 
     private fun consume(): Token {
         if (position < input.size) return input[position++]
-        throw CompileError("Parser:Out_of_size consume requested")
+        parserError("out_of_size consume requested")
     }
 
     private fun expectAndConsume(type: TokenType): String {
@@ -35,9 +36,9 @@ class RParser(val input: MutableList<Token>) {
 
     private fun expect(type: TokenType): String {
         if (position >= input.size) {
-            throw CompileError("Parser:Out_of_size expect requested")
+            parserError("out_of_size expect requested")
         } else if (input[position].type != type) {
-            throw CompileError("Parser:Encounter unexpected token ${input[position]}, expect $type")
+            parserError("encounter unexpected token ${input[position]}, expect $type")
         }
         return input[position].value
     }
@@ -68,12 +69,12 @@ class RParser(val input: MutableList<Token>) {
             Keyword.CONST -> {
                 if (nextToken?.type == Keyword.FN) parseFunctionItem()
                 else if (nextToken?.type == Identifier) parseConstItem()
-                else throw CompileError("Parser:Encounter invalid const item begin with :${input[position + 1]}")
+                else parserError("encounter invalid const item begin with :${input[position + 1]}")
             }
 
             Keyword.TRAIT -> parseTraitItem()
             Keyword.IMPL -> parseImplItem()
-            else -> throw CompileError("Parser:Encounter invalid item begin with :${input[position]}")
+            else -> parserError("encounter invalid item begin with :${input[position]}")
         }
     }
 
@@ -92,7 +93,7 @@ class RParser(val input: MutableList<Token>) {
                 expectAndConsume(Keyword.SELF)
                 if (peek(1)?.type == Punctuation.COLON) {
                     if (hasBorrow) {
-                        throw CompileError("Parser:encounter ambitious self-param")
+                        parserError("encounter ambitious self-param")
                     }
                     consume()
                     val type = parseType()
@@ -169,7 +170,7 @@ class RParser(val input: MutableList<Token>) {
     private fun parseAssociatedItem(): ItemNode = when (peek(1)?.type) {
         Keyword.CONST -> parseConstItem()
         Keyword.FN -> parseFunctionItem()
-        else -> throw CompileError("Parser:Expect associated item, met ${peek(1)}")
+        else -> parserError("expect associated item, met ${peek(1)}")
     }
 
     private fun parseTraitItem(): TraitItemNode {
@@ -229,7 +230,7 @@ class RParser(val input: MutableList<Token>) {
             Punctuation.AMPERSAND, Punctuation.AND_AND -> parseBorrowExpr()
             Punctuation.STAR -> parseDerefExpr()
             in unaryOp -> parseUnaryExpr()
-            else -> throw CompileError("Parser:Expect expression, met ${peek(1)}")
+            else -> parserError("expect expression, met ${peek(1)}")
         }
     }
 
@@ -249,7 +250,7 @@ class RParser(val input: MutableList<Token>) {
     }
 
     private fun parseInfix(left: ExprNode): ExprNode {
-        val operator = peek(1)?.type ?: throw CompileError("Parser:expect binary operator, met null")
+        val operator = peek(1)?.type ?: parserError("expect binary operator, met null")
         val pre = getInfixPrecedence(operator)
         return when (operator) {
             in binaryOp -> {
@@ -273,7 +274,7 @@ class RParser(val input: MutableList<Token>) {
 
             Punctuation.LEFT_BRACKET -> parseIndexExpr(left)
             Punctuation.LEFT_BRACE -> parseStructExpr(left)
-            else -> throw CompileError("Parser: Invalid infix operator: $operator")
+            else -> parserError(" Invalid infix operator: $operator")
         }
     }
 
@@ -329,7 +330,7 @@ class RParser(val input: MutableList<Token>) {
                     return ArrayExprNode(listOf(first), null, null)
                 }
 
-                else -> throw CompileError("Parser:Expect right-side of array-expression, met ${peek(1)}")
+                else -> parserError("expect right-side of array-expression, met ${peek(1)}")
             }
         } else return ArrayExprNode(listOf(), null, null)
 
@@ -352,7 +353,7 @@ class RParser(val input: MutableList<Token>) {
                 TypePathNode(null, consume().type)
             }
 
-            else -> throw CompileError("Parser:expect path-segment, met ${peek(1)}")
+            else -> parserError("expect path-segment, met ${peek(1)}")
         }
         expectAndConsume(Punctuation.LEFT_PAREN)
         val seg = mutableListOf<ExprNode>()
@@ -373,7 +374,7 @@ class RParser(val input: MutableList<Token>) {
         } else if (token.type == Keyword.TRUE || token.type == Keyword.FALSE) {
             LiteralExprNode(null, token.type)
         } else {
-            throw CompileError("Parser:Expect literal-expression, met $token")
+            parserError("expect literal-expression, met $token")
         }
     }
 
@@ -407,7 +408,7 @@ class RParser(val input: MutableList<Token>) {
                     TypePathNode(null, consume().type)
                 }
 
-                else -> throw CompileError("Parser:expect path-segment, met ${peek(1)}")
+                else -> parserError("expect path-segment, met ${peek(1)}")
             }
         }
         val seg1 = exe()
@@ -435,7 +436,7 @@ class RParser(val input: MutableList<Token>) {
             when (peek(1)?.type) {
                 Punctuation.LEFT_BRACE -> IfExprNode(conds, block, parseBlockExpr())
                 Keyword.IF -> IfExprNode(conds, block, parseIfExpr())
-                else -> throw CompileError("Parser:Expect else-expression in if-expression, met ${peek(1)}")
+                else -> parserError("expect else-expression in if-expression, met ${peek(1)}")
             }
         } else IfExprNode(conds, block, null)
     }
@@ -452,7 +453,7 @@ class RParser(val input: MutableList<Token>) {
 //            val expr = parseExpr()
 //            arms.add(Pair(MatchArmNode(pattern, guard), expr))
 //            if (peek(1)?.type != Punctuation.COMMA && peek(1)?.type != Punctuation.RIGHT_BRACE && expr !is ExprWOBlock) {
-//                throw CompileError("Parser:Expect comma in not-end match arm, met ${peek(1)}")
+//                parserError("expect comma in not-end match arm, met ${peek(1)}")
 //            }
 //            tryConsume(Punctuation.COMMA)
 //        }
@@ -527,7 +528,7 @@ class RParser(val input: MutableList<Token>) {
             Punctuation.AMPERSAND, Punctuation.AND_AND -> parseRefPattern()
             Keyword.REF, Keyword.MUT -> parseIdentifierPattern()
             Identifier -> parseIdentifierPattern()
-            else -> throw CompileError("Parser:Expect pattern, met ${peek(1)}")
+            else -> parserError("expect pattern, met ${peek(1)}")
         }
     }
 
@@ -546,7 +547,7 @@ class RParser(val input: MutableList<Token>) {
         val isDouble = when (peek(1)?.type) {
             Punctuation.AMPERSAND -> false
             Punctuation.AND_AND -> true
-            else -> throw CompileError("Parser:Expect ref-pattern, met ${peek(1)}")
+            else -> parserError("expect ref-pattern, met ${peek(1)}")
         }
         consume()
         val hasMut = tryConsume(Keyword.MUT)
@@ -606,13 +607,13 @@ class RParser(val input: MutableList<Token>) {
         Punctuation.LEFT_BRACKET -> parseArrayType()
         Identifier, Keyword.SELF, Keyword.SELF_UPPER -> parseTypePath()
         Punctuation.LEFT_PAREN -> parseUnitType()
-        else -> throw CompileError("Parser:Expect type, met ${peek(1)}")
+        else -> parserError("expect type, met ${peek(1)}")
     }
 
     private fun parseTypePath(): TypePathNode = when (peek(1)?.type) {
         Identifier -> TypePathNode(consume().value, null)
         Keyword.SELF_UPPER, Keyword.SELF -> TypePathNode(null, consume().type)
-        else -> throw CompileError("Parser:expect path-segment, met ${peek(1)}")
+        else -> parserError("expect path-segment, met ${peek(1)}")
     }
 
     private fun parseRefType(): RefTypeNode {
@@ -638,5 +639,4 @@ class RParser(val input: MutableList<Token>) {
     //----------------------support---------------------------------
 
 }
-
 

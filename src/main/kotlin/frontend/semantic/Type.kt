@@ -1,7 +1,6 @@
 package frontend.semantic
 
 import frontend.ast.LiteralExprNode
-import utils.CompileError
 
 sealed interface Type
 
@@ -49,7 +48,7 @@ fun isInt(type: Type): Boolean =
 
 fun getInt(expr: LiteralExprNode): ConstValue.Int {
     if (expr.value == null) {
-        throw CompileError("Semantic:Invalid integer in const expression")
+        semanticError("Invalid integer in const expression")
     }
     var (numeric, type) = when {
         expr.value.endsWith("i32") -> Pair(expr.value.removeSuffix("i32"), Int32Type)
@@ -77,7 +76,7 @@ fun getInt(expr: LiteralExprNode): ConstValue.Int {
         }
     }
     if (number > 4294967296) {
-        throw CompileError("Semantic: Integer overflow")
+        semanticError("Integer overflow")
     } else if (number > 2147483647) {
         type = UInt32Type
     }
@@ -86,13 +85,13 @@ fun getInt(expr: LiteralExprNode): ConstValue.Int {
 
 fun unifyInt(lhs: Type, rhs: Type): Type {
     if (!isInt(lhs) || !isInt(rhs)) {
-        throw CompileError("Semantic: invalid integer type")
+        semanticError("invalid integer type")
     }
     return when {
         lhs == rhs -> lhs
         lhs is IntType -> rhs
         rhs is IntType -> lhs
-        else -> throw CompileError("Semantic: cannot unify integer type $lhs and $rhs")
+        else -> semanticError("cannot unify integer type $lhs and $rhs")
     }
 }
 

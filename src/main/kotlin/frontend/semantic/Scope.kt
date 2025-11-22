@@ -1,6 +1,5 @@
 package frontend.semantic
 
-import utils.CompileError
 
 enum class Namespace { TYPE, VALUE }
 
@@ -20,7 +19,7 @@ class Scope(val parent: Scope? = null, val kind: ScopeKind) {
             Namespace.VALUE -> valueNamespace
         }
         if (table.containsKey(symbol.name)) {
-            throw CompileError("Semantic Error: Symbol '${symbol.name}' already declared in the $namespace namespace of this scope.")
+            semanticError("Symbol '${symbol.name}' already declared in the $namespace namespace of this scope.")
         }
         table.put(symbol.name, symbol)
     }
@@ -35,7 +34,7 @@ class Scope(val parent: Scope? = null, val kind: ScopeKind) {
 
     fun declareVariable(symbol: Variable) {
         if (resolve(symbol.name, Namespace.VALUE) is Constant) {
-            throw CompileError("Semantic: declaration of binding $symbol shadows an constant")
+            semanticError("declaration of binding $symbol shadows an constant")
         }
         variables.put(symbol.name, symbol)
     }

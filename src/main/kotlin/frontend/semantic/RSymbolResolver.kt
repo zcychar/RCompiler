@@ -4,7 +4,6 @@ import frontend.ast.*
 import frontend.Keyword
 import frontend.Literal
 import frontend.Punctuation
-import utils.CompileError
 
 
 class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit> {
@@ -25,7 +24,7 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                 Literal.CHAR -> {
                     val value = expr.value ?: ""
                     if (value.length != 1) {
-                        throw CompileError("Semantic:Invalid Char $expr")
+                        semanticError("Invalid Char $expr")
                     }
                     ConstValue.Char(value[0])
                 }
@@ -34,43 +33,43 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                     expr.value ?: ""
                 )
 
-                else -> throw CompileError("Semantic:Unsupported literal type $expr")
+                else -> semanticError("Unsupported literal type $expr")
             }
 
             is PathExprNode -> {
-                val name = expr.seg1.name ?: throw CompileError("Semantic:Const path with no identified found")
+                val name = expr.seg1.name ?: semanticError("Const path with no identified found")
                 val symbol = currentScope?.resolve(name, Namespace.VALUE)
-                    ?: throw CompileError("Semantic: cannot find value $name in this scope")
+                    ?: semanticError("cannot find value $name in this scope")
                 when (symbol) {
                     is Constant -> {
                         val resolvedConst = resolveConst(name)
-                        resolvedConst.value ?: throw CompileError("Semantic:constant $name has no value")
+                        resolvedConst.value ?: semanticError("constant $name has no value")
                     }
 
                     is Struct -> {
                         if (symbol.type.fields.isNotEmpty()) {
-                            throw CompileError("Semantic:paths to non-unit struct is not allowed to be const")
+                            semanticError("paths to non-unit struct is not allowed to be const")
                         }
                         ConstValue.Struct(symbol.type, emptyMap())
                     }
 
-                    else -> throw CompileError("Semantic:Invalid path $name in const expression")
+                    else -> semanticError("Invalid path $name in const expression")
                 }
             }
 
             is GroupedExprNode -> evaluateConstExpr(expr.expr, expectType)
             is StructExprNode -> {
                 (expr.path as PathExprNode).seg2
-                    ?: throw CompileError("Semantic:${expr.path} is not a SIMPLE type path")
+                    ?: semanticError("${expr.path} is not a SIMPLE type path")
                 val structType = resolveType((expr.path).seg1) as? StructType
-                    ?: throw CompileError("Semantic:Path ${expr.path.seg1.name} does not resolve to a struct type")
+                    ?: semanticError("Path ${expr.path.seg1.name} does not resolve to a struct type")
                 val fields = mutableMapOf<String, ConstValue>()
                 expr.fields.forEach { fieldNode ->
-                    val fieldType = structType.fields[fieldNode.id] ?: throw CompileError("Semantic:")
+                    val fieldType = structType.fields[fieldNode.id] ?: semanticError("")
                     val fieldExpr = fieldNode.expr ?: PathExprNode(TypePathNode(fieldNode.id, null), null)
                     val fieldNames = expr.fields.map { it.id }.toSet()
                     structType.fields.keys.forEach {
-                        if (it !in fieldNames) throw CompileError("Semantic:Field  $it is missing in initializer for struct $structType")
+                        if (it !in fieldNames) semanticError("Field  $it is missing in initializer for struct $structType")
                     }
                 }
                 ConstValue.Struct(structType, fields)
@@ -78,9 +77,9 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
 
             is FieldAccessExprNode -> {
                 val innerExpr = evaluateConstExpr(expr.expr, ErrorType)
-                if (innerExpr !is ConstValue.Struct) throw CompileError("Semantic:Invalid field to a non-struct const value")
+                if (innerExpr !is ConstValue.Struct) semanticError("Invalid field to a non-struct const value")
                 innerExpr.fields[expr.id]
-                    ?: throw CompileError("Semantic:Const struct ${innerExpr.type.name} has no field ${expr.id}")
+                    ?: semanticError("Const struct ${innerExpr.type.name} has no field ${expr.id}")
             }
 
             is CastExprNode -> {
@@ -96,13 +95,13 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                             } else if (exprType is BoolType && isInt(targetType)) {
                                 ConstValue.Int(if ((innerExpr as ConstValue.Bool).value) 1 else 0, targetType)
                             } else {
-                                throw CompileError("Semantic: only integer types can be cast in const context. Cannot cast from `$exprType` to `$targetType`")
+                                semanticError("only integer types can be cast in const context. Cannot cast from `$exprType` to `$targetType`")
                             }
                         }
 
-                        else -> throw CompileError("Semantic: only integer types can be cast in const contest")
+                        else -> semanticError("only integer types can be cast in const contest")
                     }
-                } else throw CompileError("Semantic: only integer types can be cast in const contest")
+                } else semanticError("only integer types can be cast in const contest")
             }
 
             is ArrayExprNode -> {
@@ -116,9 +115,9 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                 } else if (expr.repeatOp != null && expr.lengthOp != null) {
                     val lengthValue = evaluateConstExpr(expr.lengthOp, UInt32Type)
                     val length = (lengthValue as? ConstValue.Int)?.value?.toInt()
-                        ?: throw CompileError("Semantic:lengthOp of array $lengthValue, not const int")
+                        ?: semanticError("lengthOp of array $lengthValue, not const int")
                     if (length < 0) {
-                        throw CompileError("Semantic:Array length cannot be negative")
+                        semanticError("Array length cannot be negative")
                     }
                     expr.evaluatedSize = length.toLong()
 
@@ -134,12 +133,12 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                 val baseValue = evaluateConstExpr(expr.base, ErrorType)
                 val indexValue = evaluateConstExpr(expr.index, UInt32Type)
                 if (baseValue !is ConstValue.Array) {
-                    throw CompileError("Semantic:Indexing of $expr, not a constant array")
+                    semanticError("Indexing of $expr, not a constant array")
                 }
                 val index = (indexValue as? ConstValue.Int)?.value?.toInt()
-                    ?: throw CompileError("Semantic:Array index must be an constant int")
+                    ?: semanticError("Array index must be an constant int")
                 if (index !in 0..baseValue.elements.size) {
-                    throw CompileError("Semantic:const index $index out of bound for $baseValue")
+                    semanticError("const index $index out of bound for $baseValue")
                 }
                 baseValue.elements[index]
             }
@@ -149,7 +148,7 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                     Punctuation.MINUS -> {
                         val innerValue = evaluateConstExpr(expr.rhs, expectType)
                         val value = (innerValue as? ConstValue.Int)?.value
-                            ?: throw CompileError("Semantic:Unary minus followed by an non-int operand ${expr.rhs}")
+                            ?: semanticError("Unary minus followed by an non-int operand ${expr.rhs}")
                         ConstValue.Int(-value, innerValue.actualType)
                     }
 
@@ -162,30 +161,30 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                             is ConstValue.Int->{
                                 ConstValue.Int(innerValue.value,innerValue.actualType)
                             }
-                            else->throw CompileError("Semantic:Unary bang followed by an non-bool non-int operand ${expr.rhs}")
+                            else->semanticError("Unary bang followed by an non-bool non-int operand ${expr.rhs}")
                         }
                     }
 
-                    else -> throw CompileError("Semantic:Unsupported unary $expr")
+                    else -> semanticError("Unsupported unary $expr")
                 }
             }
 
             is BinaryExprNode -> {
                 if (expr.op == Punctuation.AND_AND) {
                     val lhs = evaluateConstExpr(expr.lhs, BoolType)
-                    if (lhs !is ConstValue.Bool) throw CompileError("Semantic: ${expr.op} requires boolean operands.")
+                    if (lhs !is ConstValue.Bool) semanticError("${expr.op} requires boolean operands.")
                     return if (!lhs.value) ConstValue.Bool(false) else {
                         val rhs = evaluateConstExpr(expr.rhs, BoolType)
-                        if (rhs !is ConstValue.Bool) throw CompileError("Semantic: ${expr.op} requires boolean operands.")
+                        if (rhs !is ConstValue.Bool) semanticError("${expr.op} requires boolean operands.")
                         rhs
                     }
                 }
                 if (expr.op == Punctuation.OR_OR) {
                     val lhs = evaluateConstExpr(expr.lhs, BoolType)
-                    if (lhs !is ConstValue.Bool) throw CompileError("Semantic: not boolean operand for ${expr.op}")
+                    if (lhs !is ConstValue.Bool) semanticError("not boolean operand for ${expr.op}")
                     return if (lhs.value) ConstValue.Bool(true) else {
                         val rhs = evaluateConstExpr(expr.rhs, BoolType)
-                        if (rhs !is ConstValue.Bool) throw CompileError("Semantic: ${expr.op} requires boolean operands.")
+                        if (rhs !is ConstValue.Bool) semanticError("${expr.op} requires boolean operands.")
                         rhs
                     }
                 }
@@ -201,12 +200,12 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                             Punctuation.MINUS -> ConstValue.Int(l - r, type)
                             Punctuation.STAR -> ConstValue.Int(l * r, type)
                             Punctuation.SLASH -> {
-                                if (r == 0L) throw CompileError("Semantic: Div by zero in const expression")
+                                if (r == 0L) semanticError("Div by zero in const expression")
                                 ConstValue.Int(l / r, type)
                             }
 
                             Punctuation.PERCENT -> {
-                                if (r == 0L) throw CompileError("Semantic: Div by zero in const expression")
+                                if (r == 0L) semanticError("Div by zero in const expression")
                                 ConstValue.Int(l % r, type)
                             }
 
@@ -221,7 +220,7 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                             Punctuation.LESS_EQUAL -> ConstValue.Bool(l <= r)
                             Punctuation.GREATER -> ConstValue.Bool(l > r)
                             Punctuation.GREATER_EQUAL -> ConstValue.Bool(l >= r)
-                            else -> throw CompileError("Semantic: Unsupported binary operator ${expr.op} for integers")
+                            else -> semanticError("Unsupported binary operator ${expr.op} for integers")
                         }
                     }
 
@@ -231,15 +230,15 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                         when (expr.op) {
                             Punctuation.EQUAL_EQUAL -> ConstValue.Bool(l == r)
                             Punctuation.NOT_EQUAL -> ConstValue.Bool(l != r)
-                            else -> throw CompileError("Semantic: Unsupported binary operator '${expr.op}' for booleans")
+                            else -> semanticError("Unsupported binary operator '${expr.op}' for booleans")
                         }
                     }
 
-                    else -> throw CompileError("Semantic: Type mismatch for binary const expression $expr")
+                    else -> semanticError("Type mismatch for binary const expression $expr")
                 }
             }
 
-            else -> throw CompileError("Semantic:Invalid type of expr ${expr.toString()} in const expression")
+            else -> semanticError("Invalid type of expr ${expr.toString()} in const expression")
         }
     }
 
@@ -249,8 +248,8 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
             val elementType = resolveType(node.type)
             val sizeValue = evaluateConstExpr(node.expr, UInt32Type)
             val size = (sizeValue as? ConstValue.Int)?.value?.toInt()
-                ?: throw CompileError("Semantic: Array size must be a constant integer.")
-            if (size < 0) throw CompileError("Semantic: Array size cannot be negative.")
+                ?: semanticError("Array size must be a constant integer.")
+            if (size < 0) semanticError("Array size cannot be negative.")
             node.evaluatedSize = size.toLong()
             ArrayType(elementType, size)
         }
@@ -260,13 +259,13 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
             if (node.type != null) {
                 SelfType(isMut = false, isRef = false)
             } else {
-                val name = node.name ?: throw CompileError("Semantic:TypePathNode has no ID and is not Self")
+                val name = node.name ?: semanticError("TypePathNode has no ID and is not Self")
                 when (val symbol = currentScope?.resolve(name, Namespace.TYPE)) {
                     is Struct -> resolveStruct(symbol.name)
                     is Enum -> resolveEnum(symbol.name)
                     is BuiltIn -> symbol.type
-                    null -> throw CompileError("Semantic:Type $name not found")
-                    else -> throw CompileError("Semantic:'$name is not a type")
+                    null -> semanticError("Type $name not found")
+                    else -> semanticError("'$name is not a type")
                 }
             }
 
@@ -279,18 +278,18 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
     //These functions resolve a name to corresponding formatted type
     fun resolveStruct(name: String): StructType {
         val symbol = currentScope?.resolve(name, Namespace.TYPE) as? Struct
-            ?: throw CompileError("Semantic:undefined struct type $name")
+            ?: semanticError("undefined struct type $name")
         when (symbol.resolutionState) {
             ResolutionState.UNRESOLVED -> {}
-            ResolutionState.RESOLVING -> throw CompileError("Semantic:recursive dependency of struct $name")
+            ResolutionState.RESOLVING -> semanticError("recursive dependency of struct $name")
             ResolutionState.RESOLVED -> return symbol.type
         }
         symbol.resolutionState = ResolutionState.RESOLVING
-        val node = symbol.node as? StructItemNode ?: throw CompileError("Semantic:invalid prelude usage")
+        val node = symbol.node as? StructItemNode ?: semanticError("invalid prelude usage")
         val fieldsMap = mutableMapOf<String, Type>()
         node.fields.forEach { fieldNode ->
             if (fieldsMap.containsKey(fieldNode.name)) {
-                throw CompileError("Semantic: struct node $name have duplicated field ${fieldNode.name}")
+                semanticError("struct node $name have duplicated field ${fieldNode.name}")
             }
             fieldsMap[fieldNode.name] = resolveType(fieldNode.type)
         }
@@ -301,17 +300,17 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
 
     fun resolveEnum(name: String): EnumType {
         val symbol = currentScope?.resolve(name, Namespace.TYPE) as? Enum
-            ?: throw CompileError("Semantic:undefined enumeration type $name")
+            ?: semanticError("undefined enumeration type $name")
         when (symbol.resolutionState) {
             ResolutionState.UNRESOLVED -> {}
-            ResolutionState.RESOLVING -> throw CompileError("Semantic:recursive dependency of enum $name")
+            ResolutionState.RESOLVING -> semanticError("recursive dependency of enum $name")
             ResolutionState.RESOLVED -> return symbol.type
         }
         symbol.resolutionState = ResolutionState.RESOLVING
-        val node = symbol.node as? EnumItemNode ?: throw CompileError("Semantic:invalid prelude usage")
+        val node = symbol.node as? EnumItemNode ?: semanticError("invalid prelude usage")
         val variantSet = node.variants.toSet()
         if (variantSet.size != node.variants.size) {
-            throw CompileError("Semantic: enum node $name have duplicated variant")
+            semanticError("enum node $name have duplicated variant")
         }
         symbol.type.variants = variantSet
         node.variants.forEach { variantName ->
@@ -328,20 +327,20 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
 
     fun resolveConst(name: String): Constant {
         val symbol = currentScope?.resolve(name, Namespace.VALUE) as? Constant
-            ?: throw CompileError("Semantic:undefined const type $name")
+            ?: semanticError("undefined const type $name")
         when (symbol.resolutionState) {
             ResolutionState.UNRESOLVED -> {}
-            ResolutionState.RESOLVING -> throw CompileError("Semantic:recursive dependency of constant $name")
+            ResolutionState.RESOLVING -> semanticError("recursive dependency of constant $name")
             ResolutionState.RESOLVED -> return symbol
         }
         symbol.resolutionState = ResolutionState.RESOLVING
         val node =
-            symbol.node as? ConstItemNode ?: throw CompileError("Semantic:invalid prelude usage")//TODO:CHECK PRELUDE
+            symbol.node as? ConstItemNode ?: semanticError("invalid prelude usage")//TODO:CHECK PRELUDE
         symbol.type = resolveType(node.type)
         if (node.expr != null) {
             symbol.value = evaluateConstExpr(node.expr, symbol.type)
         } else {
-            throw CompileError("Semantic: Constant $name does not have an initializer")
+            semanticError("Constant $name does not have an initializer")
         }
         symbol.resolutionState = ResolutionState.RESOLVED
         return symbol
@@ -363,25 +362,25 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                             when (it.pattern) {
                                 is IdentifierPatternNode -> {
                                     if (it.pattern.hasRef) {
-                                        throw CompileError("Semantic:ref in pattern is forbidden")
+                                        semanticError("ref in pattern is forbidden")
                                     }
                                     if (it.pattern.subPattern != null) {
-                                        throw CompileError("Semantic:invalid function pattern $it")
+                                        semanticError("invalid function pattern $it")
                                     }
                                     Variable(it.pattern.id, resolveType(it.type), it.pattern.hasMut)
                                 }
 
-                                else -> throw CompileError("Semantic:invalid function pattern $it")
+                                else -> semanticError("invalid function pattern $it")
                             }
                         },
                         returnType = resolveType(it.returnType)
                     )
                     currentScope =
-                        it.body?.scope ?: throw CompileError("Semantic: invalid associate function without a scope")
+                        it.body?.scope ?: semanticError("invalid associate function without a scope")
                     it.body.stmts.forEach { it.accept(this) }
                     currentScope = currentScope?.parentScope()
                     associates.put(function.name, function)?.let {
-                        throw CompileError("Semantic: duplicated associated item $it in trait/implementation")
+                        semanticError("duplicated associated item $it in trait/implementation")
                     }
                 }
 
@@ -394,10 +393,10 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                     )
                     if (it.expr != null) const.value = evaluateConstExpr(it.expr, const.type)
                     associates.put(const.name, const)
-                        ?.let { throw CompileError("Semantic: duplicated associated item $it in trait/implementation") }
+                        ?.let { semanticError("duplicated associated item $it in trait/implementation") }
                 }
 
-                else -> throw CompileError("Semantic: invalid associate item $it of trait/implementation")
+                else -> semanticError("invalid associate item $it of trait/implementation")
             }
         }
         return associates
@@ -412,25 +411,25 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
 
     override fun visit(node: FunctionItemNode) {
         val symbol = (currentScope?.resolve(node.name, Namespace.VALUE)) as? Function
-            ?: throw CompileError("Semantic:undefined function $node.name")
+            ?: semanticError("undefined function $node.name")
         symbol.params = node.funParams.map {
             when (it.pattern) {
                 is IdentifierPatternNode -> {
                     if (it.pattern.hasRef) {
-                        throw CompileError("Semantic:ref in pattern is forbidden")
+                        semanticError("ref in pattern is forbidden")
                     }
                     if (it.pattern.subPattern != null) {
-                        throw CompileError("Semantic:invalid function pattern $it")
+                        semanticError("invalid function pattern $it")
                     }
                     Variable(it.pattern.id, resolveType(it.type), it.pattern.hasMut)
                 }
 
-                else -> throw CompileError("Semantic:invalid function pattern $it")
+                else -> semanticError("invalid function pattern $it")
             }
         }
         symbol.returnType = resolveType(node.returnType)
         if (node.selfParam != null) {
-            throw CompileError("Semantic: 'self' parameter used outside of an impl or trait block.")
+            semanticError("'self' parameter used outside of an impl or trait block.")
         }
         currentScope = node.body?.scope ?: return
         node.body.stmts.forEach { it.accept(this) }
@@ -447,23 +446,23 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
 
     override fun visit(node: TraitItemNode) {
         val symbol = (currentScope?.resolve(node.name, Namespace.TYPE)) as? Trait
-            ?: throw CompileError("Semantic: undefined trait $node")
+            ?: semanticError("undefined trait $node")
         symbol.type.associatedItems = resolveAssociates(node.items)
     }
 
     override fun visit(node: ImplItemNode) {
         if (node.name != null) {
             currentScope?.resolve(node.name, Namespace.TYPE) as? Trait
-                ?: throw CompileError("Semantic: implementing an invalid trait ${node.name}")
+                ?: semanticError("implementing an invalid trait ${node.name}")
         }
         val type = resolveType(node.type)
         if (type !is StructType && type !is EnumType) {
-            throw CompileError("Semantic: implementing an invalid type ${node.type}")
+            semanticError("implementing an invalid type ${node.type}")
         }
         currentScope = node.scope
         resolveAssociates(node.items).forEach { it ->
             if (it.value is Constant && (it.value as Constant).value == null) {
-                throw CompileError("Semantic: Invalid null constant in impl $node")
+                semanticError("Invalid null constant in impl $node")
             }
             val symbol = currentScope?.resolve(it.value.name, Namespace.VALUE)
             when (it.value) {
@@ -473,7 +472,7 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                         symbol.params = (it.value as Function).params
                         symbol.selfParam = (it.value as Function).selfParam
                         symbol.self = (it.value as Function).self
-                    } else throw CompileError("Semantic: invalid associate type in impl ${node.name}")
+                    } else semanticError("invalid associate type in impl ${node.name}")
                 }
 
                 is Constant -> {
@@ -481,10 +480,10 @@ class RSymbolResolver(val gScope: Scope, val crate: CrateNode) : ASTVisitor<Unit
                         symbol.value = (it.value as Constant).value
                         symbol.type = (it.value as Constant).type
                         symbol.resolutionState = (it.value as Constant).resolutionState
-                    } else throw CompileError("Semantic: invalid associate type in impl ${node.name}")
+                    } else semanticError("invalid associate type in impl ${node.name}")
                 }
 
-                else -> throw CompileError("Semantic: invalid associate type in impl ${node.name}")
+                else -> semanticError("invalid associate type in impl ${node.name}")
             }
         }
         currentScope = currentScope?.parentScope()

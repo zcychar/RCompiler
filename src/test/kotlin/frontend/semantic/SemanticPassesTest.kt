@@ -259,8 +259,8 @@ class SemanticPassesTest {
       fn main() { exit(0); }
     """.trimIndent()
     val ex = assertFailsWith<CompileError> { runAll(src) }
-    assertTrue(ex.message?.contains("Array size cannot be negative") == true,
-      "错误应包含 'Array size cannot be negative'，实际: ${ex.message}")
+    assertTrue(ex.message?.contains("array size cannot be negative") == true,
+      "错误应包含 'array size cannot be negative'，实际: ${ex.message}")
   }
 
   @Test

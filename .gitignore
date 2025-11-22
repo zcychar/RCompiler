@@ -45,3 +45,9 @@ bin/
 .DS_Store
 
 .idea
+b 
+RCompiler-Spec
+
+docs
+
+AGENTS.md
