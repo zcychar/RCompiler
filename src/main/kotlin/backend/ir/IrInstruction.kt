@@ -135,20 +135,6 @@ data class IrCall(
     }
 }
 
-data class IrPhi(
-    override val id: Int,
-    override val type: IrType,
-    val incoming: MutableList<Pair<String, IrValue>>,
-) : IrInstruction {
-    override fun render(): String = buildString {
-        append("%").append(id).append(" = phi ").append(type.render()).append(' ')
-        incoming.forEachIndexed { index, (label, value) ->
-            if (index > 0) append(", ")
-            append("[ ").append(value.render()).append(", %").append(label).append(" ]")
-        }
-    }
-}
-
 data class IrGep(
     override val id: Int,
     override val type: IrType,
