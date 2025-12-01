@@ -18,7 +18,7 @@ import frontend.semantic.USizeType
 import frontend.semantic.UInt32Type
 import frontend.semantic.UnitType
 
-class TypeMapper(private val wordSize: Int) {
+class TypeMapper {
     fun toIrType(type: Type): IrType = when (type) {
         is BoolType -> IrPrimitive(PrimitiveKind.BOOL)
         is CharType -> IrPrimitive(PrimitiveKind.CHAR)
