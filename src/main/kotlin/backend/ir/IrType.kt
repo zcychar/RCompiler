@@ -32,7 +32,7 @@ data class IrPointer(val pointee: IrType, val mutable: Boolean = false) : IrType
 data class IrArray(val element: IrType, val length: Int) : IrType {
     override fun render(): String = buildString {
         append('[')
-        append(length)
+        append(this@IrArray.length)
         append(" x ")
         element.appendTo(this)
         append(']')

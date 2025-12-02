@@ -137,4 +137,5 @@ class ExprEmitterTest {
         val value = emitter.emitExpr(borrow)
         assertEquals(IrPointer(i32, mutable = true), value.type)
     }
+
 }

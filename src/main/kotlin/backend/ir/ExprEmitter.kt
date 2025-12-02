@@ -57,6 +57,7 @@ class ExprEmitter(
         is LiteralExprNode -> emitLiteral(node)
         is PathExprNode -> emitPath(node)
         is GroupedExprNode -> emitExpr(node.expr)
+        is frontend.ast.BlockExprNode -> emitBlockExpr(node)
         is BinaryExprNode -> emitBinary(node)
         is UnaryExprNode -> emitUnary(node)
         is CastExprNode -> emitCast(node)
@@ -370,6 +371,11 @@ class ExprEmitter(
         )
     }
 
+    private fun emitBlockExpr(block: frontend.ast.BlockExprNode): IrValue {
+        val value = blockEmitter.emitBlock(block, expectValue = block.hasFinal())
+        return value ?: unitValue()
+    }
+
     private fun emitIf(node: IfExprNode): IrValue {
         val function = context.currentFunction ?: error("No active function")
         val condExpr = node.conds.firstOrNull()?.expr ?: error("if without condition")
@@ -670,9 +676,13 @@ class ExprEmitter(
         error("Unknown struct $name")
     }
 
-    private fun fieldIndex(struct: IrStruct, fieldName: String): Int =
-        struct.fields.indices.firstOrNull()
-            ?: error("Field $fieldName not found")
+    private fun fieldIndex(structType: IrStruct, fieldName: String): Int {
+        val semantic = resolveStruct(structType.name ?: error("unnamed struct"))
+        val names = semantic.fields.keys.toList()
+        val idx = names.indexOf(fieldName)
+        if (idx == -1) error("Field $fieldName not found")
+        return idx
+    }
 
     private fun retargetPointer(value: IrValue, targetType: IrPointer): IrValue =
         if (value.type == targetType) {
