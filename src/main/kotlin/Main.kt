@@ -2,6 +2,7 @@ import frontend.RPreprocessor
 import frontend.RLexer
 import frontend.RParser
 import frontend.semantic.*
+import backend.ir.IrBackend
 import utils.*
 import utils.CompileError
 import kotlin.system.exitProcess
@@ -21,7 +22,7 @@ fun main(args: Array<String>) {
     return
   }
 
-  val rawText = inputStream.bufferedReader().readText()
+    val rawText = inputStream.bufferedReader().readText()
 
   try {
     if (isDebugMode) println("----- 1. Preprocessing -----")
@@ -81,7 +82,14 @@ fun main(args: Array<String>) {
     }
     checker.process()
 
+    // Drive IR backend after successful semantics.
+    val backend = IrBackend()
+    val irPath = backend.generate(crate, preludeScope)
+
     println("\n✅ Compilation successful!")
+    if (isDebugMode) {
+      println("IR written to $irPath")
+    }
 
   } catch (e: CompileError) {
 

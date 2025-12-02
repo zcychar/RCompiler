@@ -1,17 +1,29 @@
 package backend.ir
 
+import utils.CompileError
+
 /**
- * Minimal IR builder for sequencing instructions within a function.
- * No PHI or CFG metadata; enforces single terminator per block and monotonic IDs.
+ * Mutable façade for building SSA instructions. Tracks the current insertion point,
+ * generates register ids per function, and offers deterministic name generation.
  */
-class IrBuilder {
+class IrBuilder(
+    private val module: IrModule,
+) {
     private var currentFunction: IrFunction? = null
     private var currentBlock: IrBasicBlock? = null
     private var nextRegisterId: Int = 0
+    private val nameCounters: MutableMap<String, Int> = mutableMapOf()
 
     fun positionAt(function: IrFunction, block: IrBasicBlock) {
+        if (currentFunction !== function) {
+            nextRegisterId = 0
+            nameCounters.clear()
+        }
         currentFunction = function
         currentBlock = block
+        if (!function.blocks.contains(block)) {
+            function.appendBlock(block)
+        }
     }
 
     fun ensureBlock(name: String): IrBasicBlock {
@@ -19,9 +31,18 @@ class IrBuilder {
         return fn.blocks.find { it.label == name } ?: fn.createBlock(name)
     }
 
+    fun freshLocalName(hint: String): String {
+        val count = (nameCounters[hint] ?: 0) + 1
+        nameCounters[hint] = count
+        return if (count == 1) hint else "$hint.$count"
+    }
+
     fun emit(instruction: IrInstruction): IrValue {
         val block = currentBlock ?: error("No current block")
-        when (instruction) {
+        if (block.terminator != null) {
+            CompileError.fail("", "block ${block.label} is already terminated")
+        }
+        return when (instruction) {
             is IrAlloca,
             is IrConst,
             is IrLoad,
@@ -34,8 +55,9 @@ class IrBuilder {
             is IrCast -> {
                 val idInstruction = instruction.withId(nextRegisterId++)
                 block.append(idInstruction)
-                return IrRegister(idInstruction.id, idInstruction.type)
+                IrRegister(idInstruction.id, idInstruction.type)
             }
+
             is IrTerminator -> error("Use emitTerminator for terminators")
         }
     }
@@ -46,6 +68,8 @@ class IrBuilder {
         block.setTerminator(termWithId)
         currentBlock = null
     }
+
+    fun hasInsertionPoint(): Boolean = currentBlock != null
 }
 
 // Extension to produce a copy with a new id for convenience.

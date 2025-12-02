@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "2.2.0"
+    application
 }
 
 group = "org.example"
@@ -129,4 +130,8 @@ tasks.register("allCompilerTests") {
     group = "Verification"
     description = "Runs all compiler tests across all roots and stages."
     dependsOn(allStageTasks)
+}
+
+application {
+    mainClass.set("MainKt")
 }
