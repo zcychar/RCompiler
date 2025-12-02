@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+
 plugins {
     kotlin("jvm") version "2.2.0"
     application
@@ -44,64 +46,122 @@ testCaseRoots.filter { it.isDirectory }.forEach { rootDir ->
 
         logger.lifecycle("Discovered stage: ${stageDir.name} in root '${rootDir.name}' -> Creating tasks with prefix '${stageTaskName}'")
 
-        // 遍历第二层目录，即阶段下的每个“测试点”（如 basic1）
-        stageDir.listFiles { file -> file.isDirectory && !file.name.startsWith(".") }?.forEach { testCaseDir ->
+        val globalFile = stageDir.resolve("global.json")
+        val resourcesDir = sourceSets.main.get().resources.srcDirs.first()
 
-            val caseNameCamel = testCaseDir.name.toCamelCase().replaceFirstChar { it.uppercase() }
-            val individualTaskName = "${stageTaskName}${caseNameCamel}"
+        if (globalFile.exists()) {
+            val cases = (JsonSlurper().parse(globalFile) as List<*>).filterIsInstance<Map<*, *>>()
+            cases.filter { entry -> entry["active"] != false }.forEach { entry ->
+                val caseName = entry["name"] as? String
+                    ?: throw GradleException("Missing case name in ${globalFile.name}")
+                val caseNameCamel = caseName.toCamelCase().replaceFirstChar { it.uppercase() }
+                val individualTaskName = "${stageTaskName}${caseNameCamel}"
+                val sourceSpec = (entry["source"] as? List<*>)?.firstOrNull() as? String
+                    ?: throw GradleException("Missing source path for test '$caseName'")
+                val expectedExitCode = (entry["compileexitcode"] as? Number)?.toInt()
+                    ?: throw GradleException("Missing compileexitcode for test '$caseName'")
 
-            val individualTaskProvider = tasks.register(individualTaskName) {
-                group = "Compiler Individual Tests"
-                description = "Runs compiler test '${testCaseDir.name}' from stage '${stageDir.name}' (root='${rootDir.name}')."
+                val individualTaskProvider = tasks.register(individualTaskName) {
+                    group = "Compiler Individual Tests"
+                    description = "Runs compiler test '$caseName' from stage '${stageDir.name}' (root='${rootDir.name}')."
 
-                inputs.dir(testCaseDir)
-                dependsOn(sourceSets.main.get().processResourcesTaskName)
+                    inputs.file(globalFile)
+                    inputs.file(stageDir.resolve(sourceSpec))
+                    dependsOn(sourceSets.main.get().processResourcesTaskName)
 
-                doLast {
-                    val sourceFile = testCaseDir.resolve("${testCaseDir.name}.rx")
-                    val resourcesDir = sourceSets.main.get().resources.srcDirs.first()
-                    val relativePath = sourceFile.relativeTo(resourcesDir).path
+                    doLast {
+                        val sourceFile = stageDir.resolve(sourceSpec)
+                        val relativePath = sourceFile.relativeTo(resourcesDir).path
 
-                    val infoFile = testCaseDir.resolve("testcase_info.json")
-                    if (!infoFile.exists()) throw GradleException("testcase_info.json not found for test '${testCaseDir.name}'")
+                        val debugProp = (project.findProperty("debug") as String?)?.lowercase()
+                        val enableDebug = debugProp == "true" || debugProp == "1" || debugProp == "yes" || debugProp == "y"
 
-                    // 读取 Gradle 属性以控制是否开启 debug 模式（默认关闭）
-                    val debugProp = (project.findProperty("debug") as String?)?.lowercase()
-                    val enableDebug = debugProp == "true" || debugProp == "1" || debugProp == "yes" || debugProp == "y"
+                        val argsList = mutableListOf(relativePath)
+                        if (enableDebug) argsList.add("--debug")
 
-                    val argsList = mutableListOf(relativePath)
-                    if (enableDebug) argsList.add("--debug")
+                        val execResult = project.javaexec {
+                            classpath = sourceSets.main.get().runtimeClasspath
+                            mainClass.set("MainKt")
+                            args = argsList
+                            isIgnoreExitValue = true
+                        }
 
-                    val execResult = project.javaexec {
-                        classpath = sourceSets.main.get().runtimeClasspath
-                        mainClass.set("MainKt")
-                        args = argsList
-                        isIgnoreExitValue = true
-                    }
+                        val actualExitCode = execResult.exitValue
+                        logger.lifecycle("\n--- Test '$caseName' from stage '${stageDir.name}' (root='${rootDir.name}') ---")
+                        logger.lifecycle("   > Expected exit code: $expectedExitCode")
+                        logger.lifecycle("   > Actual exit code:   $actualExitCode")
 
-                    val jsonText = infoFile.readText()
-                    val exitCodeString =
-                        """"compileexitcode"\s*:\s*(-?\d+)""".toRegex().find(jsonText)?.groups?.get(1)?.value
-                            ?: throw GradleException("Could not find 'compileexitcode' key in ${infoFile.path}")
-
-                    val expectedExitCode = exitCodeString.toInt()
-                    val actualExitCode = execResult.exitValue
-
-                    logger.lifecycle("\n--- Test '${testCaseDir.name}' from stage '${stageDir.name}' (root='${rootDir.name}') ---")
-                    logger.lifecycle("   > Expected exit code: $expectedExitCode")
-                    logger.lifecycle("   > Actual exit code:   $actualExitCode")
-
-                    val passed =
-                        (expectedExitCode == 0 && actualExitCode == 0) || (expectedExitCode != 0 && actualExitCode != 0)
-                    if (!passed) {
-                        logger.error("   ❌ FAILED")
-                        throw GradleException("Test case '${testCaseDir.name}' failed.")
-                    } else {
-                        logger.lifecycle("   ✅ PASSED")
+                        val passed =
+                            (expectedExitCode == 0 && actualExitCode == 0) || (expectedExitCode != 0 && actualExitCode != 0)
+                        if (!passed) {
+                            logger.error("   ❌ FAILED")
+                            throw GradleException("Test case '$caseName' failed.")
+                        } else {
+                            logger.lifecycle("   ✅ PASSED")
+                        }
                     }
                 }
+                stageTestTasks.add(individualTaskProvider)
             }
-            stageTestTasks.add(individualTaskProvider)
+        } else {
+            // 遍历第二层目录，即阶段下的每个“测试点”（如 basic1）
+            stageDir.listFiles { file -> file.isDirectory && !file.name.startsWith(".") }?.forEach { testCaseDir ->
+
+                val caseNameCamel = testCaseDir.name.toCamelCase().replaceFirstChar { it.uppercase() }
+                val individualTaskName = "${stageTaskName}${caseNameCamel}"
+
+                val individualTaskProvider = tasks.register(individualTaskName) {
+                    group = "Compiler Individual Tests"
+                    description = "Runs compiler test '${testCaseDir.name}' from stage '${stageDir.name}' (root='${rootDir.name}')."
+
+                    inputs.dir(testCaseDir)
+                    dependsOn(sourceSets.main.get().processResourcesTaskName)
+
+                    doLast {
+                        val sourceFile = testCaseDir.resolve("${testCaseDir.name}.rx")
+                        val relativePath = sourceFile.relativeTo(resourcesDir).path
+
+                        val infoFile = testCaseDir.resolve("testcase_info.json")
+                        if (!infoFile.exists()) throw GradleException("testcase_info.json not found for test '${testCaseDir.name}'")
+
+                        // 读取 Gradle 属性以控制是否开启 debug 模式（默认关闭）
+                        val debugProp = (project.findProperty("debug") as String?)?.lowercase()
+                        val enableDebug = debugProp == "true" || debugProp == "1" || debugProp == "yes" || debugProp == "y"
+
+                        val argsList = mutableListOf(relativePath)
+                        if (enableDebug) argsList.add("--debug")
+
+                        val execResult = project.javaexec {
+                            classpath = sourceSets.main.get().runtimeClasspath
+                            mainClass.set("MainKt")
+                            args = argsList
+                            isIgnoreExitValue = true
+                        }
+
+                        val jsonText = infoFile.readText()
+                        val exitCodeString =
+                            """"compileexitcode"\s*:\s*(-?\d+)""".toRegex().find(jsonText)?.groups?.get(1)?.value
+                                ?: throw GradleException("Could not find 'compileexitcode' key in ${infoFile.path}")
+
+                        val expectedExitCode = exitCodeString.toInt()
+                        val actualExitCode = execResult.exitValue
+
+                        logger.lifecycle("\n--- Test '${testCaseDir.name}' from stage '${stageDir.name}' (root='${rootDir.name}') ---")
+                        logger.lifecycle("   > Expected exit code: $expectedExitCode")
+                        logger.lifecycle("   > Actual exit code:   $actualExitCode")
+
+                        val passed =
+                            (expectedExitCode == 0 && actualExitCode == 0) || (expectedExitCode != 0 && actualExitCode != 0)
+                        if (!passed) {
+                            logger.error("   ❌ FAILED")
+                            throw GradleException("Test case '${testCaseDir.name}' failed.")
+                        } else {
+                            logger.lifecycle("   ✅ PASSED")
+                        }
+                    }
+                }
+                stageTestTasks.add(individualTaskProvider)
+            }
         }
 
         val stageTaskProvider = tasks.register(stageTaskName) {

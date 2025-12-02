@@ -41,4 +41,29 @@ class IrFunction(
         }
         return blocks.first()
     }
+
+    fun render(): String = buildString {
+        append("define ")
+        append(signature.returnType.render())
+        append(" @")
+        append(name)
+        append('(')
+        append(
+            signature.parameters.mapIndexed { index, param ->
+                "${param.render()} %arg$index"
+            }.joinToString(", "),
+        )
+        append(')')
+        appendLine(" {")
+        blocks.forEach { block ->
+            append(block.label).appendLine(":")
+            block.instructions.forEach { inst ->
+                append("  ").appendLine(inst.render())
+            }
+            block.terminator?.let { term ->
+                append("  ").appendLine(term.render())
+            }
+        }
+        append('}')
+    }
 }

@@ -3,6 +3,7 @@ package backend.ir
 import frontend.Keyword
 import frontend.Literal
 import frontend.Punctuation
+import frontend.ast.ArrayExprNode
 import frontend.ast.BinaryExprNode
 import frontend.ast.BorrowExprNode
 import frontend.ast.BreakExprNode
@@ -27,6 +28,8 @@ import frontend.assignOp
 import frontend.semantic.ArrayType
 import frontend.semantic.BoolType
 import frontend.semantic.CharType
+import frontend.semantic.ConstValue
+import frontend.semantic.Constant
 import frontend.semantic.Function
 import frontend.semantic.Int32Type
 import frontend.semantic.IntType
@@ -57,6 +60,7 @@ class ExprEmitter(
         is LiteralExprNode -> emitLiteral(node)
         is PathExprNode -> emitPath(node)
         is GroupedExprNode -> emitExpr(node.expr)
+        is ArrayExprNode -> emitArrayLiteral(node)
         is frontend.ast.BlockExprNode -> emitBlockExpr(node)
         is BinaryExprNode -> emitBinary(node)
         is UnaryExprNode -> emitUnary(node)
@@ -72,6 +76,8 @@ class ExprEmitter(
         is MethodCallExprNode -> emitMethodCall(node)
         is StructExprNode -> emitStructLiteral(node)
         is ReturnExprNode -> emitReturn(node)
+        is frontend.ast.FieldAccessExprNode -> emitFieldAccess(node)
+        is frontend.ast.IndexExprNode -> emitIndexAccess(node)
         else -> error("Unsupported expression: ${node::class.simpleName}")
     }
 
@@ -98,7 +104,8 @@ class ExprEmitter(
             error("Qualified paths are not supported in expression lowering yet")
         }
         val identifier = node.seg1.name ?: "self"
-        val binding = valueEnv.resolve(identifier) ?: error("Unbound identifier $identifier")
+        val binding = valueEnv.resolve(identifier) ?: resolveConstant(identifier)
+            ?: error("Unbound identifier $identifier")
         return when (binding) {
             is SsaValue -> binding.value
             is FunctionParam -> binding.value
@@ -490,8 +497,7 @@ class ExprEmitter(
 
     private fun emitCall(node: CallExprNode): IrValue {
         val calleePath = node.expr as? PathExprNode ?: error("function calls require path callee")
-        if (calleePath.seg2 != null || calleePath.seg1.name == null) error("unsupported callee path")
-        val fnName = calleePath.seg1.name
+        val fnName = calleePath.seg2?.name ?: calleePath.seg1.name ?: error("unsupported callee path")
         val fnSymbol = resolveFunction(fnName) ?: error("Unknown function $fnName")
         val signature = typeMapper.functionSignature(fnSymbol)
         val args = node.params.map { emitExpr(it) }
@@ -505,8 +511,71 @@ class ExprEmitter(
         )
     }
 
-    private fun emitMethodCall(node: MethodCallExprNode): IrValue =
-        error("Method calls are not supported in the current backend subset")
+    private fun emitMethodCall(node: MethodCallExprNode): IrValue {
+        val fnName = node.pathSeg.name ?: error("method name missing")
+        val receiver = emitExpr(node.expr)
+        val fnSymbol = resolveMethod(receiver.type, fnName) ?: resolveFunction(fnName) ?: error("Unknown method $fnName")
+        val signature = typeMapper.functionSignature(fnSymbol)
+        val args = listOf(receiver) + node.params.map { emitExpr(it) }
+        return builder.emit(
+            IrCall(
+                id = -1,
+                type = signature.returnType,
+                callee = IrFunctionRef(fnName, signature.toFunctionPointer()),
+                arguments = args,
+            ),
+        )
+    }
+
+    private fun emitArrayLiteral(node: ArrayExprNode): IrValue {
+        val elements = if (node.elements.isNotEmpty()) {
+            node.elements.map { emitExpr(it) }
+        } else if (node.repeatOp != null) {
+            val count = node.evaluatedSize.takeIf { it >= 0 }?.toInt()
+                ?: error("array repeat size unknown")
+            List(count) { emitExpr(node.repeatOp) }
+        } else {
+            error("empty array literal not supported")
+        }
+        val elementType = elements.first().type
+        val irArrayType = IrArray(elementType, elements.size)
+        val alloca = builder.emit(
+            IrAlloca(
+                id = -1,
+                type = IrPointer(irArrayType),
+                allocatedType = irArrayType,
+                slotName = builder.freshLocalName("arr"),
+            ),
+        )
+        elements.forEachIndexed { index, value ->
+            val gep = builder.emit(
+                IrGep(
+                    id = -1,
+                    type = IrPointer(elementType),
+                    base = alloca,
+                    indices = listOf(
+                        IrIntConstant(0, IrPrimitive(PrimitiveKind.I32)),
+                        IrIntConstant(index.toLong(), IrPrimitive(PrimitiveKind.I32)),
+                    ),
+                ),
+            )
+            builder.emit(
+                IrStore(
+                    id = -1,
+                    type = IrPrimitive(PrimitiveKind.UNIT),
+                    address = gep,
+                    value = value,
+                ),
+            )
+        }
+        return builder.emit(
+            IrLoad(
+                id = -1,
+                type = irArrayType,
+                address = alloca,
+            ),
+        )
+    }
 
     private fun emitStructLiteral(node: StructExprNode): IrValue {
         val path = node.path as? PathExprNode ?: error("struct literal requires path")
@@ -571,6 +640,28 @@ class ExprEmitter(
         return IrUndef(IrPrimitive(PrimitiveKind.NEVER))
     }
 
+    private fun emitFieldAccess(node: frontend.ast.FieldAccessExprNode): IrValue {
+        val lvalue = emitLValue(node)
+        return builder.emit(
+            IrLoad(
+                id = -1,
+                type = lvalue.pointee,
+                address = lvalue.address,
+            ),
+        )
+    }
+
+    private fun emitIndexAccess(node: frontend.ast.IndexExprNode): IrValue {
+        val lvalue = emitLValue(node)
+        return builder.emit(
+            IrLoad(
+                id = -1,
+                type = lvalue.pointee,
+                address = lvalue.address,
+            ),
+        )
+    }
+
     private fun emitLValue(node: ExprNode): LValue = when (node) {
         is PathExprNode -> {
             if (node.seg2 != null) error("Qualified paths are not supported for assignment")
@@ -579,7 +670,32 @@ class ExprEmitter(
             when (binding) {
                 is StackSlot -> LValue(binding.address, binding.type)
                 is SsaValue -> error("Cannot take lvalue of SSA value")
-                is FunctionParam -> error("Cannot take lvalue of function parameter without stack slot")
+                is FunctionParam -> {
+                    val type = binding.value.type
+                    if (type is IrPointer) {
+                        LValue(binding.value, type.pointee)
+                    } else {
+                        val address = builder.emit(
+                            IrAlloca(
+                                id = -1,
+                                type = IrPointer(type),
+                                allocatedType = type,
+                                slotName = builder.freshLocalName(identifier),
+                            ),
+                        )
+                        builder.emit(
+                            IrStore(
+                                id = -1,
+                                type = IrPrimitive(PrimitiveKind.UNIT),
+                                address = address,
+                                value = binding.value,
+                            ),
+                        )
+                        val stackSlot = StackSlot(address, type, mutable = false)
+                        valueEnv.bind(identifier, stackSlot)
+                        LValue(address, type)
+                    }
+                }
                 else -> error("Expression is not assignable")
             }
         }
@@ -646,9 +762,9 @@ class ExprEmitter(
     }
 
     private fun ensureSameType(lhs: IrType, rhs: IrType) {
-        if (lhs != rhs) {
-            error("Type mismatch: $lhs vs $rhs")
-        }
+        if (lhs == rhs) return
+        if (lhs is IrPrimitive && rhs is IrPrimitive && lhs.render() == rhs.render()) return
+        error("Type mismatch: $lhs vs $rhs")
     }
 
     private fun isUnsigned(type: IrType): Boolean =
@@ -674,6 +790,37 @@ class ExprEmitter(
             scope = scope.parentScope()
         }
         error("Unknown struct $name")
+    }
+
+    private fun resolveConstant(name: String): ValueBinding? {
+        var scope = context.currentScope ?: context.rootScope
+        while (scope != null) {
+            val symbol = scope.resolve(name, Namespace.VALUE)
+            if (symbol is Constant) {
+                val value = symbol.value
+                if (value is ConstValue.Int) {
+                    val irType = typeMapper.toIrType(value.actualType)
+                    return SsaValue(IrIntConstant(value.value, irType))
+                }
+            }
+            scope = scope.parentScope()
+        }
+        return null
+    }
+
+    private fun resolveMethod(receiverType: IrType, name: String): Function? {
+        val base = if (receiverType is IrPointer) receiverType.pointee else receiverType
+        val struct = base as? IrStruct ?: return null
+        val structName = struct.name ?: return null
+        var scope = context.currentScope ?: context.rootScope
+        while (scope != null) {
+            val symbol = scope.resolve(structName, Namespace.TYPE)
+            if (symbol is frontend.semantic.Struct) {
+                return symbol.methods[name]
+            }
+            scope = scope.parentScope()
+        }
+        return null
     }
 
     private fun fieldIndex(structType: IrStruct, fieldName: String): Int {

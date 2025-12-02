@@ -43,4 +43,45 @@ class IrModule {
     fun allTypes(): Collection<IrType> = types.values
     fun allGlobals(): List<IrGlobal> = globals
     fun allFunctions(): List<IrFunction> = functions
+
+    fun render(): String = buildString {
+        emitBuiltinPrologue()
+        globals.forEach { global ->
+            appendLine(global.render())
+        }
+        types.values.forEach { type ->
+            appendLine(type.render())
+        }
+        functions.forEach { function ->
+            appendLine(function.render())
+        }
+    }
+}
+
+private fun StringBuilder.emitBuiltinPrologue() {
+    appendLine("declare i32 @printf(i8*, ...)")
+    appendLine("declare i32 @scanf(i8*, ...)")
+    appendLine("define void @exit(i32 %code) {")
+    appendLine("entry:")
+    appendLine("  ret void")
+    appendLine("}")
+    appendLine("@.str.d = private unnamed_addr constant [3 x i8] c\"%d\\00\"")
+    appendLine("@.str.d_ln = private unnamed_addr constant [4 x i8] c\"%d\\0A\\00\"")
+    appendLine("define void @printInt(i32 %arg0) {")
+    appendLine("entry:")
+    appendLine("  %0 = call i32 @printf(i8* getelementptr ([3 x i8], [3 x i8]* @.str.d, i32 0, i32 0), i32 %arg0)")
+    appendLine("  ret void")
+    appendLine("}")
+    appendLine("define void @printlnInt(i32 %arg0) {")
+    appendLine("entry:")
+    appendLine("  %0 = call i32 @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.str.d_ln, i32 0, i32 0), i32 %arg0)")
+    appendLine("  ret void")
+    appendLine("}")
+    appendLine("define i32 @getInt() {")
+    appendLine("entry:")
+    appendLine("  %0 = alloca i32")
+    appendLine("  %1 = call i32 @scanf(i8* getelementptr ([3 x i8], [3 x i8]* @.str.d, i32 0, i32 0), i32* %0)")
+    appendLine("  %2 = load i32, i32* %0")
+    appendLine("  ret i32 %2")
+    appendLine("}")
 }
