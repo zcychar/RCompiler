@@ -17,7 +17,7 @@ import java.nio.file.Paths
  */
 class IrBackend(
 ) {
-    fun generate(crate: CrateNode, globalScope: Scope): Path {
+    fun generate(crate: CrateNode, globalScope: Scope): String {
         val context = CodegenContext(rootScope = crate.scope ?: globalScope)
         val functionEmitter = FunctionEmitter(context)
         val scope = crate.scope ?: globalScope
@@ -33,10 +33,11 @@ class IrBackend(
             }
         }
 
+        val irText = context.module.render()
         val output = Paths.get("build", "output.ll")
         Files.createDirectories(output.parent)
-        Files.writeString(output, context.module.render())
-        return output
+        Files.writeString(output, irText)
+        return irText
     }
 
     private fun emitFunction(scope: Scope, functionEmitter: FunctionEmitter, item: frontend.ast.FunctionItemNode) {

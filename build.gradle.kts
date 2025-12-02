@@ -71,18 +71,19 @@ testCaseRoots.filter { it.isDirectory }.forEach { rootDir ->
 
                     doLast {
                         val sourceFile = stageDir.resolve(sourceSpec)
-                        val relativePath = sourceFile.relativeTo(resourcesDir).path
+                        val inputPath = sourceFile.absoluteFile.normalize().path
 
                         val debugProp = (project.findProperty("debug") as String?)?.lowercase()
                         val enableDebug = debugProp == "true" || debugProp == "1" || debugProp == "yes" || debugProp == "y"
 
-                        val argsList = mutableListOf(relativePath)
+                        val argsList = mutableListOf(inputPath)
                         if (enableDebug) argsList.add("--debug")
 
                         val execResult = project.javaexec {
                             classpath = sourceSets.main.get().runtimeClasspath
                             mainClass.set("MainKt")
                             args = argsList
+                            workingDir = project.projectDir
                             isIgnoreExitValue = true
                         }
 
@@ -119,7 +120,7 @@ testCaseRoots.filter { it.isDirectory }.forEach { rootDir ->
 
                     doLast {
                         val sourceFile = testCaseDir.resolve("${testCaseDir.name}.rx")
-                        val relativePath = sourceFile.relativeTo(resourcesDir).path
+                        val inputPath = sourceFile.absoluteFile.normalize().path
 
                         val infoFile = testCaseDir.resolve("testcase_info.json")
                         if (!infoFile.exists()) throw GradleException("testcase_info.json not found for test '${testCaseDir.name}'")
@@ -128,13 +129,14 @@ testCaseRoots.filter { it.isDirectory }.forEach { rootDir ->
                         val debugProp = (project.findProperty("debug") as String?)?.lowercase()
                         val enableDebug = debugProp == "true" || debugProp == "1" || debugProp == "yes" || debugProp == "y"
 
-                        val argsList = mutableListOf(relativePath)
+                        val argsList = mutableListOf(inputPath)
                         if (enableDebug) argsList.add("--debug")
 
                         val execResult = project.javaexec {
                             classpath = sourceSets.main.get().runtimeClasspath
                             mainClass.set("MainKt")
                             args = argsList
+                            workingDir = project.projectDir
                             isIgnoreExitValue = true
                         }
 
@@ -190,6 +192,11 @@ tasks.register("allCompilerTests") {
     group = "Verification"
     description = "Runs all compiler tests across all roots and stages."
     dependsOn(allStageTasks)
+}
+
+// Ensure the run task can consume stdin (e.g., `make run < file`)
+tasks.named<JavaExec>("run") {
+    standardInput = System.`in`
 }
 
 application {

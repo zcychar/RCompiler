@@ -23,9 +23,19 @@ class FunctionEmitter(
     private val valueEnv: ValueEnv = context.valueEnv,
 ) {
 
-    fun emitFunction(fnSymbol: Function, node: frontend.ast.FunctionItemNode): IrFunction {
+    fun emitFunction(fnSymbol: Function, node: frontend.ast.FunctionItemNode, owner: Type? = null): IrFunction {
         val signature = typeMapper.functionSignature(fnSymbol)
-        val function = IrFunction(fnSymbol.name, signature)
+        val ownerName = when (val resolvedOwner = owner ?: fnSymbol.self) {
+            is frontend.semantic.StructType -> resolvedOwner.name
+            is frontend.semantic.EnumType -> resolvedOwner.name
+            else -> null
+        }
+        val irName = ownerName?.let { "$it.${fnSymbol.name}" } ?: fnSymbol.name
+        val parameterNames = buildList {
+            fnSymbol.selfParam?.let { add("self") }
+            fnSymbol.params.forEach { add(it.name) }
+        }
+        val function = IrFunction(irName, signature, parameterNames)
         context.module.declareFunction(function)
         context.currentFunction = function
         val previousScope = context.currentScope
@@ -36,7 +46,23 @@ class FunctionEmitter(
         valueEnv.enterScope()
 
         bindParameters(fnSymbol, signature)
-        node.body?.let { emitBlock(it, expectValue = false) }
+        val expectsValue = signature.returnType !is IrPrimitive || signature.returnType.kind != PrimitiveKind.UNIT
+        val blockResult = node.body?.let { emitBlock(it, expectValue = expectsValue, expectedType = signature.returnType) }
+
+        if (builder.hasInsertionPoint()) {
+            val returnValue = when {
+                signature.returnType is IrPrimitive && signature.returnType.kind == PrimitiveKind.UNIT -> null
+                blockResult != null -> blockResult
+                else -> IrUndef(signature.returnType)
+            }
+            builder.emitTerminator(
+                IrReturn(
+                    id = -1,
+                    type = signature.returnType,
+                    value = returnValue,
+                ),
+            )
+        }
 
         valueEnv.leaveScope()
         valueEnv.popFunction()
@@ -48,32 +74,32 @@ class FunctionEmitter(
     fun emitMethod(fnSymbol: Function, implType: Type, node: frontend.ast.FunctionItemNode): IrFunction {
         typeMapper.beginMethod(implType)
         try {
-            return emitFunction(fnSymbol, node)
+            return emitFunction(fnSymbol, node, implType)
         } finally {
             typeMapper.endMethod()
         }
     }
 
-    fun emitBlock(block: BlockExprNode, expectValue: Boolean): IrValue? {
+    fun emitBlock(block: BlockExprNode, expectValue: Boolean, expectedType: IrType? = null): IrValue? {
         valueEnv.enterScope()
         var result: IrValue? = null
         for ((index, stmt) in block.stmts.withIndex()) {
             val isLastExpr = expectValue && index == block.stmts.lastIndex && stmt is ExprStmtNode && !stmt.hasSemiColon
-            result = emitStmt(stmt, isLastExpr)
+            result = emitStmt(stmt, isLastExpr, expectedType)
             if (!builder.hasInsertionPoint()) break
         }
         valueEnv.leaveScope()
         return result
     }
 
-    private fun emitStmt(stmt: StmtNode, expectValue: Boolean): IrValue? = when (stmt) {
+    private fun emitStmt(stmt: StmtNode, expectValue: Boolean, expectedType: IrType?): IrValue? = when (stmt) {
         is LetStmtNode -> {
             emitLet(stmt)
             null
         }
 
         is ExprStmtNode -> {
-            val value = exprEmitter.emitExpr(stmt.expr)
+            val value = exprEmitter.emitExpr(stmt.expr, expectedType.takeIf { expectValue })
             if (expectValue) value else null
         }
 

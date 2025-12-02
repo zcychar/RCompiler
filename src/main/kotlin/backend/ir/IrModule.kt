@@ -46,11 +46,11 @@ class IrModule {
 
     fun render(): String = buildString {
         emitBuiltinPrologue()
+        types.values.filterIsInstance<IrStruct>().filter { it.name != null }.forEach { struct ->
+            appendLine(struct.renderDefinition())
+        }
         globals.forEach { global ->
             appendLine(global.render())
-        }
-        types.values.forEach { type ->
-            appendLine(type.render())
         }
         functions.forEach { function ->
             appendLine(function.render())

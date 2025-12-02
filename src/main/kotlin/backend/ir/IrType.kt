@@ -40,10 +40,21 @@ data class IrArray(val element: IrType, val length: Int) : IrType {
 }
 
 data class IrStruct(val name: String?, val fields: List<IrType>) : IrType {
-    override fun render(): String = buildString {
-        name?.let {
-            append('%').append(it).append(" = ")
+    override fun render(): String =
+        name?.let { "%$it" } ?: renderBody()
+
+    /**
+     * Render the named struct definition form: `%Name = type { ... }`
+     */
+    fun renderDefinition(): String {
+        val structName = name ?: error("Cannot render definition for anonymous struct")
+        return buildString {
+            append('%').append(structName).append(" = type ")
+            append(renderBody())
         }
+    }
+
+    private fun renderBody(): String = buildString {
         append('{')
         fields.forEachIndexed { index, field ->
             if (index > 0) append(", ")

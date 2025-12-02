@@ -22,6 +22,7 @@ data class IrFunctionSignature(
 class IrFunction(
     val name: String,
     val signature: IrFunctionSignature,
+    val parameterNames: List<String> = emptyList(),
 ) {
     val blocks: MutableList<IrBasicBlock> = mutableListOf()
 
@@ -50,7 +51,8 @@ class IrFunction(
         append('(')
         append(
             signature.parameters.mapIndexed { index, param ->
-                "${param.render()} %arg$index"
+                val paramName = parameterNames.getOrNull(index)?.takeIf { it.isNotEmpty() } ?: "arg$index"
+                "${param.render()} %$paramName"
             }.joinToString(", "),
         )
         append(')')

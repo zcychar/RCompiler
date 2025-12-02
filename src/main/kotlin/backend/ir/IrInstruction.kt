@@ -21,6 +21,9 @@ enum class BinaryOperator(val llvmName: String) {
     AND("and"),
     OR("or"),
     XOR("xor"),
+    SHL("shl"),
+    ASHR("ashr"),
+    LSHR("lshr"),
 }
 
 enum class UnaryOperator(val llvmName: String) {
@@ -102,8 +105,19 @@ data class IrUnary(
     val operator: UnaryOperator,
     val operand: IrValue,
 ) : IrInstruction {
-    override fun render(): String =
-        "%$id = ${operator.llvmName} ${type.render()} ${operand.render()}"
+    override fun render(): String = when (operator) {
+        UnaryOperator.NEG -> buildString {
+            append('%').append(id).append(" = sub ").append(type.render()).append(' ')
+            append("0, ").append(operand.render())
+        }
+
+        UnaryOperator.NOT -> buildString {
+            append('%').append(id).append(" = xor ").append(type.render()).append(' ')
+            val isBool = (type as? IrPrimitive)?.kind == PrimitiveKind.BOOL
+            val literal = if (isBool) "true" else "-1"
+            append(operand.render()).append(", ").append(literal)
+        }
+    }
 }
 
 data class IrCmp(
@@ -124,7 +138,11 @@ data class IrCall(
     val arguments: List<IrValue>,
 ) : IrInstruction {
     override fun render(): String = buildString {
-        append("%").append(id).append(" = call ").append(type.render()).append(' ')
+        val returnsVoid = (type as? IrPrimitive)?.kind == PrimitiveKind.UNIT
+        if (!returnsVoid) {
+            append("%").append(id).append(" = ")
+        }
+        append("call ").append(if (returnsVoid) "void" else type.render()).append(' ')
         append(callee.render())
         append('(')
         arguments.forEachIndexed { index, arg ->
@@ -143,8 +161,10 @@ data class IrGep(
 ) : IrInstruction {
     override fun render(): String = buildString {
         append("%").append(id).append(" = getelementptr ")
-        append(base.type.render()).append(", ")
-        append(base.type.render()).append(' ').append(base.render())
+        val baseType = base.type
+        val pointee = (baseType as? IrPointer)?.pointee ?: baseType
+        append(pointee.render()).append(", ")
+        append(baseType.render()).append(' ').append(base.render())
         this@IrGep.indices.forEach { indexValue ->
             append(", ").append(indexValue.type.render()).append(' ').append(indexValue.render())
         }

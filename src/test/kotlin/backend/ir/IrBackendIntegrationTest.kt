@@ -7,7 +7,6 @@ import frontend.semantic.Constant
 import frontend.semantic.Namespace
 import frontend.semantic.Scope
 import frontend.semantic.ScopeKind
-import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -32,9 +31,7 @@ class IrBackendIntegrationTest {
         crate.scope = scope
 
         val backend = IrBackend()
-        val output = backend.generate(crate, scope)
-
-        val text = output.readText()
+        val text = backend.generate(crate, scope)
         assertTrue(text.contains("declare i32 @printf"))
         assertTrue(text.contains("@C"))
         assertTrue(text.contains("42"))
