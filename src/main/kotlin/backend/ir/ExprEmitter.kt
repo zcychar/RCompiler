@@ -406,7 +406,7 @@ class ExprEmitter(
     )
   }
 
-  private fun emitBlockExpr(block: frontend.ast.BlockExprNode, expectedType: IrType?): IrValue {
+  private fun emitBlockExpr(block:BlockExprNode, expectedType: IrType?): IrValue {
     val value = blockEmitter.emitBlock(block, expectValue = block.hasFinal())
     return value ?: expectedType?.let { IrUndef(it) } ?: unitValue()
   }
@@ -469,7 +469,7 @@ class ExprEmitter(
     builder.positionAt(function, elseBlock)
     val elseValue = when (val elseExpr = node.elseExpr) {
       null -> if (needsValue) IrUndef(resultType) else unitValue()
-      is frontend.ast.BlockExprNode -> blockEmitter.emitBlock(
+      is BlockExprNode -> blockEmitter.emitBlock(
         elseExpr,
         expectValue = needsValue,
         expectedType = resultType
@@ -913,7 +913,7 @@ class ExprEmitter(
   }
 
   private fun tryLValue(expr: ExprNode): LValue? = when (expr) {
-    is PathExprNode, is DerefExprNode, is frontend.ast.FieldAccessExprNode, is frontend.ast.IndexExprNode -> {
+    is PathExprNode, is DerefExprNode, is FieldAccessExprNode, is IndexExprNode -> {
       try {
         emitLValue(expr)
       } catch (_: Exception) {
@@ -935,14 +935,14 @@ class ExprEmitter(
       else -> error("Unsupported cast target type ${node.name}")
     }
 
-    is frontend.ast.RefTypeNode -> RefType(mapType(node.type), node.hasMut)
-    is frontend.ast.ArrayTypeNode -> {
+    is RefTypeNode -> RefType(mapType(node.type), node.hasMut)
+    is ArrayTypeNode -> {
       val element = mapType(node.type)
       if (node.evaluatedSize < 0) CompileError.fail("", "Array size must be known for cast")
       ArrayType(element, node.evaluatedSize.toInt())
     }
 
-    frontend.ast.UnitTypeNode -> UnitType
+    UnitTypeNode -> UnitType
   }
 
   private fun ensureSameType(lhs: IrType, rhs: IrType) {

@@ -46,7 +46,10 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
                 }
                 val identifier = node.seg1.name ?: "self"
                 val variable = currentScope?.resolveVariable(identifier)
-                if (variable != null) return variable.isMutable
+                if (variable != null) {
+                    node.isLeft = true
+                    return variable.isMutable
+                }
                 val item = currentScope?.resolve(identifier, Namespace.VALUE)
                 if (item != null) semanticError("cannot assign to `${identifier}` because it is an item (like a function or constant), not a variable")
                 semanticError("cannot find value `${identifier}` in this scope")
@@ -64,6 +67,7 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
                         if (!baseType.fields.containsKey(node.id)) {
                             semanticError("no field `${node.id}` on type `$baseType`")
                         }
+                        node.isLeft = true
                         return baseIsMutable
                     }
 
@@ -72,7 +76,9 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
             }
 
             is GroupedExprNode -> {
-                return checkPlaceContext(node.expr)
+                val res = checkPlaceContext(node.expr)
+                node.isLeft = node.expr.isLeft
+                return res
             }
 
             is BorrowExprNode -> {
@@ -80,6 +86,7 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
                 if (!baseIsMutable && node.isMut) {
                     semanticError("cannot create a mutable reference to an immutable value")
                 }
+                node.isLeft = true
                 return node.isMut
             }
 
@@ -89,6 +96,7 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
                 if (baseType !is RefType) {
                     semanticError("type `$baseType` cannot be dereferenced")
                 }
+                node.isLeft = true
                 return baseType.isMutable
             }
 
@@ -101,6 +109,7 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
                 if (autoDeref(baseType) !is ArrayType) {
                     semanticError("type `$baseType` cannot be indexed")
                 }
+                node.isLeft = true
                 return baseIsMutable
             }
 
