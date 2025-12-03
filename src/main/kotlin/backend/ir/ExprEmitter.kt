@@ -67,7 +67,6 @@ class ExprEmitter(
     ?: error("Unbound identifier $identifier")
     return when (binding) {
       is SsaValue -> binding.value
-      is FunctionParam -> binding.value
       is StackSlot -> builder.emit(
         IrLoad(
           id = -1,
@@ -790,6 +789,9 @@ class ExprEmitter(
         is StackSlot -> LValue(binding.address, binding.type)
         is SsaValue -> {
           val type = binding.value.type
+          if (binding.value is IrParameter && type is IrPointer) {
+            LValue(binding.value, type.pointee)
+          }
           val address = builder.emit(
             IrAlloca(
               id = -1,
@@ -807,36 +809,9 @@ class ExprEmitter(
             ),
           )
           val stackSlot = StackSlot(address, type)
-          valueEnv.bind(identifier, stackSlot)
-          LValue(address, type)
-        }
-
-        is FunctionParam -> {
-          val type = binding.value.type
-          if (type is IrPointer) {
-            LValue(binding.value, type.pointee)
-          } else {
-            val address = builder.emit(
-              IrAlloca(
-                id = -1,
-                type = IrPointer(type),
-                allocatedType = type,
-                slotName = builder.freshLocalName(identifier),
-              ),
-            )
-            builder.emit(
-              IrStore(
-                id = -1,
-                type = IrPrimitive(PrimitiveKind.UNIT),
-                address = address,
-                value = binding.value,
-              ),
-            )
-            val stackSlot = StackSlot(address, type)
             valueEnv.bind(identifier, stackSlot)
             LValue(address, type)
           }
-        }
       }
     }
 

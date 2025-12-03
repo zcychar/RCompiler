@@ -136,12 +136,12 @@ class FunctionEmitter(
         var index = 0
         fnSymbol.selfParam?.let {
             val param = IrParameter(index, "self", signature.parameters[index])
-            valueEnv.bind("self", FunctionParam(index, param))
+            valueEnv.bind("self", SsaValue(param))
             index++
         }
         fnSymbol.params.forEach { param ->
             val irParam = IrParameter(index, param.name, signature.parameters[index])
-            valueEnv.bind(param.name, FunctionParam(index, irParam))
+            valueEnv.bind(param.name, SsaValue(irParam))
             index++
         }
     }

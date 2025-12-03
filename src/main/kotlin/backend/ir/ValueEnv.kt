@@ -57,7 +57,6 @@ class ValueEnv {
 sealed interface ValueBinding
 data class SsaValue(val value: IrValue) : ValueBinding
 data class StackSlot(val address: IrValue, val type: IrType) : ValueBinding
-data class FunctionParam(val index: Int, val value: IrValue) : ValueBinding
 
 private data class FunctionFrame(
     val returnType: IrType,
