@@ -1,2 +1,0 @@
-{ "active":1, "cmp":["compileexitcode"], "compileexitcode":0, "name":"lexer_integer_literals", "source_path":"src/lexer_integer_literals/lexer_integer_literals.rx", "stage_name":"ci-special" }
-

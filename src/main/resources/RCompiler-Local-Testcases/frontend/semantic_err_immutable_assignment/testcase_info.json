@@ -1,2 +1,0 @@
-{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_immutable_assignment", "source_path":"src/semantic_err_immutable_assignment/semantic_err_immutable_assignment.rx", "stage_name":"ci-special" }
-

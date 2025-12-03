@@ -1,9 +1,0 @@
-{
-  "active": 1,
-  "cmp": ["compileexitcode"],
-  "compileexitcode": 1,
-  "name": "lexer_unterminated_raw_hash_mismatch",
-  "source_path": "src/lexer_unterminated_raw_hash_mismatch/lexer_unterminated_raw_hash_mismatch.rx",
-  "stage_name": "ci-special"
-}
-

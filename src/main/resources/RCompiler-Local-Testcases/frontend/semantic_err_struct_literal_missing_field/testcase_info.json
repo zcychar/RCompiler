@@ -1,2 +1,0 @@
-{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"semantic_err_struct_literal_missing_field", "source_path":"src/semantic_err_struct_literal_missing_field/semantic_err_struct_literal_missing_field.rx", "stage_name":"ci-special" }
-

@@ -1,9 +1,0 @@
-{
-  "active": 1,
-  "cmp": ["compileexitcode"],
-  "compileexitcode": 0,
-  "name": "lexer_string_char_corner_cases",
-  "source_path": "src/lexer_string_char_corner_cases/lexer_string_char_corner_cases.rx",
-  "stage_name": "ci-special"
-}
-

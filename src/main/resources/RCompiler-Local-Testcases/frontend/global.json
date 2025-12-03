@@ -1,0 +1,665 @@
+[
+  {
+    "name": "lexer_identifiers_various",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/lexer_identifiers_various/lexer_identifiers_various.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "lexer_integer_literals",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/lexer_integer_literals/lexer_integer_literals.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "lexer_longest_punct_priority",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/lexer_longest_punct_priority/lexer_longest_punct_priority.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "lexer_raw_string_corner_cases",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/lexer_raw_string_corner_cases/lexer_raw_string_corner_cases.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "lexer_string_char_corner_cases",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/lexer_string_char_corner_cases/lexer_string_char_corner_cases.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "lexer_unrecognized_punct1",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/lexer_unrecognized_punct1/lexer_unrecognized_punct1.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "lexer_unterminated_char",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/lexer_unterminated_char/lexer_unterminated_char.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "lexer_unterminated_raw_hash_mismatch",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/lexer_unterminated_raw_hash_mismatch/lexer_unterminated_raw_hash_mismatch.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "lexer_unterminated_raw_simple",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/lexer_unterminated_raw_simple/lexer_unterminated_raw_simple.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "lexer_unterminated_string",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/lexer_unterminated_string/lexer_unterminated_string.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_const_fn",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_const_fn/parser_const_fn.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_const_item_numeric_underscore",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_const_item_numeric_underscore/parser_const_item_numeric_underscore.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_enum_with_trailing_comma",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_enum_with_trailing_comma/parser_enum_with_trailing_comma.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_function_item_with_params_and_return",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_function_item_with_params_and_return/parser_function_item_with_params_and_return.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_missing_closing_paren_in_fn",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_missing_closing_paren_in_fn/parser_missing_closing_paren_in_fn.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_missing_semicolon_after_let",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_missing_semicolon_after_let/parser_missing_semicolon_after_let.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_struct_with_fields",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_struct_with_fields/parser_struct_with_fields.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_success_assignment_and_compound_assignment",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_success_assignment_and_compound_assignment/parser_success_assignment_and_compound_assignment.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_success_expr_stmt_with_semicolons",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_success_expr_stmt_with_semicolons/parser_success_expr_stmt_with_semicolons.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_success_identifier_pattern_variations",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_success_identifier_pattern_variations/parser_success_identifier_pattern_variations.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_success_let_variations",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_success_let_variations/parser_success_let_variations.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_success_return_break_and_loop_value",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_success_return_break_and_loop_value/parser_success_return_break_and_loop_value.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_success_various_types",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_success_various_types/parser_success_various_types.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_unexpected_eof_in_let",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_unexpected_eof_in_let/parser_unexpected_eof_in_let.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "parser_unit_like_struct",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/parser_unit_like_struct/parser_unit_like_struct.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_array_index_not_integer",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_array_index_not_integer/semantic_err_array_index_not_integer.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_array_type_negative_size",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_array_type_negative_size/semantic_err_array_type_negative_size.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_assign_op_invalid_char",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_assign_op_invalid_char/semantic_err_assign_op_invalid_char.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_binary_eq_type_mismatch",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_binary_eq_type_mismatch/semantic_err_binary_eq_type_mismatch.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_borrow_mut_from_immutable",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_borrow_mut_from_immutable/semantic_err_borrow_mut_from_immutable.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_call_non_function",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_call_non_function/semantic_err_call_non_function.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_deref_non_ref",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_deref_non_ref/semantic_err_deref_non_ref.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_enum_duplicate_variant",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_enum_duplicate_variant/semantic_err_enum_duplicate_variant.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_field_access_on_non_struct",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_field_access_on_non_struct/semantic_err_field_access_on_non_struct.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_if_branches_type_mismatch",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_if_branches_type_mismatch/semantic_err_if_branches_type_mismatch.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_if_condition_not_bool",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_if_condition_not_bool/semantic_err_if_condition_not_bool.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_immutable_assignment",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_immutable_assignment/semantic_err_immutable_assignment.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_impl_invalid_type_or_trait",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_impl_invalid_type_or_trait/semantic_err_impl_invalid_type_or_trait.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_index_non_array",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_index_non_array/semantic_err_index_non_array.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_method_receiver_must_be_variable",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_method_receiver_must_be_variable/semantic_err_method_receiver_must_be_variable.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_missing_exit_in_main",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_missing_exit_in_main/semantic_err_missing_exit_in_main.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_no_such_field_on_struct",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_no_such_field_on_struct/semantic_err_no_such_field_on_struct.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_non_unit_struct_as_const_path",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_non_unit_struct_as_const_path/semantic_err_non_unit_struct_as_const_path.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_recursive_struct_dependency",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_recursive_struct_dependency/semantic_err_recursive_struct_dependency.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_return_type_mismatch",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_return_type_mismatch/semantic_err_return_type_mismatch.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_struct_literal_missing_field",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_struct_literal_missing_field/semantic_err_struct_literal_missing_field.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_use_self_param_outside_impl",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_use_self_param_outside_impl/semantic_err_use_self_param_outside_impl.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_err_wrong_argument_count",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_err_wrong_argument_count/semantic_err_wrong_argument_count.rx",
+      "visible"
+    ],
+    "compileexitcode": 1,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_success_control_flow_and_cast_ref_deref",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_success_control_flow_and_cast_ref_deref/semantic_success_control_flow_and_cast_ref_deref.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_success_minimal_main",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_success_minimal_main/semantic_success_minimal_main.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  },
+  {
+    "name": "semantic_success_struct_enum_const_impl_method_and_calls",
+    "name_visible": true,
+    "active": true,
+    "source": [
+      "src/semantic_success_struct_enum_const_impl_method_and_calls/semantic_success_struct_enum_const_impl_method_and_calls.rx",
+      "visible"
+    ],
+    "compileexitcode": 0,
+    "cmp": [
+      "compileexitcode"
+    ]
+  }
+]

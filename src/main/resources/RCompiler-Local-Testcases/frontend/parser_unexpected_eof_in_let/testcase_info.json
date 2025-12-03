@@ -1,2 +1,0 @@
-{ "active":1, "cmp":["compileexitcode"], "compileexitcode":1, "name":"parser_unexpected_eof_in_let", "source_path":"src/parser_unexpected_eof_in_let/parser_unexpected_eof_in_let.rx", "stage_name":"ci-special" }
-

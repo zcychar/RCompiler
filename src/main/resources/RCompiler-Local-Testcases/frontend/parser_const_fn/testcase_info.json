@@ -1,2 +1,0 @@
-{ "active":1, "cmp":["compileexitcode"], "compileexitcode":0, "name":"parser_const_fn", "source_path":"src/parser_const_fn/parser_const_fn.rx", "stage_name":"ci-special" }
-

@@ -1,9 +1,0 @@
-{
-  "active": 1,
-  "cmp": ["compileexitcode"],
-  "compileexitcode": 1,
-  "name": "lexer_unterminated_string",
-  "source_path": "src/lexer_unterminated_string/lexer_unterminated_string.rx",
-  "stage_name": "ci-special"
-}
-

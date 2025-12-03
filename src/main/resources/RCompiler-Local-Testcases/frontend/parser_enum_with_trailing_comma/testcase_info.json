@@ -1,2 +1,0 @@
-{ "active":1, "cmp":["compileexitcode"], "compileexitcode":0, "name":"parser_enum_with_trailing_comma", "source_path":"src/parser_enum_with_trailing_comma/parser_enum_with_trailing_comma.rx", "stage_name":"ci-special" }
-
