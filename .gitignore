@@ -56,3 +56,7 @@ ref
 AGENTS.md
 
 REIMU
+
+test_llvm_local.bash
+.tmp
+builtin.c

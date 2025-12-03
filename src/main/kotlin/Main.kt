@@ -22,27 +22,27 @@ fun main(args: Array<String>) {
     }
 
     try {
-        if (options.debugParse) println("----- 1. Preprocessing -----")
+        if (options.debugParse) System.err.println("----- 1. Preprocessing -----")
         val preprocessor = RPreprocessor(rawText)
         val processedText = preprocessor.process()
 
         if (options.debugParse) {
-            println("\n----- 2. Lexing -----")
+            System.err.println("\n----- 2. Lexing -----")
         }
         val lexer = RLexer(processedText)
         val tokens = lexer.process()
 
-        if (options.debugParse) println("\n----- 3. Parsing -----")
+        if (options.debugParse) System.err.println("\n----- 3. Parsing -----")
         val parser = RParser(tokens)
         val crate = parser.process()
 
         if (options.debugSemantic) {
-            println("\n----- 4. Semantic Analysis -----")
+            System.err.println("\n----- 4. Semantic Analysis -----")
         }
 
         val preludeScope = toPrelude()
 
-        if (options.debugSemantic) println("\n--- Running Pass 1: Symbol Collector ---")
+        if (options.debugSemantic) System.err.println("\n--- Running Pass 1: Symbol Collector ---")
         val symbolCollector = RSymbolCollector(preludeScope, crate)
         symbolCollector.process()
         if (options.debugSemantic) {
@@ -50,14 +50,14 @@ fun main(args: Array<String>) {
             collectorDumper.dump()
         }
 
-        if (options.debugSemantic) println("\n--- Running Pass 2: Symbol Resolver ---")
+        if (options.debugSemantic) System.err.println("\n--- Running Pass 2: Symbol Resolver ---")
         val symbolResolver = RSymbolResolver(preludeScope, crate)
         symbolResolver.process()
         if (options.debugSemantic) {
             val resolverDumper = RResolvedSymbolDumper(crate)
             resolverDumper.dump()
         }
-        if (options.debugSemantic) println("\n--- Running Pass 3: Impl Injector ---")
+        if (options.debugSemantic) System.err.println("\n--- Running Pass 3: Impl Injector ---")
         val implInjector = RImplInjector(preludeScope, crate)
         implInjector.process()
         if (options.debugSemantic) {
@@ -65,7 +65,7 @@ fun main(args: Array<String>) {
             injectionDumper.dump()
         }
 
-        if (options.debugSemantic) println("\n--- Running Pass 4: Semantic Checker ---")
+        if (options.debugSemantic) System.err.println("\n--- Running Pass 4: Semantic Checker ---")
 
         val checker: RSemanticChecker =
             if (options.debugSemantic) TracedSemanticChecker(preludeScope, crate) else RSemanticChecker(preludeScope, crate)
@@ -75,21 +75,24 @@ fun main(args: Array<String>) {
         val backend = IrBackend()
         val irText = backend.generate(crate, preludeScope)
 
-        if (options.debugIr) {
-            options.irOutPath?.let {
+        val irWrittenToStdout = options.irOutPath == "-"
+        options.irOutPath?.let {
+            if (it == "-") {
+                println(irText)
+            } else {
                 val outPath = Paths.get(it)
                 outPath.parent?.let { parent -> Files.createDirectories(parent) }
                 Files.writeString(outPath, irText)
-                println("\n[debug] IR written to ${outPath.toAbsolutePath()}")
+                if (options.debugIr) {
+                    System.err.println("\n[debug] IR written to ${outPath.toAbsolutePath()}")
+                }
             }
-            println("\n✅ Compilation successful!")
-            println(irText)
-        } else {
-            options.irOutPath?.let {
-                val outPath = Paths.get(it)
-                outPath.parent?.let { parent -> Files.createDirectories(parent) }
-                Files.writeString(outPath, irText)
-            }
+        }
+        if (options.debugIr && !irWrittenToStdout) {
+            System.err.println("\n✅ Compilation successful!")
+            System.err.println(irText)
+        } else if (!irWrittenToStdout && options.debugIr) {
+            System.err.println("\n✅ Compilation successful!")
         }
 
     } catch (e: CompileError) {
