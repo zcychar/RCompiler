@@ -2,10 +2,6 @@ package backend.ir
 
 import utils.CompileError
 
-/**
- * Mutable façade for building SSA instructions. Tracks the current insertion point,
- * generates register ids per function, and offers deterministic name generation.
- */
 class IrBuilder(
     private val module: IrModule,
 ) {

@@ -7,16 +7,14 @@ import frontend.semantic.RSemanticChecker
 import frontend.semantic.RSymbolCollector
 import frontend.semantic.RSymbolResolver
 import frontend.semantic.toPrelude
-import utils.CompileError
-import utils.RImplInjectionDumper
-import utils.RResolvedSymbolDumper
-import utils.RSymbolTableDumper
-import utils.TracedSemanticChecker
+import utils.*
+import java.nio.file.Files
+import java.nio.file.Paths
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
-    val isDebugMode = args.contains("--debug")
-    val filePath = args.firstOrNull { !it.startsWith("--") }
+    val options = CliOptions.parse(args)
+    val filePath = options.inputPath
 
     val rawText: String = when {
         filePath == null || filePath == "-" -> generateSequence { readlnOrNull() }.joinToString("\n")
@@ -24,64 +22,74 @@ fun main(args: Array<String>) {
     }
 
     try {
-        if (isDebugMode) println("----- 1. Preprocessing -----")
+        if (options.debugParse) println("----- 1. Preprocessing -----")
         val preprocessor = RPreprocessor(rawText)
         val processedText = preprocessor.process()
 
-        if (isDebugMode) {
+        if (options.debugParse) {
             println("\n----- 2. Lexing -----")
         }
         val lexer = RLexer(processedText)
         val tokens = lexer.process()
 
-        if (isDebugMode) println("\n----- 3. Parsing -----")
+        if (options.debugParse) println("\n----- 3. Parsing -----")
         val parser = RParser(tokens)
         val crate = parser.process()
 
-        if (isDebugMode) {
+        if (options.debugSemantic) {
             println("\n----- 4. Semantic Analysis -----")
         }
 
         val preludeScope = toPrelude()
 
-        if (isDebugMode) println("\n--- Running Pass 1: Symbol Collector ---")
+        if (options.debugSemantic) println("\n--- Running Pass 1: Symbol Collector ---")
         val symbolCollector = RSymbolCollector(preludeScope, crate)
         symbolCollector.process()
-        if (isDebugMode) {
+        if (options.debugSemantic) {
             val collectorDumper = RSymbolTableDumper(crate)
             collectorDumper.dump()
         }
 
-        if (isDebugMode) println("\n--- Running Pass 2: Symbol Resolver ---")
+        if (options.debugSemantic) println("\n--- Running Pass 2: Symbol Resolver ---")
         val symbolResolver = RSymbolResolver(preludeScope, crate)
         symbolResolver.process()
-        if (isDebugMode) {
+        if (options.debugSemantic) {
             val resolverDumper = RResolvedSymbolDumper(crate)
             resolverDumper.dump()
         }
-        if (isDebugMode) println("\n--- Running Pass 3: Impl Injector ---")
+        if (options.debugSemantic) println("\n--- Running Pass 3: Impl Injector ---")
         val implInjector = RImplInjector(preludeScope, crate)
         implInjector.process()
-        if (isDebugMode) {
+        if (options.debugSemantic) {
             val injectionDumper = RImplInjectionDumper(crate)
             injectionDumper.dump()
         }
 
-        if (isDebugMode) println("\n--- Running Pass 4: Semantic Checker ---")
+        if (options.debugSemantic) println("\n--- Running Pass 4: Semantic Checker ---")
 
         val checker: RSemanticChecker =
-            if (isDebugMode) TracedSemanticChecker(preludeScope, crate) else RSemanticChecker(preludeScope, crate)
+            if (options.debugSemantic) TracedSemanticChecker(preludeScope, crate) else RSemanticChecker(preludeScope, crate)
         checker.process()
 
         // Drive IR backend after successful semantics.
         val backend = IrBackend()
         val irText = backend.generate(crate, preludeScope)
 
-        if (isDebugMode) {
+        if (options.debugIr) {
+            options.irOutPath?.let {
+                val outPath = Paths.get(it)
+                outPath.parent?.let { parent -> Files.createDirectories(parent) }
+                Files.writeString(outPath, irText)
+                println("\n[debug] IR written to ${outPath.toAbsolutePath()}")
+            }
             println("\n✅ Compilation successful!")
             println(irText)
         } else {
-            println(irText)
+            options.irOutPath?.let {
+                val outPath = Paths.get(it)
+                outPath.parent?.let { parent -> Files.createDirectories(parent) }
+                Files.writeString(outPath, irText)
+            }
         }
 
     } catch (e: CompileError) {

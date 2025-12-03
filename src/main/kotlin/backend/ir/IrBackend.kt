@@ -3,8 +3,6 @@ package backend.ir
 import frontend.ast.*
 import frontend.semantic.*
 import frontend.semantic.Function
-import java.nio.file.Files
-import java.nio.file.Paths
 
 /**
  * Entry point for lowering a typed crate into IR. Currently emits an empty module stub
@@ -26,11 +24,7 @@ class IrBackend(
             }
         }
 
-        val irText = context.module.render()
-        val output = Paths.get("build", "output.ll")
-        Files.createDirectories(output.parent)
-        Files.writeString(output, irText)
-        return irText
+        return context.module.render()
     }
 
     private fun emitFunction(scope: Scope, functionEmitter: FunctionEmitter, item: FunctionItemNode) {
