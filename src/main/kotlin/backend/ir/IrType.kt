@@ -24,7 +24,7 @@ data class IrPrimitive(val kind: PrimitiveKind) : IrType {
     override fun render(): String = kind.llvmName
 }
 
-data class IrPointer(val pointee: IrType, val mutable: Boolean = false) : IrType {
+data class IrPointer(val pointee: IrType) : IrType {
     override fun render(): String = buildString {
         pointee.appendTo(this)
         append('*')
@@ -96,7 +96,7 @@ fun toIrType(type: Type): IrType = when (type) {
             IrPrimitive(PrimitiveKind.U32),
         ),
     )
-    is RefType -> IrPointer(toIrType(type.baseType), mutable = type.isMutable)
+    is RefType -> IrPointer(toIrType(type.baseType))
     is ArrayType -> IrArray(toIrType(type.elementType), type.size)
     is StructType -> structLayout(type)
     is EnumType -> IrPrimitive(PrimitiveKind.I32)

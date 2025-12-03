@@ -86,7 +86,7 @@ class ExprEmitterTest {
                 slotName = "x",
             ),
         )
-        context.valueEnv.bind("x", StackSlot(address, valueType, mutable = true))
+        context.valueEnv.bind("x", StackSlot(address, valueType))
 
         val assign = BinaryExprNode(
             Punctuation.EQUAL,
@@ -128,7 +128,7 @@ class ExprEmitterTest {
                 slotName = "x",
             ),
         )
-        context.valueEnv.bind("x", StackSlot(address, intType, mutable = true))
+        context.valueEnv.bind("x", StackSlot(address, intType))
 
         val value = emitter.emitExpr(expr)
         assertEquals(boolType, value.type)
@@ -141,7 +141,7 @@ class ExprEmitterTest {
     }
 
     @Test
-    fun `borrow produces bitcast when mutability changes`() = withEmitter { emitter, _, context ->
+    fun `borrow returns pointer to lvalue`() = withEmitter { emitter, _, context ->
         val i32 = IrPrimitive(PrimitiveKind.I32)
         val slot = context.builder.emit(
             IrAlloca(
@@ -151,10 +151,10 @@ class ExprEmitterTest {
                 slotName = "y",
             ),
         )
-        context.valueEnv.bind("y", StackSlot(slot, i32, mutable = false))
+        context.valueEnv.bind("y", StackSlot(slot, i32))
         val borrow = BorrowExprNode(PathExprNode(TypePathNode("y", null), null), isMut = true)
         val value = emitter.emitExpr(borrow)
-        assertEquals(IrPointer(i32, mutable = true), value.type)
+        assertEquals(IrPointer(i32), value.type)
     }
 
     @Test

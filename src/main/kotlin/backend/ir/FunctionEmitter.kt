@@ -126,7 +126,7 @@ class FunctionEmitter(
                     value = expr,
                 ),
             )
-            valueEnv.bind(pattern.id, StackSlot(address, expr.type, pattern.hasMut))
+            valueEnv.bind(pattern.id, StackSlot(address, expr.type))
         } else {
             valueEnv.bind(pattern.id, SsaValue(expr))
         }

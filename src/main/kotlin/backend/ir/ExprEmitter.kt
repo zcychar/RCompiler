@@ -26,7 +26,7 @@ class ExprEmitter(
     is PathExprNode -> emitPath(node)
     is GroupedExprNode -> emitExpr(node.expr, expectedType)
     is ArrayExprNode -> emitArrayLiteral(node)
-    is frontend.ast.BlockExprNode -> emitBlockExpr(node, expectedType)
+    is BlockExprNode -> emitBlockExpr(node, expectedType)
     is BinaryExprNode -> emitBinary(node)
     is UnaryExprNode -> emitUnary(node)
     is CastExprNode -> emitCast(node)
@@ -41,8 +41,8 @@ class ExprEmitter(
     is MethodCallExprNode -> emitMethodCall(node)
     is StructExprNode -> emitStructLiteral(node)
     is ReturnExprNode -> emitReturn(node)
-    is frontend.ast.FieldAccessExprNode -> emitFieldAccess(node)
-    is frontend.ast.IndexExprNode -> emitIndexAccess(node)
+    is FieldAccessExprNode -> emitFieldAccess(node)
+    is IndexExprNode -> emitIndexAccess(node)
     else -> error("Unsupported expression: ${node::class.simpleName}")
   }
 
@@ -389,7 +389,7 @@ class ExprEmitter(
 
   private fun emitBorrow(node: BorrowExprNode): IrValue {
     val lvalue = emitLValue(node.expr)
-    val targetType = IrPointer(lvalue.pointee, mutable = node.isMut)
+    val targetType = IrPointer(lvalue.pointee)
     return retargetPointer(lvalue.address, targetType)
   }
 
@@ -449,8 +449,9 @@ class ExprEmitter(
     builder.positionAt(function, thenBlock)
     val thenValue =
       blockEmitter.emitBlock(node.expr, expectValue = needsValue, expectedType = resultType) ?: unitValue()
-    if (needsValue) ensureSameType(resultType, thenValue.type)
-    if (builder.hasInsertionPoint()) {
+    val thenActive = builder.hasInsertionPoint()
+    if (needsValue && thenActive) ensureSameType(resultType, thenValue.type)
+    if (thenActive) {
       if (needsValue) {
         builder.emit(
           IrStore(
@@ -477,8 +478,9 @@ class ExprEmitter(
 
       else -> emitExpr(elseExpr, expectedType = resultType)
     }
-    if (needsValue) ensureSameType(resultType, elseValue.type)
-    if (builder.hasInsertionPoint()) {
+    val elseActive = builder.hasInsertionPoint()
+    if (needsValue && elseActive) ensureSameType(resultType, elseValue.type)
+    if (elseActive) {
       if (needsValue) {
         builder.emit(
           IrStore(
@@ -804,7 +806,7 @@ class ExprEmitter(
               value = binding.value,
             ),
           )
-          val stackSlot = StackSlot(address, type, mutable = false)
+          val stackSlot = StackSlot(address, type)
           valueEnv.bind(identifier, stackSlot)
           LValue(address, type)
         }
@@ -830,13 +832,11 @@ class ExprEmitter(
                 value = binding.value,
               ),
             )
-            val stackSlot = StackSlot(address, type, mutable = false)
+            val stackSlot = StackSlot(address, type)
             valueEnv.bind(identifier, stackSlot)
             LValue(address, type)
           }
         }
-
-        else -> error("Expression is not assignable")
       }
     }
 
@@ -902,6 +902,8 @@ class ExprEmitter(
   private fun emitArgument(expr: ExprNode, expected: IrType?, hint: String): IrValue {
     if (expected is IrPointer) {
       tryLValue(expr)?.let { lv ->
+        // If the lvalue already holds a pointer, passing its address would create a pointer-to-pointer.
+        if (lv.pointee is IrPointer) return emitExpr(expr, expectedType = expected)
         ensureSameType(expected.pointee, lv.pointee)
         return retargetPointer(lv.address, expected)
       }
