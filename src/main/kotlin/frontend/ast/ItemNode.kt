@@ -12,7 +12,8 @@ data class FunctionItemNode(
     val selfParam: SelfParamNode?,
     val funParams: List<FunParamNode>,
     val returnType: TypeNode,
-    val body: BlockExprNode?
+    val body: BlockExprNode?,
+    var declScope: Scope? = null,
 ) : ItemNode {
     override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
     data class SelfParamNode(val hasBorrow: Boolean, val hasMut: Boolean, val type: TypeNode?)

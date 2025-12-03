@@ -1,6 +1,7 @@
 package backend.ir
 
-import kotlin.text.buildString
+import frontend.semantic.Function
+import frontend.semantic.RefType
 
 data class IrFunctionSignature(
     val parameters: List<IrType>,
@@ -68,4 +69,16 @@ class IrFunction(
         }
         append('}')
     }
+}
+
+fun irFunctionSignature(function: Function): IrFunctionSignature {
+    val params = mutableListOf<IrType>()
+    function.selfParam?.let {
+        val rawSelf = function.self ?: error("method missing self target")
+        val selfSemantic = if (it.isRef) RefType(rawSelf, it.isMut) else rawSelf
+        params += toIrType(selfSemantic)
+    }
+    params += function.params.map { param -> toIrType(param.type) }
+    val ret = toIrType(function.returnType)
+    return IrFunctionSignature(params, ret)
 }

@@ -1,4 +1,6 @@
 .gradle
+.gradle-user
+.github
 build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
@@ -45,7 +47,6 @@ bin/
 .DS_Store
 
 .idea
-.github
 b 
 RCompiler-Spec
 

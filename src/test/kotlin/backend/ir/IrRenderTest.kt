@@ -9,7 +9,6 @@ class IrRenderTest {
     fun `value renderings`() {
         assertEquals("true", IrBoolConstant(true, IrPrimitive(PrimitiveKind.BOOL)).render())
         assertEquals("42", IrIntConstant(42, IrPrimitive(PrimitiveKind.I32)).render())
-        assertEquals("\"hi\"", IrStringConstant("hi", IrArray(IrPrimitive(PrimitiveKind.CHAR), 3)).render())
         assertEquals("%1", IrRegister(1, IrPrimitive(PrimitiveKind.I32)).render())
         assertEquals("%arg0", IrParameter(0, "", IrPrimitive(PrimitiveKind.I32)).render())
     }
@@ -19,7 +18,7 @@ class IrRenderTest {
         assertEquals("i32*", IrPointer(IrPrimitive(PrimitiveKind.I32)).render())
         assertEquals("[4 x i32]", IrArray(IrPrimitive(PrimitiveKind.I32), 4).render())
         val struct = IrStruct("S", listOf(IrPrimitive(PrimitiveKind.I32), IrPrimitive(PrimitiveKind.BOOL)))
-        assertEquals("%S = {i32, i1}", struct.render())
+        assertEquals("%S", struct.render())
     }
 
     @Test

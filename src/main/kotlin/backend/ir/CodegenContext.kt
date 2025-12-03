@@ -13,34 +13,9 @@ class CodegenContext(
 ) {
     val builder: IrBuilder = IrBuilder(module)
     val valueEnv: ValueEnv = ValueEnv()
-    val stringTable: MutableMap<String, IrGlobal> = mutableMapOf()
-    val typeMapper: TypeMapper = TypeMapper(this)
 
     var currentFunction: IrFunction? = null
     var currentScope: Scope? = null
-
-    fun withFunction(function: IrFunction, scope: Scope? = null, body: () -> Unit) {
-        val previousFunction = currentFunction
-        val previousScope = currentScope
-
-        currentFunction = function
-        currentScope = scope
-
-        module.declareFunction(function)
-        builder.positionAt(function, function.entryBlock())
-        valueEnv.pushFunction(function.signature.returnType)
-        valueEnv.enterScope()
-        try {
-            body()
-        } finally {
-            valueEnv.leaveScope()
-            valueEnv.popFunction()
-            currentFunction = previousFunction
-            currentScope = previousScope
-        }
-    }
-
-    fun resolveType(semantic: Type): IrType = typeMapper.toIrType(semantic)
 
     /**
      * Compute or retrieve the unique IR-level name for a semantic function.
@@ -55,29 +30,5 @@ class CodegenContext(
             else -> null
         }
         return if (ownerName != null) "$ownerName.${function.name}" else function.name
-    }
-
-    fun internString(value: String): IrGlobalRef {
-        stringTable[value]?.let { return it.asValue() }
-
-        val bytes = value.encodeToByteArray()
-        val arrayType = IrArray(IrPrimitive(PrimitiveKind.CHAR), bytes.size + 1)
-        val globalName = ".str.${stringTable.size}"
-        val constant = IrStringConstant(value, arrayType)
-        val global = IrGlobal(globalName, arrayType, constant)
-
-        module.declareGlobal(global)
-        stringTable[value] = global
-        return global.asValue()
-    }
-
-    fun enterScope(scope: Scope) {
-        currentScope = scope
-        valueEnv.enterScope()
-    }
-
-    fun leaveScope() {
-        valueEnv.leaveScope()
-        currentScope = currentScope?.parentScope()
     }
 }

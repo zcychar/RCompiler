@@ -3,47 +3,11 @@ package backend.ir
 import frontend.Keyword
 import frontend.Literal
 import frontend.Punctuation
-import frontend.ast.ArrayExprNode
-import frontend.ast.BinaryExprNode
-import frontend.ast.BorrowExprNode
-import frontend.ast.BreakExprNode
-import frontend.ast.CallExprNode
-import frontend.ast.CastExprNode
-import frontend.ast.ContinueExprNode
-import frontend.ast.DerefExprNode
-import frontend.ast.ExprNode
-import frontend.ast.GroupedExprNode
-import frontend.ast.IfExprNode
-import frontend.ast.LiteralExprNode
-import frontend.ast.LoopExprNode
-import frontend.ast.MethodCallExprNode
-import frontend.ast.StructExprNode
-import frontend.ast.PathExprNode
-import frontend.ast.ReturnExprNode
-import frontend.ast.TypeNode
-import frontend.ast.TypePathNode
-import frontend.ast.UnaryExprNode
-import frontend.ast.WhileExprNode
 import frontend.assignOp
-import frontend.semantic.ArrayType
-import frontend.semantic.BoolType
-import frontend.semantic.CharType
-import frontend.semantic.ConstValue
-import frontend.semantic.Constant
+import frontend.ast.*
+import frontend.semantic.*
 import frontend.semantic.Enum
 import frontend.semantic.Function
-import frontend.semantic.Int32Type
-import frontend.semantic.IntType
-import frontend.semantic.ISizeType
-import frontend.semantic.Namespace
-import frontend.semantic.RefType
-import frontend.semantic.StructType
-import frontend.semantic.Struct
-import frontend.semantic.Type
-import frontend.semantic.USizeType
-import frontend.semantic.UInt32Type
-import frontend.semantic.UnitType
-import frontend.semantic.getInt
 import utils.CompileError
 
 /**
@@ -53,10 +17,9 @@ import utils.CompileError
 class ExprEmitter(
   private val context: CodegenContext,
   private val builder: IrBuilder = context.builder,
-  private val typeMapper: TypeMapper = context.typeMapper,
   private val valueEnv: ValueEnv = context.valueEnv,
 ) {
-  private val blockEmitter by lazy { FunctionEmitter(context, builder, this, typeMapper, valueEnv) }
+  private val blockEmitter by lazy { FunctionEmitter(context, builder, this, valueEnv) }
 
   fun emitExpr(node: ExprNode, expectedType: IrType? = null): IrValue = when (node) {
     is LiteralExprNode -> emitLiteral(node)
@@ -86,15 +49,9 @@ class ExprEmitter(
   private fun emitLiteral(node: LiteralExprNode): IrValue = when (node.type) {
     Keyword.TRUE -> IrBoolConstant(true, IrPrimitive(PrimitiveKind.BOOL))
     Keyword.FALSE -> IrBoolConstant(false, IrPrimitive(PrimitiveKind.BOOL))
-    Literal.CHAR -> {
-      val value = node.value?.firstOrNull()
-        ?: CompileError.fail("", "Invalid char literal")
-      IrCharConstant(value.code, IrPrimitive(PrimitiveKind.CHAR))
-    }
-
     Literal.INTEGER -> {
       val intConst = getInt(node)
-      val irType = typeMapper.toIrType(intConst.actualType)
+      val irType = toIrType(intConst.actualType)
       IrIntConstant(intConst.value, irType)
     }
 
@@ -408,7 +365,7 @@ class ExprEmitter(
   private fun emitCast(node: CastExprNode): IrValue {
     val value = emitExpr(node.expr)
     val targetType = mapType(node.targetType)
-    val irTarget = typeMapper.toIrType(targetType)
+    val irTarget = toIrType(targetType)
     val valueType = value.type
     if (irTarget == valueType) return value
     val kind = when {
@@ -629,7 +586,7 @@ class ExprEmitter(
     } else {
       resolveFunction(fnName)
     } ?: error("Unknown function $fnName")
-    val signature = typeMapper.functionSignature(fnSymbol)
+    val signature = irFunctionSignature(fnSymbol)
     val irName = if (calleePath.seg2 != null) {
       val typeName = calleePath.seg1.name ?: error("type path missing name")
       "$typeName.$fnName"
@@ -638,8 +595,7 @@ class ExprEmitter(
     }
     val args = node.params.mapIndexed { index, expr ->
       val expected = signature.parameters.getOrNull(index)
-      val value = emitExpr(expr, expectedType = expected)
-      expected?.let { coerceArgument(value, it, hint = calleePath.seg1.name ?: "arg$index") } ?: value
+      emitArgument(expr, expected, calleePath.seg1.name ?: "arg$index")
     }
     return builder.emit(
       IrCall(
@@ -655,16 +611,24 @@ class ExprEmitter(
     val fnName = node.pathSeg.name ?: error("method name missing")
     val receiver = emitExpr(node.expr)
     val fnSymbol = resolveMethod(receiver.type, fnName) ?: resolveFunction(fnName) ?: error("Unknown method $fnName")
-    val signature = typeMapper.functionSignature(fnSymbol)
+    val signature = irFunctionSignature(fnSymbol)
     val baseType = (receiver.type as? IrPointer)?.pointee ?: receiver.type
     val ownerName = (baseType as? IrStruct)?.name
     val irName = ownerName?.let { "$it.$fnName" } ?: context.irFunctionName(fnSymbol)
     val selfParamType = signature.parameters.firstOrNull()
-    val coercedReceiver = selfParamType?.let { coerceArgument(receiver, it, hint = "self") } ?: receiver
+    val coercedReceiver = when {
+      selfParamType is IrPointer -> {
+        tryLValue(node.expr)?.let { lv ->
+          ensureSameType(selfParamType.pointee, lv.pointee)
+          retargetPointer(lv.address, selfParamType)
+        } ?: coerceArgument(receiver, selfParamType, hint = "self")
+      }
+
+      else -> receiver
+    }
     val argValues = node.params.mapIndexed { index, expr ->
       val expected = signature.parameters.getOrNull(index + 1) // offset self
-      val value = emitExpr(expr, expectedType = expected)
-      expected?.let { coerceArgument(value, it, hint = node.pathSeg.name ?: "arg$index") } ?: value
+      emitArgument(expr, expected, node.pathSeg.name ?: "arg$index")
     }
     val args = listOf(coercedReceiver) + argValues
     return builder.emit(
@@ -731,7 +695,7 @@ class ExprEmitter(
     val path = node.path as? PathExprNode ?: error("struct literal requires path")
     val typeName = path.seg1.name ?: error("struct literal missing name")
     val structType = resolveStruct(typeName)
-    val irType = typeMapper.structLayout(structType)
+    val irType = structLayout(structType)
     val fieldValues = structType.fields.keys.map { fieldName ->
       val fieldExpr = node.fields.find { it.id == fieldName }?.expr
         ?: error("missing field $fieldName in struct literal")
@@ -935,6 +899,29 @@ class ExprEmitter(
     else -> error("Unsupported lvalue expression ${node::class.simpleName}")
   }
 
+  private fun emitArgument(expr: ExprNode, expected: IrType?, hint: String): IrValue {
+    if (expected is IrPointer) {
+      tryLValue(expr)?.let { lv ->
+        ensureSameType(expected.pointee, lv.pointee)
+        return retargetPointer(lv.address, expected)
+      }
+    }
+    val value = emitExpr(expr, expectedType = expected)
+    return if (expected is IrPointer) coerceArgument(value, expected, hint) else value
+  }
+
+  private fun tryLValue(expr: ExprNode): LValue? = when (expr) {
+    is PathExprNode, is DerefExprNode, is frontend.ast.FieldAccessExprNode, is frontend.ast.IndexExprNode -> {
+      try {
+        emitLValue(expr)
+      } catch (_: Exception) {
+        null
+      }
+    }
+
+    else -> null
+  }
+
   private fun mapType(node: TypeNode): Type = when (node) {
     is TypePathNode -> when (node.name) {
       "i32" -> Int32Type
@@ -1030,7 +1017,7 @@ class ExprEmitter(
       if (symbol is Constant) {
         val value = symbol.value
         if (value is ConstValue.Int) {
-          val irType = typeMapper.toIrType(value.actualType)
+          val irType = toIrType(value.actualType)
           return SsaValue(IrIntConstant(value.value, irType))
         }
       }

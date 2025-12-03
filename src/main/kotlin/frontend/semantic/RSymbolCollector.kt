@@ -23,6 +23,7 @@ class RSymbolCollector(val preludeScope: Scope, val crate: CrateNode) : ASTVisit
       selfParam = null,
       node = node
     )
+    node.declScope = currentScope
     currentScope?.declare(function, Namespace.VALUE)
     currentScope = Scope(currentScope, ScopeKind.FUNCTION)
     node.body?.scope = currentScope

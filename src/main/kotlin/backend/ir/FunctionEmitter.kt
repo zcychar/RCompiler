@@ -19,12 +19,11 @@ class FunctionEmitter(
     private val context: CodegenContext,
     private val builder: IrBuilder = context.builder,
     private val exprEmitter: ExprEmitter = ExprEmitter(context),
-    private val typeMapper: TypeMapper = context.typeMapper,
     private val valueEnv: ValueEnv = context.valueEnv,
 ) {
 
     fun emitFunction(fnSymbol: Function, node: frontend.ast.FunctionItemNode, owner: Type? = null): IrFunction {
-        val signature = typeMapper.functionSignature(fnSymbol)
+        val signature = irFunctionSignature(fnSymbol)
         val ownerName = when (val resolvedOwner = owner ?: fnSymbol.self) {
             is frontend.semantic.StructType -> resolvedOwner.name
             is frontend.semantic.EnumType -> resolvedOwner.name
@@ -72,12 +71,7 @@ class FunctionEmitter(
     }
 
     fun emitMethod(fnSymbol: Function, implType: Type, node: frontend.ast.FunctionItemNode): IrFunction {
-        typeMapper.beginMethod(implType)
-        try {
-            return emitFunction(fnSymbol, node, implType)
-        } finally {
-            typeMapper.endMethod()
-        }
+        return emitFunction(fnSymbol, node, implType)
     }
 
     fun emitBlock(block: BlockExprNode, expectValue: Boolean, expectedType: IrType? = null): IrValue? {

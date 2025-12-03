@@ -1,5 +1,7 @@
 package backend.ir
 
+import frontend.semantic.*
+
 sealed interface IrType {
     fun render(): String
     fun appendTo(builder: StringBuilder) {
@@ -42,10 +44,6 @@ data class IrArray(val element: IrType, val length: Int) : IrType {
 data class IrStruct(val name: String?, val fields: List<IrType>) : IrType {
     override fun render(): String =
         name?.let { "%$it" } ?: renderBody()
-
-    /**
-     * Render the named struct definition form: `%Name = type { ... }`
-     */
     fun renderDefinition(): String {
         val structName = name ?: error("Cannot render definition for anonymous struct")
         return buildString {
@@ -64,14 +62,6 @@ data class IrStruct(val name: String?, val fields: List<IrType>) : IrType {
     }
 }
 
-data class IrSlice(val element: IrType) : IrType {
-    override fun render(): String = buildString {
-        append("{ ")
-        element.appendTo(this)
-        append("* , i32 }")
-    }
-}
-
 data class IrFunctionType(val parameters: List<IrType>, val returnType: IrType) : IrType {
     override fun render(): String = buildString {
         returnType.appendTo(this)
@@ -87,3 +77,33 @@ data class IrFunctionType(val parameters: List<IrType>, val returnType: IrType) 
 data class IrOpaque(val name: String) : IrType {
     override fun render(): String = "%$name"
 }
+
+fun toIrType(type: Type): IrType = when (type) {
+    is BoolType -> IrPrimitive(PrimitiveKind.BOOL)
+    is CharType -> IrPrimitive(PrimitiveKind.CHAR)
+    is Int32Type -> IrPrimitive(PrimitiveKind.I32)
+    is UInt32Type -> IrPrimitive(PrimitiveKind.U32)
+    is ISizeType -> IrPrimitive(PrimitiveKind.ISIZE)
+    is USizeType -> IrPrimitive(PrimitiveKind.USIZE)
+    is UnitType -> IrPrimitive(PrimitiveKind.UNIT)
+    is NeverType -> IrPrimitive(PrimitiveKind.NEVER)
+    is IntType -> IrPrimitive(PrimitiveKind.I32)
+    is StrType -> IrOpaque("str")
+    is StringType -> IrStruct(
+        "String",
+        listOf(
+            IrPointer(IrPrimitive(PrimitiveKind.CHAR)),
+            IrPrimitive(PrimitiveKind.U32),
+        ),
+    )
+    is RefType -> IrPointer(toIrType(type.baseType), mutable = type.isMutable)
+    is ArrayType -> IrArray(toIrType(type.elementType), type.size)
+    is StructType -> structLayout(type)
+    is EnumType -> IrPrimitive(PrimitiveKind.I32)
+    is SelfType -> error("SelfType should be resolved before IR mapping")
+    is ErrorType -> IrOpaque("error")
+    else -> IrOpaque(type.toString())
+}
+
+fun structLayout(structType: StructType): IrType =
+    IrStruct(structType.name, structType.fields.values.map { fieldType -> toIrType(fieldType) })
