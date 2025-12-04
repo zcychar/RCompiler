@@ -78,6 +78,8 @@ data class IrOpaque(val name: String) : IrType {
     override fun render(): String = "%$name"
 }
 
+fun isAggregate(type: IrType): Boolean = type is IrStruct || type is IrArray
+
 fun toIrType(type: Type): IrType = when (type) {
     is BoolType -> IrPrimitive(PrimitiveKind.BOOL)
     is CharType -> IrPrimitive(PrimitiveKind.CHAR)
@@ -105,5 +107,5 @@ fun toIrType(type: Type): IrType = when (type) {
     else -> IrOpaque(type.toString())
 }
 
-fun structLayout(structType: StructType): IrType =
+fun structLayout(structType: StructType): IrStruct =
     IrStruct(structType.name, structType.fields.values.map { fieldType -> toIrType(fieldType) })

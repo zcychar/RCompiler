@@ -38,19 +38,13 @@ class IrModule {
         return function
     }
 
-    fun globalByName(name: String): IrGlobal? = globals.find { it.name == name }
-    fun functionByName(name: String): IrFunction? = functions.find { it.name == name }
-    fun allTypes(): Collection<IrType> = types.values
-    fun allGlobals(): List<IrGlobal> = globals
-    fun allFunctions(): List<IrFunction> = functions
-
     fun render(): String = buildString {
         emitBuiltinPrologue()
-        types.values.filterIsInstance<IrStruct>().filter { it.name != null }.forEach { struct ->
-            appendLine(struct.renderDefinition())
-        }
         globals.forEach { global ->
             appendLine(global.render())
+        }
+        types.values.filterIsInstance<IrStruct>().filter { it.name != null }.forEach { struct ->
+            appendLine(struct.renderDefinition())
         }
         functions.forEach { function ->
             appendLine(function.render())

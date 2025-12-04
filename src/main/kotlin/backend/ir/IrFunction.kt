@@ -73,12 +73,41 @@ class IrFunction(
 
 fun irFunctionSignature(function: Function): IrFunctionSignature {
     val params = mutableListOf<IrType>()
-    function.selfParam?.let {
-        val rawSelf = function.self ?: error("method missing self target")
-        val selfSemantic = if (it.isRef) RefType(rawSelf, it.isMut) else rawSelf
-        params += toIrType(selfSemantic)
+
+    // sret for aggregate returns
+    val irRet = toIrType(function.returnType)
+    val usesSret = isAggregate(irRet)
+    if (usesSret) {
+        params += IrPointer(irRet)
     }
-    params += function.params.map { param -> toIrType(param.type) }
-    val ret = toIrType(function.returnType)
-    return IrFunctionSignature(params, ret)
+
+    // self is always passed as a pointer
+    function.selfParam?.let { selfParam ->
+        val rawSelf = function.self ?: error("method missing self target")
+        val selfType = if (selfParam.isRef) {
+            // already a borrow; map directly to pointer of base
+            toIrType(RefType(rawSelf, selfParam.isMut))
+        } else {
+            // by-value self still passed as pointer to caller-side copy
+            IrPointer(toIrType(rawSelf))
+        }
+        params += selfType
+    }
+
+    // other parameters per ABI
+    function.params.forEach { param ->
+        val irParamType = toIrType(param.type)
+        val mapped = when {
+            param.type is RefType -> irParamType // already pointer
+            isAggregate(irParamType) -> IrPointer(irParamType) // by-value aggregate passed as pointer to caller copy
+            else -> irParamType // scalar by value
+        }
+        params += mapped
+    }
+
+    val retType = when {
+        usesSret -> IrPrimitive(PrimitiveKind.UNIT)
+        else -> irRet
+    }
+    return IrFunctionSignature(params, retType)
 }

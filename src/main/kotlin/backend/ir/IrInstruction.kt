@@ -9,6 +9,16 @@ sealed interface IrInstruction {
 }
 
 sealed interface IrTerminator : IrInstruction
+data class IrPhi(
+    override val id: Int,
+    override val type: IrType,
+    val incomings: List<Pair<IrValue, String>>,
+) : IrInstruction {
+    override fun render(): String = buildString {
+        append('%').append(id).append(" = phi ").append(type.render()).append(' ')
+        append(incomings.joinToString(", ") { "[ ${it.first.render()}, %${it.second} ]" })
+    }
+}
 
 enum class BinaryOperator(val llvmName: String) {
     ADD("add"),
@@ -216,4 +226,11 @@ data class IrJump(
     val target: String,
 ) : IrTerminator {
     override fun render(): String = "br label %$target"
+}
+
+data class IrUnreachable(
+    override val id: Int = -1,
+    override val type: IrType = IrPrimitive(PrimitiveKind.NEVER),
+) : IrTerminator {
+    override fun render(): String = "unreachable"
 }

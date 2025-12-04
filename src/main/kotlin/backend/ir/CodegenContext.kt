@@ -16,6 +16,7 @@ class CodegenContext(
 
     var currentFunction: IrFunction? = null
     var currentScope: Scope? = null
+    var currentSretParam: IrValue? = null
 
     /**
      * Compute or retrieve the unique IR-level name for a semantic function.

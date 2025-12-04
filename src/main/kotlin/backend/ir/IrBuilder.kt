@@ -34,7 +34,7 @@ class IrBuilder(
     }
 
     fun emit(instruction: IrInstruction): IrValue {
-        val block = currentBlock ?: error("No current block")
+        var block = currentBlock ?: error("No current block")
         if (block.terminator != null) {
             CompileError.fail("", "block ${block.label} is already terminated")
         }
@@ -48,8 +48,13 @@ class IrBuilder(
             is IrCmp,
             is IrCall,
             is IrGep,
-            is IrCast -> {
+            is IrCast,
+            is IrPhi -> {
                 val idInstruction = instruction.withId(nextRegisterId++)
+                // Hoist allocas to entry block.
+                if (idInstruction is IrAlloca) {
+                    block = currentFunction?.entryBlock() ?: error("No current function")
+                }
                 block.append(idInstruction)
                 IrRegister(idInstruction.id, idInstruction.type)
             }
@@ -81,7 +86,9 @@ private fun <T : IrInstruction> T.withId(id: Int): T = when (this) {
     is IrCall -> copy(id = id)
     is IrGep -> copy(id = id)
     is IrCast -> copy(id = id)
+    is IrPhi -> copy(id = id)
     is IrReturn -> copy(id = id)
     is IrBranch -> copy(id = id)
     is IrJump -> copy(id = id)
+    is IrUnreachable -> copy(id = id)
 } as T
