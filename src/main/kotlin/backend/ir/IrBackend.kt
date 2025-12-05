@@ -40,9 +40,7 @@ class IrBackend(
     ) {
         val symbol = scope.resolve(item.name, Namespace.TYPE) as? Struct ?: return
         val irStruct = structLayout(symbol.type)
-        if (irStruct is IrStruct) {
-            context.module.declareType(symbol.name, irStruct)
-        }
+        context.module.declareType(symbol.name, irStruct)
         val previousScope = context.currentScope
         // Emit methods with self
         symbol.methods.values.forEach { fn ->
@@ -72,7 +70,7 @@ class IrBackend(
     }
 
     private fun constToIrConstant(value: ConstValue): IrConstant? = when (value) {
-        is ConstValue.Int -> IrIntConstant(value.value, toIrType(value.actualType))
+        is ConstValue.Int -> IrConstant(value.value, toIrType(value.actualType))
         // IR-1 only uses integer consts; other shapes are skipped for now.
         else -> null
     }

@@ -162,8 +162,7 @@ data class IrGep(
         append("%").append(name).append(" = getelementptr ")
         val baseType = base.type
         val pointee = (baseType as? IrPointer)?.pointee ?: baseType
-        append(pointee.render()).append(", ")
-        append(baseType.render()).append(' ').append(base.render())
+        append(pointee.render()).append(", ptr ").append(base.render())
         this@IrGep.indices.forEach { indexValue ->
             append(", ").append(indexValue.type.render()).append(' ').append(indexValue.render())
         }

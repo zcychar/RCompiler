@@ -17,18 +17,4 @@ class CodegenContext(
     var currentFunction: IrFunction? = null
     var currentScope: Scope? = null
 
-    /**
-     * Compute or retrieve the unique IR-level name for a semantic function.
-     * Methods and associated functions are qualified with their impl type name
-     * to avoid collisions (e.g., `Edge.new` vs `Graph.new`).
-     */
-    fun irFunctionName(function: frontend.semantic.Function, ownerOverride: Type? = null): String {
-        val owner = ownerOverride ?: function.self
-        val ownerName = when (owner) {
-            is frontend.semantic.StructType -> owner.name
-            is frontend.semantic.EnumType -> owner.name
-            else -> null
-        }
-        return if (ownerName != null) "$ownerName.${function.name}" else function.name
-    }
 }

@@ -33,6 +33,10 @@ class IrBuilder(
     return if (count == 1) hint else "$hint.$count"
   }
 
+  fun currentBlockLabel(): String{
+    return currentBlock?.label?:error("asking for current block label with no block")
+  }
+
   fun freshFunctionName(): String {
     return ""
   }
@@ -93,6 +97,7 @@ class IrBuilder(
       IrStore("", IrPrimitive(PrimitiveKind.UNIT),toDst,ret)
     )
   }
+
 }
 
 // Extension to produce a copy with a new id for convenience.

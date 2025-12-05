@@ -2,6 +2,9 @@ package frontend.ast
 
 import frontend.TokenType
 import frontend.semantic.Scope
+import frontend.semantic.Symbol
+import frontend.semantic.Type
+import javax.sound.midi.Receiver
 
 sealed interface ExprNode {
   var isLeft: Boolean
@@ -16,9 +19,9 @@ data class BlockExprNode(val hasConst: Boolean, val stmts: List<StmtNode>, overr
   ExprWIBlock {
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
   fun hasFinal(): Boolean {
-    if(stmts.isEmpty())return false
+    if (stmts.isEmpty()) return false
     val last = stmts.last()
-    return last is ExprStmtNode && ( !last.hasSemiColon)
+    return last is ExprStmtNode && (!last.hasSemiColon)
   }
 
   var scope: Scope? = null
@@ -52,11 +55,17 @@ data class IfExprNode(
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class FieldAccessExprNode(val expr: ExprNode, val id: String, override var isLeft: Boolean = false) : ExprWOBlock {
+data class FieldAccessExprNode(val expr: ExprNode, val id: String,var structSymbol:frontend.semantic.Struct?= null, override var isLeft: Boolean = false) : ExprWOBlock {
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class MethodCallExprNode(val expr: ExprNode, val pathSeg: TypePathNode, val params: List<ExprNode>) :
+data class MethodCallExprNode(
+  val expr: ExprNode,
+  val pathSeg: TypePathNode,
+  val params: List<ExprNode>,
+  var receiverType: Type? = null,
+  var methodSymbol: frontend.semantic.Function? = null
+) :
   ExprWOBlock {
   override var isLeft: Boolean = false
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
@@ -67,12 +76,13 @@ data class MethodCallExprNode(val expr: ExprNode, val pathSeg: TypePathNode, val
 //    data class MatchArmNode(val pattern: PatternNode, val guard: ExprNode?)
 //}
 
-data class CallExprNode(val expr: ExprNode, val params: List<ExprNode>, override var isLeft: Boolean = false) :
+data class CallExprNode(val expr: ExprNode, val params: List<ExprNode>,var functionSymbol: frontend.semantic.Function? = null, override var isLeft: Boolean = false) :
   ExprWOBlock {
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class CondExprNode(val pattern: PatternNode?, val expr: ExprNode, override var isLeft: Boolean = false) : ExprNode {
+data class CondExprNode(val pattern: PatternNode?, val expr: ExprNode, override var isLeft: Boolean = false) :
+  ExprNode {
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
@@ -95,6 +105,7 @@ data class ArrayExprNode(
   val repeatOp: ExprNode?,
   val lengthOp: ExprNode?,
   var evaluatedSize: Long = -1,
+  var type: Type? = null,
   override var isLeft: Boolean = false
 ) :
   ExprWOBlock {
@@ -110,10 +121,15 @@ data class CastExprNode(val expr: ExprNode, val targetType: TypeNode, override v
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class StructExprNode(val path: ExprNode, val fields: List<StructExprField>, override var isLeft: Boolean = false) :
+data class StructExprNode(
+  val path: ExprNode,
+  val fields: List<StructExprField>,
+  var type: Type? = null,
+  override var isLeft: Boolean = false
+) :
   ExprNode {
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
-  data class StructExprField(val id: String, val expr: ExprNode?)
+  data class StructExprField(val id: String, val expr: ExprNode?, var fieldType: Type? = null)
 }
 
 data object UnderscoreExprNode : ExprWOBlock {
@@ -125,7 +141,12 @@ data class UnaryExprNode(val op: TokenType, val rhs: ExprNode, override var isLe
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class BinaryExprNode(val op: TokenType, val lhs: ExprNode, val rhs: ExprNode, override var isLeft: Boolean = false) :
+data class BinaryExprNode(
+  val op: TokenType,
+  val lhs: ExprNode,
+  val rhs: ExprNode,
+  override var isLeft: Boolean = false
+) :
   ExprWOBlock {
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
@@ -134,7 +155,12 @@ data class GroupedExprNode(val expr: ExprNode, override var isLeft: Boolean = fa
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 
-data class BorrowExprNode(val expr: ExprNode, val isMut: Boolean, override var isLeft: Boolean = false) : ExprWOBlock {
+data class BorrowExprNode(
+  val expr: ExprNode,
+  val isMut: Boolean,
+  var type: Type? = null,
+  override var isLeft: Boolean = false
+) : ExprWOBlock {
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }
 

@@ -35,40 +35,38 @@ fun main(args: Array<String>) {
         if (options.debugParse) System.err.println("\n----- 3. Parsing -----")
         val parser = RParser(tokens)
         val crate = parser.process()
-
-        if (options.debugSemantic) {
+        val debugSemantic = false
+        if (debugSemantic) {
             System.err.println("\n----- 4. Semantic Analysis -----")
         }
-
         val preludeScope = toPrelude()
-
-        if (options.debugSemantic) System.err.println("\n--- Running Pass 1: Symbol Collector ---")
+        if (debugSemantic) System.err.println("\n--- Running Pass 1: Symbol Collector ---")
         val symbolCollector = RSymbolCollector(preludeScope, crate)
         symbolCollector.process()
-        if (options.debugSemantic) {
+        if (debugSemantic) {
             val collectorDumper = RSymbolTableDumper(crate)
             collectorDumper.dump()
         }
 
-        if (options.debugSemantic) System.err.println("\n--- Running Pass 2: Symbol Resolver ---")
+        if (debugSemantic) System.err.println("\n--- Running Pass 2: Symbol Resolver ---")
         val symbolResolver = RSymbolResolver(preludeScope, crate)
         symbolResolver.process()
-        if (options.debugSemantic) {
+        if (debugSemantic) {
             val resolverDumper = RResolvedSymbolDumper(crate)
             resolverDumper.dump()
         }
-        if (options.debugSemantic) System.err.println("\n--- Running Pass 3: Impl Injector ---")
+        if (debugSemantic) System.err.println("\n--- Running Pass 3: Impl Injector ---")
         val implInjector = RImplInjector(preludeScope, crate)
         implInjector.process()
-        if (options.debugSemantic) {
+        if (debugSemantic) {
             val injectionDumper = RImplInjectionDumper(crate)
             injectionDumper.dump()
         }
 
-        if (options.debugSemantic) System.err.println("\n--- Running Pass 4: Semantic Checker ---")
+        if (debugSemantic) System.err.println("\n--- Running Pass 4: Semantic Checker ---")
 
         val checker: RSemanticChecker =
-            if (options.debugSemantic) TracedSemanticChecker(preludeScope, crate) else RSemanticChecker(preludeScope, crate)
+            if (debugSemantic) TracedSemanticChecker(preludeScope, crate) else RSemanticChecker(preludeScope, crate)
         checker.process()
 
         // Drive IR backend after successful semantics.

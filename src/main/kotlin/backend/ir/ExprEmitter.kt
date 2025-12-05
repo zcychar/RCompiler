@@ -1,13 +1,12 @@
 package backend.ir
 
+import backend.ir.IrConstant
 import frontend.Keyword
 import frontend.Literal
 import frontend.Punctuation
 import frontend.assignOp
 import frontend.ast.*
 import frontend.semantic.*
-import frontend.semantic.Enum
-import frontend.semantic.Function
 import utils.CompileError
 
 /**
@@ -47,53 +46,66 @@ class ExprEmitter(
   }
 
   private fun emitLiteral(node: LiteralExprNode): IrValue = when (node.type) {
-    Keyword.TRUE -> builder.borrow(null,IrBoolConstant(true, IrPrimitive(PrimitiveKind.BOOL)))
-    Keyword.FALSE -> builder.borrow(null,IrBoolConstant(false, IrPrimitive(PrimitiveKind.BOOL)))
+    Keyword.TRUE -> IrConstant(1, IrPrimitive(PrimitiveKind.BOOL))
+    Keyword.FALSE -> IrConstant(0, IrPrimitive(PrimitiveKind.BOOL))
     Literal.INTEGER -> {
       val intConst = getInt(node)
       val irType = toIrType(intConst.actualType)
-      builder.borrow(null,IrIntConstant(intConst.value, irType))
+      IrConstant(intConst.value, irType)
     }
+
     else -> error("Unsupported literal ${node.type}")
   }
 
-  private fun emitPath(node: PathExprNode):  IrValue {
+  private fun emitPath(node: PathExprNode): IrValue {
     if (node.seg2 != null) {
       error("Qualified paths are not supported in expression lowering yet")
     }
     val identifier = node.seg1.name ?: "self"
-    return valueEnv.resolve(identifier) ?: resolveConstant(identifier)
-    ?: error("Unbound identifier $identifier")
+    return when (val it = valueEnv.resolve(identifier)) {
+      is Bind.Value -> it.value
+      is Bind.Pointer -> {
+        builder.emit(
+          IrLoad(
+            "", it.getPointeeType(), it.addr
+          )
+        )
+      }
+
+      else -> {
+        return context.module.getGlobalByName(identifier) ?: error("Unbound identifier $identifier")
+      }
+    }
   }
 
-  private fun emitBinary(node: BinaryExprNode):  IrValue =
+  private fun emitBinary(node: BinaryExprNode): IrValue =
     if (node.op in assignOp) emitAssignment(node) else emitBinaryOp(node)
 
-  private fun emitAssignment(node: BinaryExprNode):  IrValue {
-    val lhs = emitExpr(node.lhs)
+  private fun emitAssignment(node: BinaryExprNode): IrValue {
+    val lhs = emitLValue(node.lhs)
     val rhs = emitExpr(node.rhs)
     val stored = when (node.op) {
       Punctuation.EQUAL -> rhs
-      Punctuation.PLUS_EQUAL -> emitArithmetic(BinaryOperator.ADD, lhs, rhs)
-      Punctuation.MINUS_EQUAL -> emitArithmetic(BinaryOperator.SUB, lhs, rhs)
-      Punctuation.STAR_EQUAL -> emitArithmetic(BinaryOperator.MUL, lhs, rhs)
-      Punctuation.SLASH_EQUAL -> emitArithmetic(
+      Punctuation.PLUS_EQUAL -> emitAssignArithmetic(BinaryOperator.ADD, lhs, rhs)
+      Punctuation.MINUS_EQUAL -> emitAssignArithmetic(BinaryOperator.SUB, lhs, rhs)
+      Punctuation.STAR_EQUAL -> emitAssignArithmetic(BinaryOperator.MUL, lhs, rhs)
+      Punctuation.SLASH_EQUAL -> emitAssignArithmetic(
         if (isUnsigned(lhs.type)) BinaryOperator.UDIV else BinaryOperator.SDIV,
         lhs,
         rhs,
       )
 
-      Punctuation.PERCENT_EQUAL -> emitArithmetic(
+      Punctuation.PERCENT_EQUAL -> emitAssignArithmetic(
         if (isUnsigned(lhs.type)) BinaryOperator.UREM else BinaryOperator.SREM,
         lhs,
         rhs,
       )
 
-      Punctuation.AND_EQUAL -> emitArithmetic(BinaryOperator.AND, lhs, rhs)
-      Punctuation.OR_EQUAL -> emitArithmetic(BinaryOperator.OR, lhs, rhs)
-      Punctuation.CARET_EQUAL -> emitArithmetic(BinaryOperator.XOR, lhs, rhs)
-      Punctuation.LESS_LESS_EQUAL -> emitArithmetic(BinaryOperator.SHL, lhs, rhs)
-      Punctuation.GREATER_GREATER_EQUAL -> emitArithmetic(
+      Punctuation.AND_EQUAL -> emitAssignArithmetic(BinaryOperator.AND, lhs, rhs)
+      Punctuation.OR_EQUAL -> emitAssignArithmetic(BinaryOperator.OR, lhs, rhs)
+      Punctuation.CARET_EQUAL -> emitAssignArithmetic(BinaryOperator.XOR, lhs, rhs)
+      Punctuation.LESS_LESS_EQUAL -> emitAssignArithmetic(BinaryOperator.SHL, lhs, rhs)
+      Punctuation.GREATER_GREATER_EQUAL -> emitAssignArithmetic(
         if (isUnsigned(lhs.type)) BinaryOperator.LSHR else BinaryOperator.ASHR,
         lhs,
         rhs,
@@ -104,7 +116,7 @@ class ExprEmitter(
     return unitValue()
   }
 
-  private fun emitBinaryOp(node: BinaryExprNode):  IrValue {
+  private fun emitBinaryOp(node: BinaryExprNode): IrValue {
     val lhs = emitExpr(node.lhs)
     val rhs = emitExpr(node.rhs)
     return when (node.op) {
@@ -165,8 +177,8 @@ class ExprEmitter(
     }
   }
 
-
-  private fun emitArithmetic(operator: BinaryOperator, lhs: IrValue, rhs: IrValue):  IrValue {
+  //lhs,rhs--ssa value
+  private fun emitArithmetic(operator: BinaryOperator, lhs: IrValue, rhs: IrValue): IrValue {
     var left = lhs
     var right = rhs
     val lhsUnit = (lhs.type as? IrPrimitive)?.kind == PrimitiveKind.UNIT
@@ -175,26 +187,55 @@ class ExprEmitter(
       left = zeroOfType(rhs.type)
     } else if (rhsUnit && !lhsUnit) {
       right = zeroOfType(lhs.type)
-    } else if (lhsUnit ) {
+    } else if (lhsUnit) {
       val intType = IrPrimitive(PrimitiveKind.I32)
-      left = IrIntConstant(0, intType)
-      right = IrIntConstant(0, intType)
+      left = IrConstant(0, intType)
+      right = IrConstant(0, intType)
     }
     ensureSameType(left.type, right.type)
-    val leftValue = builder.emit(IrLoad("",left.type,left))
-    val rightValue = builder.emit(IrLoad("",right.type,right))
     return builder.emit(
       IrBinary(
         name = "",
-        type = leftValue.type,
+        type = left.type,
         operator = operator,
-        lhs = leftValue,
-        rhs = rightValue,
+        lhs = left,
+        rhs = right,
       )
     )
   }
 
-  private fun emitCompare(predicate: ComparePredicate, lhs: IrValue, rhs: IrValue):  IrValue {
+  //lhs -- lvalue
+  private fun emitAssignArithmetic(operator: BinaryOperator, lhs: IrValue, rhs: IrValue): IrValue {
+    val left = builder.emit(
+      IrLoad("", getLValueInnerType(lhs), lhs)
+    )
+    var right = rhs
+    val rhsUnit = (rhs.type as? IrPrimitive)?.kind == PrimitiveKind.UNIT
+    if (rhsUnit) {
+      right = zeroOfType(lhs.type)
+    }
+    ensureSameType(left.type, right.type)
+    val result = builder.emit(
+      IrBinary(
+        name = "",
+        type = left.type,
+        operator = operator,
+        lhs = left,
+        rhs = right,
+      )
+    )
+    builder.emit(
+      IrStore(
+        name = "",
+        type = result.type,
+        address = lhs,
+        value = result
+      )
+    )
+    return unitValue()
+  }
+
+  private fun emitCompare(predicate: ComparePredicate, lhs: IrValue, rhs: IrValue): IrValue {
     var left = lhs
     var right = rhs
     val lhsUnit = (lhs.type as? IrPrimitive)?.kind == PrimitiveKind.UNIT
@@ -205,58 +246,55 @@ class ExprEmitter(
       right = zeroOfType(lhs.type)
     } else if (lhsUnit && rhsUnit) {
       val intType = IrPrimitive(PrimitiveKind.I32)
-      left = IrIntConstant(0, intType)
-      right = IrIntConstant(0, intType)
+      left = IrConstant(0, intType)
+      right = IrConstant(0, intType)
     }
     ensureSameType(left.type, right.type)
-    val leftValue = builder.emit(IrLoad("",left.type,left))
-    val rightValue = builder.emit(IrLoad("",right.type,right))
     return builder.emit(
       IrCmp(
         name = "",
         type = IrPrimitive(PrimitiveKind.BOOL),
         predicate = predicate,
-        lhs = leftValue,
-        rhs = rightValue,
+        lhs = left,
+        rhs = right,
       ),
     )
   }
 
-  private fun zeroOfType(type: IrType):  IrValue = when (type) {
-    is IrPrimitive -> IrIntConstant(0, type)
-    is IrPointer -> IrIntConstant(0, IrPrimitive(PrimitiveKind.ISIZE))
-    else -> IrIntConstant(0, IrPrimitive(PrimitiveKind.I32))
+  private fun zeroOfType(type: IrType): IrValue = when (type) {
+    is IrPrimitive -> IrConstant(0, type)
+    is IrPointer -> IrConstant(0, IrPrimitive(PrimitiveKind.ISIZE))
+    else -> IrConstant(0, IrPrimitive(PrimitiveKind.I32))
   }
 
   private fun emitLogical(operator: BinaryOperator, lhs: IrValue, rhs: IrValue): IrValue {
     ensureSameType(lhs.type, rhs.type)
-    val leftValue = builder.emit(IrLoad("",lhs.type,lhs))
-    val rightValue = builder.emit(IrLoad("",rhs.type,rhs))
     return builder.emit(
       IrBinary(
         name = "",
         type = lhs.type,
         operator = operator,
-        lhs = leftValue,
-        rhs = rightValue,
+        lhs = lhs,
+        rhs = rhs,
       )
     )
   }
 
-  private fun emitShortCircuitAnd(lhs: IrValue, rhsThunk: () -> IrValue):  IrValue {
+  private fun emitShortCircuitAnd(lhs: IrValue, rhsThunk: () -> IrValue): IrValue {
     return emitShortCircuit(lhs, rhsThunk, shortCircuitOnTrue = false)
   }
 
-  private fun emitShortCircuitOr(lhs: IrValue, rhsThunk: () -> IrValue):  IrValue {
+  private fun emitShortCircuitOr(lhs: IrValue, rhsThunk: () -> IrValue): IrValue {
     return emitShortCircuit(lhs, rhsThunk, shortCircuitOnTrue = true)
   }
 
+  //lhs,rhs -- ssa value
   private fun emitShortCircuit(lhs: IrValue, rhsThunk: () -> IrValue, shortCircuitOnTrue: Boolean): IrValue {
     val boolType = IrPrimitive(PrimitiveKind.BOOL)
     if (lhs.type != boolType) error("Short-circuit operators require boolean operands")
-    val lhsValue = builder.emit(IrLoad("",lhs.type,lhs))
     val function = context.currentFunction ?: error("No active function for short-circuit emission")
-    val resultAddr = builder.borrow(null, lhsValue)
+
+    val lhsLabel = builder.currentBlockLabel()
     val rhsLabel = builder.freshLocalName(if (shortCircuitOnTrue) "or.rhs" else "and.rhs")
     val mergeLabel = builder.freshLocalName("sc.merge")
     val rhsBlock = builder.ensureBlock(rhsLabel)
@@ -275,14 +313,16 @@ class ExprEmitter(
     )
 
     builder.positionAt(function, rhsBlock)
+
     val rhs = rhsThunk()
     if (rhs.type != boolType) error("Short-circuit RHS must be boolean")
-    builder.copy(rhs,resultAddr)
-
     builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = mergeLabel))
 
     builder.positionAt(function, mergeBlock)
-    return resultAddr
+    val circuitVal = if (shortCircuitOnTrue) IrConstant(1, boolType) else IrConstant(0, boolType)
+    return builder.emit(
+      IrPhi("", boolType, listOf(PhiBranch(circuitVal, lhsLabel), PhiBranch(rhs, rhsLabel)))
+    )
   }
 
   private fun emitUnary(node: UnaryExprNode): IrValue {
@@ -292,18 +332,17 @@ class ExprEmitter(
       Punctuation.BANG -> UnaryOperator.NOT
       else -> error("Unsupported unary operator ${node.op}")
     }
-    val rightValue = builder.emit(IrLoad("",operand.type,operand))
     return builder.emit(
       IrUnary(
         name = "",
         type = operand.type,
         operator = operator,
-        operand = rightValue,
+        operand = operand,
       )
     )
   }
 
-  private fun emitCast(node: CastExprNode):  IrValue {
+  private fun emitCast(node: CastExprNode): IrValue {
     val value = emitExpr(node.expr)
     val targetType = mapType(node.targetType)
     val irTarget = toIrType(targetType)
@@ -318,20 +357,20 @@ class ExprEmitter(
 
       else -> CastKind.BITCAST
     }
-    val loadValue = builder.emit(IrLoad("",value.type,value))
     return builder.emit(
       IrCast(
         name = "",
         type = irTarget,
-        value = loadValue,
+        value = value,
         kind = kind,
       ),
     )
   }
 
   private fun emitBorrow(node: BorrowExprNode): IrValue {
-    val baseAddr = emitExpr(node.expr)
-    return builder.borrow(null, baseAddr)
+    val baseAddr = emitLValue(node.expr)
+    val expectType = toIrType(node.type!!) as? IrPointer ?: error("borrow expr with non-pointer type")
+    return retargetPointer(baseAddr, expectType)
   }
 
   private fun emitDeref(node: DerefExprNode): IrValue {
@@ -340,14 +379,14 @@ class ExprEmitter(
       ?: error("Cannot dereference non-pointer type ${pointer.type}")
     return builder.emit(
       IrLoad(
-        id = -1,
+        name = "",
         type = pointerType.pointee,
         address = pointer,
-      ),
+      )
     )
   }
 
-  private fun emitBlockExpr(block:BlockExprNode, expectedType: IrType?): IrValue {
+  private fun emitBlockExpr(block: BlockExprNode, expectedType: IrType?): IrValue {
     val value = blockEmitter.emitBlock(block, expectValue = block.hasFinal())
     return value ?: expectedType?.let { IrUndef(it) } ?: unitValue()
   }
@@ -361,16 +400,6 @@ class ExprEmitter(
 
     val resultType = expectedType ?: IrPrimitive(PrimitiveKind.UNIT)
     val needsValue = resultType !is IrPrimitive || resultType.kind != PrimitiveKind.UNIT
-    val resultSlot = if (needsValue) {
-      builder.emit(
-        IrAlloca(
-          id = -1,
-          type = IrPointer(resultType),
-          allocatedType = resultType,
-          slotName = builder.freshLocalName("if.res"),
-        ),
-      )
-    } else null
 
     val thenLabel = builder.freshLocalName("if.then")
     val elseLabel = builder.freshLocalName("if.else")
@@ -378,12 +407,12 @@ class ExprEmitter(
 
     builder.emitTerminator(
       IrBranch(
-        id = -1,
+        name = "",
         type = IrPrimitive(PrimitiveKind.UNIT),
         condition = condition,
         trueTarget = thenLabel,
         falseTarget = elseLabel,
-      ),
+      )
     )
 
     val thenBlock = builder.ensureBlock(thenLabel)
@@ -393,17 +422,7 @@ class ExprEmitter(
     val thenActive = builder.hasInsertionPoint()
     if (needsValue && thenActive) ensureSameType(resultType, thenValue.type)
     if (thenActive) {
-      if (needsValue) {
-        builder.emit(
-          IrStore(
-            id = -1,
-            type = IrPrimitive(PrimitiveKind.UNIT),
-            address = resultSlot!!,
-            value = thenValue,
-          ),
-        )
-      }
-      builder.emitTerminator(IrJump(id = -1, type = IrPrimitive(PrimitiveKind.UNIT), target = mergeLabel))
+      builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = mergeLabel))
     }
 
     val elseBlock = builder.ensureBlock(elseLabel)
@@ -422,29 +441,25 @@ class ExprEmitter(
     val elseActive = builder.hasInsertionPoint()
     if (needsValue && elseActive) ensureSameType(resultType, elseValue.type)
     if (elseActive) {
-      if (needsValue) {
-        builder.emit(
-          IrStore(
-            id = -1,
-            type = IrPrimitive(PrimitiveKind.UNIT),
-            address = resultSlot!!,
-            value = elseValue,
-          ),
-        )
-      }
-      builder.emitTerminator(IrJump(id = -1, type = IrPrimitive(PrimitiveKind.UNIT), target = mergeLabel))
+      builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = mergeLabel))
     }
 
     val mergeBlock = builder.ensureBlock(mergeLabel)
     builder.positionAt(function, mergeBlock)
     return if (needsValue) {
-      builder.emit(
-        IrLoad(
-          id = -1,
-          type = resultType,
-          address = resultSlot!!,
-        ),
-      )
+      if (thenActive && elseActive) {
+        builder.emit(
+          IrPhi(
+            name = "",
+            type = resultType,
+            incoming = listOf(PhiBranch(thenValue, thenLabel), PhiBranch(elseValue, elseLabel))
+          )
+        )
+      } else if (thenActive) {
+        thenValue
+      } else if (elseActive) {
+        elseValue
+      } else error("both then and else returning void for If")
     } else {
       unitValue()
     }
@@ -456,7 +471,7 @@ class ExprEmitter(
     val bodyLabel = builder.freshLocalName("while.body")
     val exitLabel = builder.freshLocalName("while.end")
 
-    builder.emitTerminator(IrJump(id = -1, type = IrPrimitive(PrimitiveKind.UNIT), target = condLabel))
+    builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = condLabel))
 
     val condBlock = builder.ensureBlock(condLabel)
     builder.positionAt(function, condBlock)
@@ -464,12 +479,12 @@ class ExprEmitter(
     val condition = emitExpr(condExpr)
     builder.emitTerminator(
       IrBranch(
-        id = -1,
+        name = "",
         type = IrPrimitive(PrimitiveKind.UNIT),
         condition = condition,
         trueTarget = bodyLabel,
         falseTarget = exitLabel,
-      ),
+      )
     )
 
     val bodyBlock = builder.ensureBlock(bodyLabel)
@@ -478,7 +493,7 @@ class ExprEmitter(
     blockEmitter.emitBlock(node.expr, expectValue = false)
     valueEnv.popLoop()
     if (builder.hasInsertionPoint()) {
-      builder.emitTerminator(IrJump(id = -1, type = IrPrimitive(PrimitiveKind.UNIT), target = condLabel))
+      builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = condLabel))
     }
 
     val exitBlock = builder.ensureBlock(exitLabel)
@@ -486,12 +501,13 @@ class ExprEmitter(
     return unitValue()
   }
 
+  //not used!
   private fun emitLoop(node: LoopExprNode): IrValue {
     val function = context.currentFunction ?: error("No active function")
     val bodyLabel = builder.freshLocalName("loop.body")
     val exitLabel = builder.freshLocalName("loop.end")
 
-    builder.emitTerminator(IrJump(id = -1, type = IrPrimitive(PrimitiveKind.UNIT), target = bodyLabel))
+    builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = bodyLabel))
 
     val bodyBlock = builder.ensureBlock(bodyLabel)
     builder.positionAt(function, bodyBlock)
@@ -499,7 +515,7 @@ class ExprEmitter(
     blockEmitter.emitBlock(node.expr, expectValue = false)
     valueEnv.popLoop()
     if (builder.hasInsertionPoint()) {
-      builder.emitTerminator(IrJump(id = -1, type = IrPrimitive(PrimitiveKind.UNIT), target = bodyLabel))
+      builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = bodyLabel))
     }
 
     val exitBlock = builder.ensureBlock(exitLabel)
@@ -507,42 +523,39 @@ class ExprEmitter(
     return unitValue()
   }
 
+  //no break with expression
   private fun emitBreak(node: BreakExprNode): IrValue {
     if (node.expr != null) error("break with value not supported")
     val target = valueEnv.currentBreakTarget() ?: error("break outside loop")
-    builder.emitTerminator(IrJump(id = -1, type = IrPrimitive(PrimitiveKind.UNIT), target = target))
+    builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = target))
     return IrUndef(IrPrimitive(PrimitiveKind.NEVER))
   }
 
+  //function name a or a.b
   private fun emitContinue(): IrValue {
     val target = valueEnv.currentContinueTarget() ?: error("continue outside loop")
-    builder.emitTerminator(IrJump(id = -1, type = IrPrimitive(PrimitiveKind.UNIT), target = target))
+    builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = target))
     return IrUndef(IrPrimitive(PrimitiveKind.NEVER))
   }
 
   private fun emitCall(node: CallExprNode): IrValue {
     val calleePath = node.expr as? PathExprNode ?: error("function calls require path callee")
     val fnName = calleePath.seg2?.name ?: calleePath.seg1.name ?: error("unsupported callee path")
-    val fnSymbol = if (calleePath.seg2 != null) {
-      val typeName = calleePath.seg1.name ?: error("type path missing name")
-      resolveAssociatedFunction(typeName, fnName) ?: resolveFunction(fnName)
-    } else {
-      resolveFunction(fnName)
-    } ?: error("Unknown function $fnName")
+    val fnSymbol = node.functionSymbol!!
     val signature = irFunctionSignature(fnSymbol)
     val irName = if (calleePath.seg2 != null) {
       val typeName = calleePath.seg1.name ?: error("type path missing name")
       "$typeName.$fnName"
     } else {
-      context.irFunctionName(fnSymbol)
+      calleePath.seg1.name ?: error("type path missing name")
     }
     val args = node.params.mapIndexed { index, expr ->
-      val expected = signature.parameters.getOrNull(index)
-      emitArgument(expr, expected, calleePath.seg1.name ?: "arg$index")
+      emitExpr(expr)
     }
+
     return builder.emit(
       IrCall(
-        id = -1,
+        name = "",
         type = signature.returnType,
         callee = IrFunctionRef(irName, signature.toFunctionPointer()),
         arguments = args,
@@ -552,31 +565,47 @@ class ExprEmitter(
 
   private fun emitMethodCall(node: MethodCallExprNode): IrValue {
     val fnName = node.pathSeg.name ?: error("method name missing")
-    val receiver = emitExpr(node.expr)
-    val fnSymbol = resolveMethod(receiver.type, fnName) ?: resolveFunction(fnName) ?: error("Unknown method $fnName")
+    val receiverType = toIrType(node.receiverType!!)
+    val fnSymbol = node.methodSymbol!!
     val signature = irFunctionSignature(fnSymbol)
-    val baseType = (receiver.type as? IrPointer)?.pointee ?: receiver.type
-    val ownerName = (baseType as? IrStruct)?.name
-    val irName = ownerName?.let { "$it.$fnName" } ?: context.irFunctionName(fnSymbol)
+    val baseType = (receiverType as? IrPointer)?.pointee ?: receiverType
+    val ownerName = (baseType as? IrStruct)?.name ?: error("method without owner")
+    val irName = "$ownerName.$fnName"
     val selfParamType = signature.parameters.firstOrNull()
-    val coercedReceiver = when {
-      selfParamType is IrPointer -> {
-        tryLValue(node.expr)?.let { lv ->
-          ensureSameType(selfParamType.pointee, lv.pointee)
-          retargetPointer(lv.address, selfParamType)
-        } ?: coerceArgument(receiver, selfParamType, hint = "self")
-      }
 
-      else -> receiver
+    val args = buildList<IrValue> {
+      if (receiverType is IrPointer) {
+        val baseRef = emitExpr(node.expr)
+        if (selfParamType is IrPointer) {
+          baseRef
+        } else {
+          builder.emit(
+            IrLoad("", baseType, baseRef)
+          )
+        }
+      } else {
+        if (selfParamType is IrPointer) {
+          tryLValue(node.expr) ?: {
+            val baseValue = emitExpr(node.expr)
+            val ret = builder.emit(
+              IrAlloca("", IrPointer(baseValue.type), baseValue.type)
+            )
+            builder.emit(
+              IrStore("", IrPrimitive(PrimitiveKind.UNIT), ret, baseValue)
+            )
+            ret
+          }()
+        } else {
+          emitExpr(node.expr)
+        }
+      }
+      node.params.mapIndexed { index, expr ->
+        emitExpr(expr)
+      }
     }
-    val argValues = node.params.mapIndexed { index, expr ->
-      val expected = signature.parameters.getOrNull(index + 1) // offset self
-      emitArgument(expr, expected, node.pathSeg.name ?: "arg$index")
-    }
-    val args = listOf(coercedReceiver) + argValues
     return builder.emit(
       IrCall(
-        id = -1,
+        name = "",
         type = signature.returnType,
         callee = IrFunctionRef(irName, signature.toFunctionPointer()),
         arguments = args,
@@ -585,100 +614,34 @@ class ExprEmitter(
   }
 
   private fun emitArrayLiteral(node: ArrayExprNode): IrValue {
-    val elements = if (node.elements.isNotEmpty()) {
-      node.elements.map { emitExpr(it) }
-    } else if (node.repeatOp != null) {
-      val count = node.evaluatedSize.takeIf { it >= 0 }?.toInt()
-        ?: error("array repeat size unknown")
-      List(count) { emitExpr(node.repeatOp) }
-    } else {
-      error("empty array literal not supported")
-    }
-    val elementType = elements.first().type
-    val irArrayType = IrArray(elementType, elements.size)
-    val alloca = builder.emit(
+    val type = node.type as? ArrayType ?: error("array literal without type")
+    val irType = toIrType(type) as IrArray
+    val destAddr = builder.emit(
       IrAlloca(
-        id = -1,
-        type = IrPointer(irArrayType),
-        allocatedType = irArrayType,
-        slotName = builder.freshLocalName("arr"),
-      ),
+        "", IrPointer(irType), irType
+      )
     )
-    elements.forEachIndexed { index, value ->
-      val gep = builder.emit(
-        IrGep(
-          id = -1,
-          type = IrPointer(elementType),
-          base = alloca,
-          indices = listOf(
-            IrIntConstant(0, IrPrimitive(PrimitiveKind.I32)),
-            IrIntConstant(index.toLong(), IrPrimitive(PrimitiveKind.I32)),
-          ),
-        ),
-      )
-      builder.emit(
-        IrStore(
-          id = -1,
-          type = IrPrimitive(PrimitiveKind.UNIT),
-          address = gep,
-          value = value,
-        ),
-      )
-    }
+    storeArrayToPointer(node, destAddr)
     return builder.emit(
       IrLoad(
-        id = -1,
-        type = irArrayType,
-        address = alloca,
+        name = "",
+        type = irType,
+        address = destAddr,
       ),
     )
   }
 
   private fun emitStructLiteral(node: StructExprNode): IrValue {
     val path = node.path as? PathExprNode ?: error("struct literal requires path")
-    val typeName = path.seg1.name ?: error("struct literal missing name")
-    val structType = resolveStruct(typeName)
-    val irType = structLayout(structType)
-    val fieldValues = structType.fields.keys.map { fieldName ->
-      val fieldExpr = node.fields.find { it.id == fieldName }?.expr
-        ?: error("missing field $fieldName in struct literal")
-      emitExpr(fieldExpr)
-    }
-    val alloca = builder.emit(
+    val irType = structLayout(node.type as StructType)
+    val destAddr = builder.emit(
       IrAlloca(
-        id = -1,
-        type = IrPointer(irType),
-        allocatedType = irType,
-        slotName = builder.freshLocalName(typeName),
-      ),
+        "", IrPointer(irType), irType
+      )
     )
-    fieldValues.forEachIndexed { index, value ->
-      val gep = builder.emit(
-        IrGep(
-          id = -1,
-          type = IrPointer(value.type),
-          base = alloca,
-          indices = listOf(
-            IrIntConstant(0, IrPrimitive(PrimitiveKind.I32)),
-            IrIntConstant(index.toLong(), IrPrimitive(PrimitiveKind.I32))
-          ),
-        ),
-      )
-      builder.emit(
-        IrStore(
-          id = -1,
-          type = IrPrimitive(PrimitiveKind.UNIT),
-          address = gep,
-          value = value,
-        ),
-      )
-    }
+    storeStructToPointer(node, destAddr)
     return builder.emit(
-      IrLoad(
-        id = -1,
-        type = irType,
-        address = alloca,
-      ),
+      IrLoad("", irType, destAddr)
     )
   }
 
@@ -692,144 +655,151 @@ class ExprEmitter(
     }
     builder.emitTerminator(
       IrReturn(
-        id = -1,
+        name = "",
         type = expectedType,
         value = irValue,
-      ),
+      )
     )
     return IrUndef(IrPrimitive(PrimitiveKind.NEVER))
   }
 
-  private fun emitFieldAccess(node: frontend.ast.FieldAccessExprNode): IrValue {
+  private fun emitFieldAccess(node: FieldAccessExprNode): IrValue {
     val lvalue = emitLValue(node)
     return builder.emit(
       IrLoad(
-        id = -1,
-        type = lvalue.pointee,
-        address = lvalue.address,
-      ),
+        name = "",
+        type = getLValueInnerType(lvalue),
+        address = lvalue,
+      )
     )
   }
 
-  private fun emitIndexAccess(node: frontend.ast.IndexExprNode): IrValue {
+  private fun emitIndexAccess(node: IndexExprNode): IrValue {
     val lvalue = emitLValue(node)
     return builder.emit(
       IrLoad(
-        id = -1,
-        type = lvalue.pointee,
-        address = lvalue.address,
-      ),
+        name = "",
+        type = getLValueInnerType(lvalue),
+        address = lvalue,
+      )
     )
   }
 
-  private fun emitLValue(node: ExprNode): LValue = when (node) {
+  private fun emitLValue(node: ExprNode): IrValue = when (node) {
     is PathExprNode -> {
-      if (node.seg2 != null) error("Qualified paths are not supported for assignment")
+      if (node.seg2 != null) {
+        error("Qualified paths are not supported in expression lowering yet")
+      }
       val identifier = node.seg1.name ?: "self"
-      val binding = valueEnv.resolve(identifier) ?: error("Unbound identifier $identifier")
-      when (binding) {
-        is StackSlot -> LValue(binding.address, binding.type)
-        is SsaValue -> {
-          val type = binding.value.type
-          if (binding.value is IrParameter && type is IrPointer) {
-            LValue(binding.value, type.pointee)
-          }
-          val address = builder.emit(
+      when (val it = valueEnv.resolve(identifier)) {
+        is Bind.Value -> {
+          val ret = builder.emit(
             IrAlloca(
-              id = -1,
-              type = IrPointer(type),
-              allocatedType = type,
-              slotName = builder.freshLocalName(identifier),
-            ),
+              "",
+              IrPointer(it.value.type),
+              it.value.type
+            )
           )
           builder.emit(
-            IrStore(
-              id = -1,
-              type = IrPrimitive(PrimitiveKind.UNIT),
-              address = address,
-              value = binding.value,
-            ),
+            IrStore("", IrPrimitive(PrimitiveKind.UNIT), ret, it.value)
           )
-          val stackSlot = StackSlot(address, type)
-            valueEnv.bind(identifier, stackSlot)
-            LValue(address, type)
-          }
+          valueEnv.bind(identifier, Bind.Pointer(ret))
+          ret
+        }
+
+        is Bind.Pointer -> {
+          it.addr
+        }
+
+        else -> {
+          error("Unbound lvalue identifier $identifier")
+        }
       }
     }
 
-    is DerefExprNode -> {
-      val pointer = emitExpr(node.expr)
-      val pointerType = pointer.type as? IrPointer
-        ?: error("Cannot dereference non-pointer type ${pointer.type}")
-      LValue(pointer, pointerType.pointee)
-    }
+    is DerefExprNode -> emitExpr(node.expr)
 
-    is frontend.ast.FieldAccessExprNode -> {
-      val base = emitLValue(node.expr)
-      var baseAddress = base.address
-      val structType = when (val pointee = base.pointee) {
-        is IrStruct -> pointee
-        is IrPointer -> pointee.pointee as? IrStruct
+    is FieldAccessExprNode -> {
+      var base = emitLValue(node.expr) as? IrLocal ?: error("cannot find proper base for field access")
+      val innerType = getLValueInnerType(base)
+      val structType = when (innerType) {
+        is IrStruct -> innerType
+        is IrPointer -> innerType.pointee as? IrStruct
         else -> null
       } ?: error("field access on non-struct")
 
-      if (base.pointee is IrPointer) {
-        baseAddress = builder.emit(
+      if (innerType is IrPointer) {
+        base = builder.emit(
           IrLoad(
-            id = -1,
-            type = base.pointee,
-            address = base.address,
-          ),
+            name = "",
+            type = innerType,
+            address = base,
+          )
         )
       }
-
-      val index = fieldIndex(structType, node.id)
-      val gep = builder.emit(
+      val index = fieldIndex(node.structSymbol!!.type, node.id)
+      builder.emit(
         IrGep(
-          id = -1,
+          name = "",
           type = IrPointer(structType.fields[index]),
-          base = baseAddress,
+          base = base,
           indices = listOf(
-            IrIntConstant(0, IrPrimitive(PrimitiveKind.I32)),
-            IrIntConstant(index.toLong(), IrPrimitive(PrimitiveKind.I32)),
+            IrConstant(0, IrPrimitive(PrimitiveKind.I32)),
+            IrConstant(index.toLong(), IrPrimitive(PrimitiveKind.I32)),
           ),
         ),
       )
-      LValue(gep, structType.fields[index])
     }
 
-    is frontend.ast.IndexExprNode -> {
-      val base = emitLValue(node.base)
-      val baseType = base.pointee as? IrArray ?: error("indexing non-array")
+    is IndexExprNode -> {
+      var base = emitLValue(node.base)
+      //base is IrPointer(innerType) innerType: IrArray, IrPointer(IrArray), elementType, IrPointer(elementType)?
+      val innerType = getLValueInnerType(base)
+
       val indexValue = emitExpr(node.index)
-      val gep = builder.emit(
+
+      if (innerType is IrPointer) {
+        base = builder.emit(
+          IrLoad(
+            name = "",
+            type = innerType,
+            address = base,
+          )
+        )
+      }
+      //now base_type is either IrPointer(IrArray) or IrPointer(elementType)
+
+      val elementType = when (val it = getLValueInnerType(base)) {
+        is IrArray -> it.element
+        else -> it
+      }
+      val indice = if (getLValueInnerType(base) is IrArray) {
+        listOf(
+          IrConstant(0, IrPrimitive(PrimitiveKind.I32)),
+          indexValue
+        )
+      } else listOf(indexValue)
+
+      builder.emit(
         IrGep(
-          id = -1,
-          type = IrPointer(baseType.element),
-          base = base.address,
-          indices = listOf(IrIntConstant(0, IrPrimitive(PrimitiveKind.I32)), indexValue),
+          name = "",
+          type = IrPointer(elementType),
+          base = base,
+          indices = indice
         ),
       )
-      LValue(gep, baseType.element)
     }
 
-    else -> error("Unsupported lvalue expression ${node::class.simpleName}")
+    else -> error(
+      "Unsupported lvalue expression ${
+        node::
+        class.simpleName
+      }"
+    )
   }
 
-  private fun emitArgument(expr: ExprNode, expected: IrType?, hint: String): IrValue {
-    if (expected is IrPointer) {
-      tryLValue(expr)?.let { lv ->
-        // If the lvalue already holds a pointer, passing its address would create a pointer-to-pointer.
-        if (lv.pointee is IrPointer) return emitExpr(expr, expectedType = expected)
-        ensureSameType(expected.pointee, lv.pointee)
-        return retargetPointer(lv.address, expected)
-      }
-    }
-    val value = emitExpr(expr, expectedType = expected)
-    return if (expected is IrPointer) coerceArgument(value, expected, hint) else value
-  }
 
-  private fun tryLValue(expr: ExprNode): LValue? = when (expr) {
+  private fun tryLValue(expr: ExprNode): IrValue? = when (expr) {
     is PathExprNode, is DerefExprNode, is FieldAccessExprNode, is IndexExprNode -> {
       try {
         emitLValue(expr)
@@ -868,125 +838,118 @@ class ExprEmitter(
     error("Type mismatch: $lhs vs $rhs")
   }
 
+  private fun retargetPointer(value: IrValue, targetType: IrPointer): IrValue =
+    if (value.type == targetType) {
+      value
+    } else {
+      builder.emit(
+        IrCast(
+          name = "",
+          type = targetType,
+          value = value,
+          kind = CastKind.BITCAST,
+        )
+      )
+    }
+
   private fun isUnsigned(type: IrType): Boolean =
     (type as? IrPrimitive)?.kind in setOf(PrimitiveKind.U32, PrimitiveKind.USIZE)
 
-  private fun coerceArgument(value: IrValue, targetType: IrType, hint: String): IrValue {
-    if (value.type == targetType) return value
-
-    if (targetType is IrPointer) {
-      return when (value.type) {
-        is IrPointer -> retargetPointer(value, targetType)
-        else -> {
-          val addr = builder.emit(
-            IrAlloca(
-              id = -1,
-              type = targetType,
-              allocatedType = targetType.pointee,
-              slotName = builder.freshLocalName(hint),
-            ),
-          )
-          ensureSameType(targetType.pointee, value.type)
-          builder.emit(
-            IrStore(
-              id = -1,
-              type = IrPrimitive(PrimitiveKind.UNIT),
-              address = addr,
-              value = value,
-            ),
-          )
-          addr
-        }
-      }
-    }
-
-    if (value.type is IrPrimitive && targetType is IrPrimitive && value.type.render() == targetType.render()) {
-      return value
-    }
-
-    error("Type mismatch: cannot pass ${value.type} to parameter of type $targetType")
-  }
-
   private fun unitValue(): IrValue = IrUndef(IrPrimitive(PrimitiveKind.UNIT))
 
-  private fun resolveFunction(name: String): Function? {
-    var scope = context.currentScope ?: context.rootScope
-    while (scope != null) {
-      val symbol = scope.resolve(name, Namespace.VALUE)
-      if (symbol is Function) return symbol
-      scope = scope.parentScope()
-    }
-    return null
-  }
 
-  private fun resolveStruct(name: String): StructType {
-    var scope = context.currentScope ?: context.rootScope
-    while (scope != null) {
-      val symbol = scope.resolve(name, Namespace.TYPE)
-      if (symbol is frontend.semantic.Struct) return symbol.type
-      scope = scope.parentScope()
-    }
-    error("Unknown struct $name")
-  }
-
-  private fun resolveConstant(name: String): IrValue? {
-    var scope = context.currentScope ?: context.rootScope
-    while (scope != null) {
-      val symbol = scope.resolve(name, Namespace.VALUE)
-      if (symbol is Constant) {
-        val value = symbol.value
-        if (value is ConstValue.Int) {
-          val irType = toIrType(value.actualType)
-          return IrIntConstant(value.value, irType)
-        }
-      }
-      scope = scope.parentScope()
-    }
-    return null
-  }
-
-  private fun resolveMethod(receiverType: IrType, name: String): Function? {
-    val base = if (receiverType is IrPointer) receiverType.pointee else receiverType
-    val struct = base as? IrStruct ?: return null
-    val structName = struct.name ?: return null
-    var scope = context.currentScope ?: context.rootScope
-    while (scope != null) {
-      val symbol = scope.resolve(structName, Namespace.TYPE)
-      if (symbol is frontend.semantic.Struct) {
-        return symbol.methods[name]
-      }
-      scope = scope.parentScope()
-    }
-    return null
-  }
-
-  private fun resolveAssociatedFunction(typeName: String, fnName: String): Function? {
-    var scope = context.currentScope ?: context.rootScope
-    while (scope != null) {
-      when (val symbol = scope.resolve(typeName, Namespace.TYPE)) {
-        is Struct -> {
-          symbol.associateItems[fnName]?.let { return it as? Function }
-          symbol.methods[fnName]?.let { return it }
-        }
-
-        is Enum -> {
-          symbol.associateItems[fnName]?.let { return it as? Function }
-          symbol.methods[fnName]?.let { return it }
-        }
-
-        else -> {}
-      }
-      scope = scope.parentScope()
-    }
-    return null
-  }
-
-  private fun fieldIndex(structType: IrStruct, fieldName: String): Int {
-    val semantic = resolveStruct(structType.name ?: error("unnamed struct"))
+  private fun fieldIndex(semantic: StructType, fieldName: String): Int {
     val names = semantic.fields.keys.toList()
     val idx = names.indexOf(fieldName)
     if (idx == -1) error("Field $fieldName not found")
     return idx
+  }
+
+
+  fun storeAggregateToPointer(valueExpr: ExprNode, toDst: IrValue): Boolean {
+    when (valueExpr) {
+      is StructExprNode -> {
+        storeStructToPointer(valueExpr, toDst)
+        return true
+      }
+
+      is ArrayExprNode -> {
+        storeArrayToPointer(valueExpr, toDst)
+        return true
+      }
+
+      else -> return false
+    }
+  }
+
+  fun storeStructToPointer(valueExpr: StructExprNode, toDst: IrValue) {
+    val path = valueExpr.path as? PathExprNode ?: error("struct literal requires path")
+    val irType = structLayout(valueExpr.type as StructType)
+    irType.fields.forEachIndexed { index, type ->
+      val indexAddr = builder.emit(
+        IrGep(
+          "", IrPointer(type), toDst, listOf(
+            IrConstant(0, IrPrimitive(PrimitiveKind.I32)),
+            IrConstant(index.toLong(), IrPrimitive(PrimitiveKind.I32))
+          )
+        )
+      )
+      if (!storeAggregateToPointer(valueExpr.fields[index].expr!!, indexAddr)) {
+        val indexExpr = emitExpr(valueExpr.fields[index].expr!!)
+        builder.emit(
+          IrStore("", IrPrimitive(PrimitiveKind.UNIT), indexAddr, indexExpr)
+        )
+      }
+    }
+  }
+
+  fun storeArrayToPointer(valueExpr: ArrayExprNode, toDst: IrValue) {
+    val type = valueExpr.type as? ArrayType ?: error("array literal without type")
+    val irType = toIrType(type) as IrArray
+    if (valueExpr.repeatOp != null && valueExpr.lengthOp != null) {
+      var elemRecord: IrValue? = null
+      val count = valueExpr.evaluatedSize.takeIf { it >= 0 }?.toInt()
+        ?: error("array repeat size unknown")
+      for (index in 0..count - 1) {
+        val indexAddr = builder.emit(
+          IrGep(
+            "",
+            IrPointer(irType.element),
+            toDst,
+            listOf(
+              IrConstant(0, IrPrimitive(PrimitiveKind.I32)),
+              IrConstant(index.toLong(), IrPrimitive(PrimitiveKind.I32))
+            )
+          )
+        )
+        if (storeAggregateToPointer(valueExpr.repeatOp, indexAddr)) {
+          continue
+        }
+        if (elemRecord == null) elemRecord = emitExpr(valueExpr.repeatOp)
+        builder.emit(
+          IrStore("", IrPrimitive(PrimitiveKind.UNIT), indexAddr, elemRecord)
+        )
+      }
+    } else {
+      valueExpr.elements.forEachIndexed { index, node ->
+        val indexAddr = builder.emit(
+          IrGep(
+            "",
+            IrPointer(irType.element),
+            toDst,
+            listOf(
+              IrConstant(0, IrPrimitive(PrimitiveKind.I32)),
+              IrConstant(index.toLong(), IrPrimitive(PrimitiveKind.I32))
+            )
+          )
+        )
+        if (!storeAggregateToPointer(node, indexAddr)) {
+          builder.emit(
+            IrStore("", IrPrimitive(PrimitiveKind.UNIT), indexAddr, emitExpr(node))
+          )
+        }
+      }
+    }
   }
 
 }
