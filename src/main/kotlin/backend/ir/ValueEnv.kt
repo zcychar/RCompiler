@@ -3,7 +3,7 @@ package backend.ir
 import frontend.semantic.Scope
 
 class ValueEnv {
-    private val scopes: ArrayDeque<MutableMap<String, ValueBinding>> = ArrayDeque()
+    private val scopes: ArrayDeque<MutableMap<String, IrLocal>> = ArrayDeque()
     private val functionStack: ArrayDeque<FunctionFrame> = ArrayDeque()
 
     fun enterScope() {
@@ -14,12 +14,12 @@ class ValueEnv {
         scopes.removeLastOrNull()
     }
 
-    fun bind(name: String, binding: ValueBinding) {
+    fun bind(name: String, binding: IrLocal) {
         val current = scopes.lastOrNull() ?: error("No scope to bind $name")
         current[name] = binding
     }
 
-    fun resolve(name: String): ValueBinding? {
+    fun resolve(name: String): IrLocal? {
         for (i in scopes.indices.reversed()) {
             val scope = scopes.elementAt(i)
             scope[name]?.let { return it }
@@ -53,10 +53,6 @@ class ValueEnv {
     fun currentBreakTarget(): String? = functionStack.lastOrNull()?.breakTargets?.lastOrNull()
     fun currentContinueTarget(): String? = functionStack.lastOrNull()?.continueTargets?.lastOrNull()
 }
-
-sealed interface ValueBinding
-data class SsaValue(val value: IrValue) : ValueBinding
-data class StackSlot(val address: IrValue, val type: IrType) : ValueBinding
 
 private data class FunctionFrame(
     val returnType: IrType,

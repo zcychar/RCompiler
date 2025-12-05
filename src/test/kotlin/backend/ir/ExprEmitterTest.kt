@@ -66,7 +66,7 @@ class ExprEmitterTest {
         )
         val value = emitter.emitExpr(expr)
 
-        assertIs<IrRegister>(value)
+        assertIs<IrLocal>(value)
         assertEquals(IrPrimitive(PrimitiveKind.I32), value.type)
 
         val block = function.entryBlock()
@@ -256,7 +256,7 @@ class ExprEmitterTest {
             )
 
             val value = emitter.emitExpr(callExpr)
-            assertIs<IrRegister>(value)
+            assertIs<IrLocal>(value)
 
             val call = assertIs<IrCall>(function.entryBlock().instructions.last())
             assertEquals("foo", call.callee.name)

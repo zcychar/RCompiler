@@ -47,83 +47,64 @@ class ExprEmitter(
   }
 
   private fun emitLiteral(node: LiteralExprNode): IrValue = when (node.type) {
-    Keyword.TRUE -> IrBoolConstant(true, IrPrimitive(PrimitiveKind.BOOL))
-    Keyword.FALSE -> IrBoolConstant(false, IrPrimitive(PrimitiveKind.BOOL))
+    Keyword.TRUE -> builder.borrow(null,IrBoolConstant(true, IrPrimitive(PrimitiveKind.BOOL)))
+    Keyword.FALSE -> builder.borrow(null,IrBoolConstant(false, IrPrimitive(PrimitiveKind.BOOL)))
     Literal.INTEGER -> {
       val intConst = getInt(node)
       val irType = toIrType(intConst.actualType)
-      IrIntConstant(intConst.value, irType)
+      builder.borrow(null,IrIntConstant(intConst.value, irType))
     }
-
     else -> error("Unsupported literal ${node.type}")
   }
 
-  private fun emitPath(node: PathExprNode): IrValue {
+  private fun emitPath(node: PathExprNode):  IrValue {
     if (node.seg2 != null) {
       error("Qualified paths are not supported in expression lowering yet")
     }
     val identifier = node.seg1.name ?: "self"
-    val binding = valueEnv.resolve(identifier) ?: resolveConstant(identifier)
+    return valueEnv.resolve(identifier) ?: resolveConstant(identifier)
     ?: error("Unbound identifier $identifier")
-    return when (binding) {
-      is SsaValue -> binding.value
-      is StackSlot -> builder.emit(
-        IrLoad(
-          id = -1,
-          type = binding.type,
-          address = binding.address,
-        ),
-      )
-    }
   }
 
-  private fun emitBinary(node: BinaryExprNode): IrValue =
+  private fun emitBinary(node: BinaryExprNode):  IrValue =
     if (node.op in assignOp) emitAssignment(node) else emitBinaryOp(node)
 
-  private fun emitAssignment(node: BinaryExprNode): IrValue {
-    val lvalue = emitLValue(node.lhs)
-    val rhs = emitExpr(node.rhs, expectedType = lvalue.pointee)
+  private fun emitAssignment(node: BinaryExprNode):  IrValue {
+    val lhs = emitExpr(node.lhs)
+    val rhs = emitExpr(node.rhs)
     val stored = when (node.op) {
       Punctuation.EQUAL -> rhs
-      Punctuation.PLUS_EQUAL -> emitArithmetic(BinaryOperator.ADD, lvalue, rhs)
-      Punctuation.MINUS_EQUAL -> emitArithmetic(BinaryOperator.SUB, lvalue, rhs)
-      Punctuation.STAR_EQUAL -> emitArithmetic(BinaryOperator.MUL, lvalue, rhs)
+      Punctuation.PLUS_EQUAL -> emitArithmetic(BinaryOperator.ADD, lhs, rhs)
+      Punctuation.MINUS_EQUAL -> emitArithmetic(BinaryOperator.SUB, lhs, rhs)
+      Punctuation.STAR_EQUAL -> emitArithmetic(BinaryOperator.MUL, lhs, rhs)
       Punctuation.SLASH_EQUAL -> emitArithmetic(
-        if (isUnsigned(lvalue.pointee)) BinaryOperator.UDIV else BinaryOperator.SDIV,
-        lvalue,
+        if (isUnsigned(lhs.type)) BinaryOperator.UDIV else BinaryOperator.SDIV,
+        lhs,
         rhs,
       )
 
       Punctuation.PERCENT_EQUAL -> emitArithmetic(
-        if (isUnsigned(lvalue.pointee)) BinaryOperator.UREM else BinaryOperator.SREM,
-        lvalue,
+        if (isUnsigned(lhs.type)) BinaryOperator.UREM else BinaryOperator.SREM,
+        lhs,
         rhs,
       )
 
-      Punctuation.AND_EQUAL -> emitArithmetic(BinaryOperator.AND, lvalue, rhs)
-      Punctuation.OR_EQUAL -> emitArithmetic(BinaryOperator.OR, lvalue, rhs)
-      Punctuation.CARET_EQUAL -> emitArithmetic(BinaryOperator.XOR, lvalue, rhs)
-      Punctuation.LESS_LESS_EQUAL -> emitArithmetic(BinaryOperator.SHL, lvalue, rhs)
+      Punctuation.AND_EQUAL -> emitArithmetic(BinaryOperator.AND, lhs, rhs)
+      Punctuation.OR_EQUAL -> emitArithmetic(BinaryOperator.OR, lhs, rhs)
+      Punctuation.CARET_EQUAL -> emitArithmetic(BinaryOperator.XOR, lhs, rhs)
+      Punctuation.LESS_LESS_EQUAL -> emitArithmetic(BinaryOperator.SHL, lhs, rhs)
       Punctuation.GREATER_GREATER_EQUAL -> emitArithmetic(
-        if (isUnsigned(lvalue.pointee)) BinaryOperator.LSHR else BinaryOperator.ASHR,
-        lvalue,
+        if (isUnsigned(lhs.type)) BinaryOperator.LSHR else BinaryOperator.ASHR,
+        lhs,
         rhs,
       )
 
       else -> error("Unsupported assignment operator ${node.op}")
     }
-    builder.emit(
-      IrStore(
-        id = -1,
-        type = IrPrimitive(PrimitiveKind.UNIT),
-        address = lvalue.address,
-        value = stored,
-      ),
-    )
     return unitValue()
   }
 
-  private fun emitBinaryOp(node: BinaryExprNode): IrValue {
+  private fun emitBinaryOp(node: BinaryExprNode):  IrValue {
     val lhs = emitExpr(node.lhs)
     val rhs = emitExpr(node.rhs)
     return when (node.op) {
@@ -184,26 +165,36 @@ class ExprEmitter(
     }
   }
 
-  private fun emitArithmetic(operator: BinaryOperator, lvalue: LValue, rhs: IrValue): IrValue {
-    val current = builder.emit(
-      IrLoad(
-        id = -1,
-        type = lvalue.pointee,
-        address = lvalue.address,
-      ),
-    )
+
+  private fun emitArithmetic(operator: BinaryOperator, lhs: IrValue, rhs: IrValue):  IrValue {
+    var left = lhs
+    var right = rhs
+    val lhsUnit = (lhs.type as? IrPrimitive)?.kind == PrimitiveKind.UNIT
+    val rhsUnit = (rhs.type as? IrPrimitive)?.kind == PrimitiveKind.UNIT
+    if (lhsUnit && !rhsUnit) {
+      left = zeroOfType(rhs.type)
+    } else if (rhsUnit && !lhsUnit) {
+      right = zeroOfType(lhs.type)
+    } else if (lhsUnit ) {
+      val intType = IrPrimitive(PrimitiveKind.I32)
+      left = IrIntConstant(0, intType)
+      right = IrIntConstant(0, intType)
+    }
+    ensureSameType(left.type, right.type)
+    val leftValue = builder.emit(IrLoad("",left.type,left))
+    val rightValue = builder.emit(IrLoad("",right.type,right))
     return builder.emit(
       IrBinary(
-        id = -1,
-        type = lvalue.pointee,
+        name = "",
+        type = leftValue.type,
         operator = operator,
-        lhs = current,
-        rhs = rhs,
-      ),
+        lhs = leftValue,
+        rhs = rightValue,
+      )
     )
   }
 
-  private fun emitArithmetic(operator: BinaryOperator, lhs: IrValue, rhs: IrValue): IrValue {
+  private fun emitCompare(predicate: ComparePredicate, lhs: IrValue, rhs: IrValue):  IrValue {
     var left = lhs
     var right = rhs
     val lhsUnit = (lhs.type as? IrPrimitive)?.kind == PrimitiveKind.UNIT
@@ -218,44 +209,20 @@ class ExprEmitter(
       right = IrIntConstant(0, intType)
     }
     ensureSameType(left.type, right.type)
-    return builder.emit(
-      IrBinary(
-        id = -1,
-        type = left.type,
-        operator = operator,
-        lhs = left,
-        rhs = right,
-      ),
-    )
-  }
-
-  private fun emitCompare(predicate: ComparePredicate, lhs: IrValue, rhs: IrValue): IrValue {
-    var left = lhs
-    var right = rhs
-    val lhsUnit = (lhs.type as? IrPrimitive)?.kind == PrimitiveKind.UNIT
-    val rhsUnit = (rhs.type as? IrPrimitive)?.kind == PrimitiveKind.UNIT
-    if (lhsUnit && !rhsUnit) {
-      left = zeroOfType(rhs.type)
-    } else if (rhsUnit && !lhsUnit) {
-      right = zeroOfType(lhs.type)
-    } else if (lhsUnit && rhsUnit) {
-      val intType = IrPrimitive(PrimitiveKind.I32)
-      left = IrIntConstant(0, intType)
-      right = IrIntConstant(0, intType)
-    }
-    ensureSameType(left.type, right.type)
+    val leftValue = builder.emit(IrLoad("",left.type,left))
+    val rightValue = builder.emit(IrLoad("",right.type,right))
     return builder.emit(
       IrCmp(
-        id = -1,
+        name = "",
         type = IrPrimitive(PrimitiveKind.BOOL),
         predicate = predicate,
-        lhs = left,
-        rhs = right,
+        lhs = leftValue,
+        rhs = rightValue,
       ),
     )
   }
 
-  private fun zeroOfType(type: IrType): IrValue = when (type) {
+  private fun zeroOfType(type: IrType):  IrValue = when (type) {
     is IrPrimitive -> IrIntConstant(0, type)
     is IrPointer -> IrIntConstant(0, IrPrimitive(PrimitiveKind.ISIZE))
     else -> IrIntConstant(0, IrPrimitive(PrimitiveKind.I32))
@@ -263,47 +230,33 @@ class ExprEmitter(
 
   private fun emitLogical(operator: BinaryOperator, lhs: IrValue, rhs: IrValue): IrValue {
     ensureSameType(lhs.type, rhs.type)
+    val leftValue = builder.emit(IrLoad("",lhs.type,lhs))
+    val rightValue = builder.emit(IrLoad("",rhs.type,rhs))
     return builder.emit(
       IrBinary(
-        id = -1,
+        name = "",
         type = lhs.type,
         operator = operator,
-        lhs = lhs,
-        rhs = rhs,
-      ),
+        lhs = leftValue,
+        rhs = rightValue,
+      )
     )
   }
 
-  private fun emitShortCircuitAnd(lhs: IrValue, rhsThunk: () -> IrValue): IrValue {
+  private fun emitShortCircuitAnd(lhs: IrValue, rhsThunk: () -> IrValue):  IrValue {
     return emitShortCircuit(lhs, rhsThunk, shortCircuitOnTrue = false)
   }
 
-  private fun emitShortCircuitOr(lhs: IrValue, rhsThunk: () -> IrValue): IrValue {
+  private fun emitShortCircuitOr(lhs: IrValue, rhsThunk: () -> IrValue):  IrValue {
     return emitShortCircuit(lhs, rhsThunk, shortCircuitOnTrue = true)
   }
 
   private fun emitShortCircuit(lhs: IrValue, rhsThunk: () -> IrValue, shortCircuitOnTrue: Boolean): IrValue {
     val boolType = IrPrimitive(PrimitiveKind.BOOL)
     if (lhs.type != boolType) error("Short-circuit operators require boolean operands")
-
+    val lhsValue = builder.emit(IrLoad("",lhs.type,lhs))
     val function = context.currentFunction ?: error("No active function for short-circuit emission")
-    val resultSlot = builder.emit(
-      IrAlloca(
-        id = -1,
-        type = IrPointer(boolType),
-        allocatedType = boolType,
-        slotName = builder.freshLocalName("sc"),
-      ),
-    )
-    builder.emit(
-      IrStore(
-        id = -1,
-        type = IrPrimitive(PrimitiveKind.UNIT),
-        address = resultSlot,
-        value = lhs,
-      ),
-    )
-
+    val resultAddr = builder.borrow(null, lhsValue)
     val rhsLabel = builder.freshLocalName(if (shortCircuitOnTrue) "or.rhs" else "and.rhs")
     val mergeLabel = builder.freshLocalName("sc.merge")
     val rhsBlock = builder.ensureBlock(rhsLabel)
@@ -313,35 +266,23 @@ class ExprEmitter(
     val falseTarget = if (shortCircuitOnTrue) rhsLabel else mergeLabel
     builder.emitTerminator(
       IrBranch(
-        id = -1,
+        name = "",
         type = IrPrimitive(PrimitiveKind.UNIT),
         condition = lhs,
         trueTarget = trueTarget,
         falseTarget = falseTarget,
-      ),
+      )
     )
 
     builder.positionAt(function, rhsBlock)
     val rhs = rhsThunk()
     if (rhs.type != boolType) error("Short-circuit RHS must be boolean")
-    builder.emit(
-      IrStore(
-        id = -1,
-        type = IrPrimitive(PrimitiveKind.UNIT),
-        address = resultSlot,
-        value = rhs,
-      ),
-    )
-    builder.emitTerminator(IrJump(id = -1, type = IrPrimitive(PrimitiveKind.UNIT), target = mergeLabel))
+    builder.copy(rhs,resultAddr)
+
+    builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = mergeLabel))
 
     builder.positionAt(function, mergeBlock)
-    return builder.emit(
-      IrLoad(
-        id = -1,
-        type = boolType,
-        address = resultSlot,
-      ),
-    )
+    return resultAddr
   }
 
   private fun emitUnary(node: UnaryExprNode): IrValue {
@@ -351,17 +292,18 @@ class ExprEmitter(
       Punctuation.BANG -> UnaryOperator.NOT
       else -> error("Unsupported unary operator ${node.op}")
     }
+    val rightValue = builder.emit(IrLoad("",operand.type,operand))
     return builder.emit(
       IrUnary(
-        id = -1,
+        name = "",
         type = operand.type,
         operator = operator,
-        operand = operand,
-      ),
+        operand = rightValue,
+      )
     )
   }
 
-  private fun emitCast(node: CastExprNode): IrValue {
+  private fun emitCast(node: CastExprNode):  IrValue {
     val value = emitExpr(node.expr)
     val targetType = mapType(node.targetType)
     val irTarget = toIrType(targetType)
@@ -376,20 +318,20 @@ class ExprEmitter(
 
       else -> CastKind.BITCAST
     }
+    val loadValue = builder.emit(IrLoad("",value.type,value))
     return builder.emit(
       IrCast(
-        id = -1,
+        name = "",
         type = irTarget,
-        value = value,
+        value = loadValue,
         kind = kind,
       ),
     )
   }
 
   private fun emitBorrow(node: BorrowExprNode): IrValue {
-    val lvalue = emitLValue(node.expr)
-    val targetType = IrPointer(lvalue.pointee)
-    return retargetPointer(lvalue.address, targetType)
+    val baseAddr = emitExpr(node.expr)
+    return builder.borrow(null, baseAddr)
   }
 
   private fun emitDeref(node: DerefExprNode): IrValue {
@@ -987,7 +929,7 @@ class ExprEmitter(
     error("Unknown struct $name")
   }
 
-  private fun resolveConstant(name: String): ValueBinding? {
+  private fun resolveConstant(name: String): IrValue? {
     var scope = context.currentScope ?: context.rootScope
     while (scope != null) {
       val symbol = scope.resolve(name, Namespace.VALUE)
@@ -995,7 +937,7 @@ class ExprEmitter(
         val value = symbol.value
         if (value is ConstValue.Int) {
           val irType = toIrType(value.actualType)
-          return SsaValue(IrIntConstant(value.value, irType))
+          return IrIntConstant(value.value, irType)
         }
       }
       scope = scope.parentScope()
@@ -1047,19 +989,4 @@ class ExprEmitter(
     return idx
   }
 
-  private fun retargetPointer(value: IrValue, targetType: IrPointer): IrValue =
-    if (value.type == targetType) {
-      value
-    } else {
-      builder.emit(
-        IrCast(
-          id = -1,
-          type = targetType,
-          value = value,
-          kind = CastKind.BITCAST,
-        ),
-      )
-    }
-
-  private data class LValue(val address: IrValue, val pointee: IrType)
 }

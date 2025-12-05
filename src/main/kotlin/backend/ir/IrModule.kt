@@ -38,11 +38,6 @@ class IrModule {
         return function
     }
 
-    fun globalByName(name: String): IrGlobal? = globals.find { it.name == name }
-    fun functionByName(name: String): IrFunction? = functions.find { it.name == name }
-    fun allTypes(): Collection<IrType> = types.values
-    fun allGlobals(): List<IrGlobal> = globals
-    fun allFunctions(): List<IrFunction> = functions
 
     fun render(): String = buildString {
         emitBuiltinPrologue()

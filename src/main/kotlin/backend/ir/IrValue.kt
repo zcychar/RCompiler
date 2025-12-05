@@ -5,8 +5,8 @@ sealed interface IrValue {
     fun render(): String
 }
 
-data class IrRegister(val id: Int, override val type: IrType) : IrValue {
-    override fun render(): String = "%$id"
+data class IrLocal(val name: String, override val type: IrType) : IrValue {
+    override fun render(): String = "%$name"
 }
 
 data class IrParameter(
@@ -31,10 +31,7 @@ data class IrIntConstant(val value: Long, override val type: IrType) : IrConstan
     override fun render(): String = value.toString()
 }
 
-data class IrBoolConstant(val value: Boolean, override val type: IrType) : IrConstant {
-    override fun render(): String = if (value) "true" else "false"
-}
-
 data class IrUndef(override val type: IrType) : IrValue {
     override fun render(): String = "undef"
 }
+

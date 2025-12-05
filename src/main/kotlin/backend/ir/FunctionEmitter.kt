@@ -1,19 +1,14 @@
 package backend.ir
 
-import frontend.ast.BlockExprNode
-import frontend.ast.ExprStmtNode
-import frontend.ast.IdentifierPatternNode
-import frontend.ast.ItemStmtNode
-import frontend.ast.LetStmtNode
-import frontend.ast.NullStmtNode
-import frontend.ast.StmtNode
+import frontend.ast.*
 import frontend.semantic.Function
+import frontend.semantic.NeverType
+import frontend.semantic.RefType
 import frontend.semantic.Type
 
 /**
- * Drives lowering of functions and methods into IR according to the backend design doc.
- * Expression-level work is delegated to [ExprEmitter]; this class wires up scopes,
- * parameters, and blocks.
+ * &self also store self copy too
+ * other param's name is changed to param.tmp (ssa value) would be stored immediately at entry block with true names.
  */
 class FunctionEmitter(
     private val context: CodegenContext,
@@ -22,7 +17,7 @@ class FunctionEmitter(
     private val valueEnv: ValueEnv = context.valueEnv,
 ) {
 
-    fun emitFunction(fnSymbol: Function, node: frontend.ast.FunctionItemNode, owner: Type? = null): IrFunction {
+    fun emitFunction(fnSymbol: Function, node: FunctionItemNode, owner: Type? = null): IrFunction {
         val signature = irFunctionSignature(fnSymbol)
         val ownerName = when (val resolvedOwner = owner ?: fnSymbol.self) {
             is frontend.semantic.StructType -> resolvedOwner.name
@@ -31,8 +26,8 @@ class FunctionEmitter(
         }
         val irName = ownerName?.let { "$it.${fnSymbol.name}" } ?: fnSymbol.name
         val parameterNames = buildList {
-            fnSymbol.selfParam?.let { add("self") }
-            fnSymbol.params.forEach { add(it.name) }
+            fnSymbol.selfParam?.let { add("self.tmp") }
+            fnSymbol.params.forEach { add(it.name+".tmp") }
         }
         val function = IrFunction(irName, signature, parameterNames)
         context.module.declareFunction(function)
@@ -56,10 +51,10 @@ class FunctionEmitter(
             }
             builder.emitTerminator(
                 IrReturn(
-                    id = -1,
+                    name = "",
                     type = signature.returnType,
                     value = returnValue,
-                ),
+                )
             )
         }
 
@@ -107,43 +102,44 @@ class FunctionEmitter(
         val initializer = stmt.expr ?: error("let without initializer is not supported in codegen")
         val expr = exprEmitter.emitExpr(initializer)
 
-        // Simple heuristic: mutable or ref bindings get a stack slot, others stay SSA.
-        if (pattern.hasMut || pattern.hasRef) {
-            val slotName = builder.freshLocalName(pattern.id)
-            val address = builder.emit(
-                IrAlloca(
-                    id = -1,
-                    type = IrPointer(expr.type),
-                    allocatedType = expr.type,
-                    slotName = slotName,
-                ),
-            )
-            builder.emit(
-                IrStore(
-                    id = -1,
-                    type = IrPrimitive(PrimitiveKind.UNIT),
-                    address = address,
-                    value = expr,
-                ),
-            )
-            valueEnv.bind(pattern.id, StackSlot(address, expr.type))
-        } else {
-            valueEnv.bind(pattern.id, SsaValue(expr))
-        }
+        val patternName = builder.freshLocalName(pattern.id)
+        val patternValue = builder.emit(
+            IrAlloca(
+                name = patternName,
+                type = IrPointer(expr.type),
+                allocatedType = expr.type,
+            ),patternName
+        )
+        builder.copy(expr,patternValue)
     }
 
     private fun bindParameters(fnSymbol: Function, signature: IrFunctionSignature) {
         var index = 0
         fnSymbol.selfParam?.let {
-            val param = IrParameter(index, "self", signature.parameters[index])
-            valueEnv.bind("self", SsaValue(param))
+            val irParam = IrParameter(index, "self.tmp", signature.parameters[index])
+            val parmAddr =builder.borrow("self",irParam)
+            valueEnv.bind("self", parmAddr)
             index++
         }
         fnSymbol.params.forEach { param ->
-            val irParam = IrParameter(index, param.name, signature.parameters[index])
-            valueEnv.bind(param.name, SsaValue(irParam))
+            val irParam = IrParameter(index, fnSymbol.name+".tmp", signature.parameters[index])
+            val parmAddr =builder.borrow(param.name,irParam)
+            valueEnv.bind(param.name, parmAddr)
             index++
         }
     }
 
 }
+
+fun irFunctionSignature(function: Function): IrFunctionSignature {
+    val params = mutableListOf<IrType>()
+    function.selfParam?.let {
+        val rawSelf = function.self ?: error("method missing self target")
+        val selfSemantic = if (it.isRef) RefType(rawSelf, it.isMut) else rawSelf
+        params += toIrType(selfSemantic)
+    }
+    params += function.params.map { param -> toIrType(param.type) }
+    val ret = toIrType(function.returnType)
+    return IrFunctionSignature(params, ret)
+}
+

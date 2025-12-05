@@ -46,7 +46,7 @@ class IrBackend(
         val previousScope = context.currentScope
         // Emit methods with self
         symbol.methods.values.forEach { fn ->
-            val fnNode = fn.node as? frontend.ast.FunctionItemNode ?: return@forEach
+            val fnNode = fn.node as? FunctionItemNode ?: return@forEach
             val implScope = fnNode.declScope
             context.currentScope = implScope
             functionEmitter.emitMethod(fn, symbol.type, fnNode)
@@ -63,15 +63,15 @@ class IrBackend(
         context.currentScope = previousScope
     }
 
-    private fun emitConst(scope: Scope, item: frontend.ast.ConstItemNode, context: CodegenContext) {
+    private fun emitConst(scope: Scope, item: ConstItemNode, context: CodegenContext) {
         val symbol = scope.resolve(item.name, Namespace.VALUE) as? Constant ?: return
         val value = symbol.value ?: return
-        val irConst = constToIrConstant(value, context) ?: return
+        val irConst = constToIrConstant(value) ?: return
         val irType = irConst.type
         context.module.declareGlobal(IrGlobal(symbol.name, irType, irConst))
     }
 
-    private fun constToIrConstant(value: ConstValue, context: CodegenContext): IrConstant? = when (value) {
+    private fun constToIrConstant(value: ConstValue): IrConstant? = when (value) {
         is ConstValue.Int -> IrIntConstant(value.value, toIrType(value.actualType))
         // IR-1 only uses integer consts; other shapes are skipped for now.
         else -> null
