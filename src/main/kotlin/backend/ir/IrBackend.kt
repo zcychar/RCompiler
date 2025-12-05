@@ -17,61 +17,24 @@ class IrBackend(
 
         crate.items.forEach { item ->
             when (item) {
-                is FunctionItemNode -> emitFunction(scope, functionEmitter, item)
-                is StructItemNode -> emitStruct(scope, item, context, functionEmitter)
-                is ConstItemNode -> emitConst(scope, item, context)
+                is ConstItemNode -> context.emitConst(scope, item)
                 else -> Unit
             }
         }
-
+        crate.items.forEach { item ->
+            when (item) {
+                is StructItemNode -> context.emitStruct(scope, item,  functionEmitter)
+                else -> Unit
+            }
+        }
+        crate.items.forEach { item ->
+            when (item) {
+                is FunctionItemNode -> context.emitFunction(scope, functionEmitter, item)
+                else -> Unit
+            }
+        }
         return context.module.render()
     }
 
-    private fun emitFunction(scope: Scope, functionEmitter: FunctionEmitter, item: FunctionItemNode) {
-        val symbol = scope.resolve(item.name, Namespace.VALUE) as? Function ?: return
-        functionEmitter.emitFunction(symbol, item)
-    }
 
-    private fun emitStruct(
-        scope: Scope,
-        item: StructItemNode,
-        context: CodegenContext,
-        functionEmitter: FunctionEmitter,
-    ) {
-        val symbol = scope.resolve(item.name, Namespace.TYPE) as? Struct ?: return
-        val irStruct = structLayout(symbol.type)
-        context.module.declareType(symbol.name, irStruct)
-        val previousScope = context.currentScope
-        // Emit methods with self
-        symbol.methods.values.forEach { fn ->
-            val fnNode = fn.node as? FunctionItemNode ?: return@forEach
-            val implScope = fnNode.declScope
-            context.currentScope = implScope
-            functionEmitter.emitMethod(fn, symbol.type, fnNode)
-        }
-        // Emit associated functions without self (not present in methods map)
-        symbol.associateItems.values.forEach { assoc ->
-            if (assoc is Function && assoc.selfParam == null) {
-                val fnNode = assoc.node as? frontend.ast.FunctionItemNode ?: return@forEach
-                val implScope = fnNode.declScope
-                context.currentScope = implScope
-                functionEmitter.emitMethod(assoc, symbol.type, fnNode)
-            }
-        }
-        context.currentScope = previousScope
-    }
-
-    private fun emitConst(scope: Scope, item: ConstItemNode, context: CodegenContext) {
-        val symbol = scope.resolve(item.name, Namespace.VALUE) as? Constant ?: return
-        val value = symbol.value ?: return
-        val irConst = constToIrConstant(value) ?: return
-        val irType = irConst.type
-        context.module.declareGlobal(IrGlobal(symbol.name, irType, irConst))
-    }
-
-    private fun constToIrConstant(value: ConstValue): IrConstant? = when (value) {
-        is ConstValue.Int -> IrConstant(value.value, toIrType(value.actualType))
-        // IR-1 only uses integer consts; other shapes are skipped for now.
-        else -> null
-    }
 }

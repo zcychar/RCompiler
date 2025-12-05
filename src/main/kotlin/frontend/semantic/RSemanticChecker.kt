@@ -310,12 +310,14 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
       if (!assignable(bodyType, UnitType) && !assignable(bodyType, NeverType)) {
         semanticError("`if` expressions without an `else` block must return `()` (unit type)")
       }
+      node.expectType = UnitType
       return UnitType
     } else {
       if (bodyType == elseType || (isInt(bodyType) && isInt(elseType) && canUnifyInt(
           bodyType, elseType
         )) || bodyType is NeverType || elseType is NeverType
       ) {
+        node.expectType = if (bodyType is NeverType) elseType else bodyType
         return if (bodyType is NeverType) elseType else bodyType
       }
       semanticError("`if` and `else` have incompatible types. Expected `$bodyType`, found `$elseType`")
@@ -730,6 +732,7 @@ open class RSemanticChecker(val gScope: Scope, val crate: CrateNode) : ASTVisito
     if (!assignable(exprType, type)) {
       semanticError("mismatched types in `let` statement. Expected `$type`, but found `$exprType`")
     }
+    node.realType = exprType
     currentScope?.declareVariable(getPatternBind(node.pattern, type))
     return UnitType
   }

@@ -50,7 +50,7 @@ data object ContinueExprNode : ExprWOBlock {
 }
 
 data class IfExprNode(
-  val conds: List<CondExprNode>, val expr: BlockExprNode, val elseExpr: ExprNode?, override var isLeft: Boolean = false
+  val conds: List<CondExprNode>, val expr: BlockExprNode, val elseExpr: ExprNode?,var expectType:Type? = null, override var isLeft: Boolean = false
 ) : ExprWIBlock {
   override fun <T> accept(visitor: ASTVisitor<T>): T = visitor.visit(this)
 }

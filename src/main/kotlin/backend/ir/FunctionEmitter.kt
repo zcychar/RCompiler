@@ -29,6 +29,31 @@ class FunctionEmitter(
       fnSymbol.selfParam?.let { add("self.tmp") }
       fnSymbol.params.forEach { add(it.name + ".tmp") }
     }
+
+    node.body!!.stmts.forEach {
+      if (it is ItemStmtNode) {
+        when (it.item) {
+          is ConstItemNode -> context.emitConst(node.body.scope!!, it.item)
+          else -> Unit
+        }
+      }
+    }
+    node.body.stmts.forEach {
+      if (it is ItemStmtNode) {
+        when (it.item) {
+          is StructItemNode -> context.emitStruct(node.body.scope!!, it.item, this)
+          else -> Unit
+        }
+      }
+    }
+    node.body.stmts.forEach {
+      if (it is ItemStmtNode) {
+        when (it.item) {
+          is FunctionItemNode -> context.emitFunction(node.body.scope!!, this, it.item)
+          else -> Unit
+        }
+      }
+    }
     val function = IrFunction(irName, signature, parameterNames)
     context.module.declareFunction(function)
     context.currentFunction = function
@@ -46,7 +71,10 @@ class FunctionEmitter(
     if (builder.hasInsertionPoint()) {
       val returnValue = when {
         signature.returnType is IrPrimitive && signature.returnType.kind == PrimitiveKind.UNIT -> null
-        blockResult != null -> blockResult
+        blockResult != null &&
+            ((blockResult.type !is IrPrimitive) || (blockResult.type as IrPrimitive).kind != PrimitiveKind.NEVER) &&
+            blockResult.type == signature.returnType -> blockResult
+
         else -> IrUndef(signature.returnType)
       }
       builder.emitTerminator(
@@ -71,6 +99,7 @@ class FunctionEmitter(
 
   fun emitBlock(block: BlockExprNode, expectValue: Boolean, expectedType: IrType? = null): IrValue? {
     valueEnv.enterScope()
+
     var result: IrValue? = null
     for ((index, stmt) in block.stmts.withIndex()) {
       val isLastExpr = expectValue && index == block.stmts.lastIndex && stmt is ExprStmtNode && !stmt.hasSemiColon
@@ -92,7 +121,7 @@ class FunctionEmitter(
       if (expectValue) value else null
     }
 
-    is ItemStmtNode -> null // items are handled by higher-level drivers
+    is ItemStmtNode -> null// items are handled by higher-level drivers
     NullStmtNode -> null
   }
 
@@ -100,17 +129,22 @@ class FunctionEmitter(
     val pattern = stmt.pattern as? IdentifierPatternNode
       ?: error("Only identifier patterns are supported in codegen")
     val initializer = stmt.expr ?: error("let without initializer is not supported in codegen")
-    val expr = exprEmitter.emitExpr(initializer)
+    val exprType = toIrType(stmt.realType!!)
 
     val patternName = builder.freshLocalName(pattern.id)
     val patternAddr = builder.emit(
       IrAlloca(
         name = patternName,
-        type = IrPointer(expr.type),
-        allocatedType = expr.type,
+        type = IrPointer(exprType),
+        allocatedType = exprType,
       ), patternName
     )
-
+    if (!exprEmitter.storeAggregateToPointer(initializer, patternAddr)) {
+      val exprValue = exprEmitter.emitExpr(initializer)
+      builder.emit(
+        IrStore("", IrPrimitive(PrimitiveKind.UNIT), patternAddr, exprValue)
+      )
+    }
     valueEnv.bind(pattern.id, Bind.Pointer(patternAddr))
   }
 
@@ -143,4 +177,3 @@ fun irFunctionSignature(function: Function): IrFunctionSignature {
   val ret = toIrType(function.returnType)
   return IrFunctionSignature(params, ret)
 }
-

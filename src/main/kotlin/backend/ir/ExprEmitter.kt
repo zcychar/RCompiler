@@ -31,7 +31,7 @@ class ExprEmitter(
     is CastExprNode -> emitCast(node)
     is BorrowExprNode -> emitBorrow(node)
     is DerefExprNode -> emitDeref(node)
-    is IfExprNode -> emitIf(node, expectedType)
+    is IfExprNode -> emitIf(node)
     is WhileExprNode -> emitWhile(node)
     is LoopExprNode -> emitLoop(node)
     is BreakExprNode -> emitBreak(node)
@@ -85,7 +85,11 @@ class ExprEmitter(
     val lhs = emitLValue(node.lhs)
     val rhs = emitExpr(node.rhs)
     val stored = when (node.op) {
-      Punctuation.EQUAL -> rhs
+      Punctuation.EQUAL -> {
+        builder.emit(
+          IrStore("", IrPrimitive(PrimitiveKind.UNIT),lhs,rhs)
+        )
+      }
       Punctuation.PLUS_EQUAL -> emitAssignArithmetic(BinaryOperator.ADD, lhs, rhs)
       Punctuation.MINUS_EQUAL -> emitAssignArithmetic(BinaryOperator.SUB, lhs, rhs)
       Punctuation.STAR_EQUAL -> emitAssignArithmetic(BinaryOperator.MUL, lhs, rhs)
@@ -297,8 +301,9 @@ class ExprEmitter(
     val lhsLabel = builder.currentBlockLabel()
     val rhsLabel = builder.freshLocalName(if (shortCircuitOnTrue) "or.rhs" else "and.rhs")
     val mergeLabel = builder.freshLocalName("sc.merge")
-    val rhsBlock = builder.ensureBlock(rhsLabel)
-    val mergeBlock = builder.ensureBlock(mergeLabel)
+    var rhsPred: String? = null
+
+
 
     val trueTarget = if (shortCircuitOnTrue) mergeLabel else rhsLabel
     val falseTarget = if (shortCircuitOnTrue) rhsLabel else mergeLabel
@@ -312,16 +317,19 @@ class ExprEmitter(
       )
     )
 
+    val rhsBlock = builder.ensureBlock(rhsLabel)
     builder.positionAt(function, rhsBlock)
 
     val rhs = rhsThunk()
     if (rhs.type != boolType) error("Short-circuit RHS must be boolean")
+    rhsPred = builder.currentBlockLabel()
     builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = mergeLabel))
 
+    val mergeBlock = builder.ensureBlock(mergeLabel)
     builder.positionAt(function, mergeBlock)
     val circuitVal = if (shortCircuitOnTrue) IrConstant(1, boolType) else IrConstant(0, boolType)
     return builder.emit(
-      IrPhi("", boolType, listOf(PhiBranch(circuitVal, lhsLabel), PhiBranch(rhs, rhsLabel)))
+      IrPhi("", boolType, listOf(PhiBranch(circuitVal, lhsLabel), PhiBranch(rhs, rhsPred)))
     )
   }
 
@@ -348,15 +356,21 @@ class ExprEmitter(
     val irTarget = toIrType(targetType)
     val valueType = value.type
     if (irTarget == valueType) return value
-    val kind = when {
-      valueType is IrPrimitive && irTarget is IrPrimitive -> when {
-        valueType.kind == PrimitiveKind.BOOL -> CastKind.ZEXT
-        irTarget.kind == PrimitiveKind.BOOL -> CastKind.TRUNC
-        else -> CastKind.BITCAST
-      }
 
+    val kind = when {
+      valueType is IrPrimitive && irTarget is IrPrimitive -> {
+        val srcW = bitWidth(valueType)
+        val dstW = bitWidth(irTarget)
+        when {
+          srcW == dstW -> return value
+          dstW < srcW -> CastKind.TRUNC
+          else -> if (isUnsigned(valueType) || valueType.kind == PrimitiveKind.BOOL) CastKind.ZEXT else CastKind.SEXT
+        }
+      }
+      valueType is IrPointer && irTarget is IrPointer -> CastKind.BITCAST
       else -> CastKind.BITCAST
     }
+
     return builder.emit(
       IrCast(
         name = "",
@@ -391,19 +405,21 @@ class ExprEmitter(
     return value ?: expectedType?.let { IrUndef(it) } ?: unitValue()
   }
 
-  private fun emitIf(node: IfExprNode, expectedType: IrType?): IrValue {
+  private fun emitIf(node: IfExprNode): IrValue {
     val function = context.currentFunction ?: error("No active function")
     val condExpr = node.conds.firstOrNull()?.expr ?: error("if without condition")
     val condition = emitExpr(condExpr)
     val boolType = IrPrimitive(PrimitiveKind.BOOL)
     if (condition.type != boolType) error("if condition must be boolean")
 
-    val resultType = expectedType ?: IrPrimitive(PrimitiveKind.UNIT)
-    val needsValue = resultType !is IrPrimitive || resultType.kind != PrimitiveKind.UNIT
+    val resultType = toIrType(node.expectType!!)
+    val needsValue = resultType !is IrPrimitive || (resultType.kind != PrimitiveKind.UNIT && resultType.kind != PrimitiveKind.NEVER)
 
     val thenLabel = builder.freshLocalName("if.then")
     val elseLabel = builder.freshLocalName("if.else")
     val mergeLabel = builder.freshLocalName("if.merge")
+    var thenPred: String? = null
+    var elsePred: String? = null
 
     builder.emitTerminator(
       IrBranch(
@@ -422,6 +438,7 @@ class ExprEmitter(
     val thenActive = builder.hasInsertionPoint()
     if (needsValue && thenActive) ensureSameType(resultType, thenValue.type)
     if (thenActive) {
+      thenPred = builder.currentBlockLabel()
       builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = mergeLabel))
     }
 
@@ -441,6 +458,7 @@ class ExprEmitter(
     val elseActive = builder.hasInsertionPoint()
     if (needsValue && elseActive) ensureSameType(resultType, elseValue.type)
     if (elseActive) {
+      elsePred = builder.currentBlockLabel()
       builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = mergeLabel))
     }
 
@@ -452,7 +470,7 @@ class ExprEmitter(
           IrPhi(
             name = "",
             type = resultType,
-            incoming = listOf(PhiBranch(thenValue, thenLabel), PhiBranch(elseValue, elseLabel))
+            incoming = listOf(PhiBranch(thenValue, thenPred ?: thenLabel), PhiBranch(elseValue, elsePred ?: elseLabel))
           )
         )
       } else if (thenActive) {
@@ -573,35 +591,35 @@ class ExprEmitter(
     val irName = "$ownerName.$fnName"
     val selfParamType = signature.parameters.firstOrNull()
 
-    val args = buildList<IrValue> {
-      if (receiverType is IrPointer) {
-        val baseRef = emitExpr(node.expr)
-        if (selfParamType is IrPointer) {
-          baseRef
-        } else {
-          builder.emit(
-            IrLoad("", baseType, baseRef)
-          )
-        }
+    val args = mutableListOf<IrValue>()
+    val selfValue = if (receiverType is IrPointer) {
+      val baseRef = emitExpr(node.expr)
+      if (selfParamType is IrPointer) {
+        baseRef
       } else {
-        if (selfParamType is IrPointer) {
-          tryLValue(node.expr) ?: {
-            val baseValue = emitExpr(node.expr)
-            val ret = builder.emit(
-              IrAlloca("", IrPointer(baseValue.type), baseValue.type)
-            )
-            builder.emit(
-              IrStore("", IrPrimitive(PrimitiveKind.UNIT), ret, baseValue)
-            )
-            ret
-          }()
-        } else {
-          emitExpr(node.expr)
-        }
+        builder.emit(
+          IrLoad("", baseType, baseRef)
+        )
       }
-      node.params.mapIndexed { index, expr ->
-        emitExpr(expr)
+    } else {
+      if (selfParamType is IrPointer) {
+        tryLValue(node.expr) ?: {
+          val baseValue = emitExpr(node.expr)
+          val ret = builder.emit(
+            IrAlloca("", IrPointer(baseValue.type), baseValue.type)
+          )
+          builder.emit(
+            IrStore("", IrPrimitive(PrimitiveKind.UNIT), ret, baseValue)
+          )
+          ret
+        }()
+      } else {
+        emitExpr(node.expr)
       }
+    }
+    args.add(selfValue)
+    node.params.mapIndexed { index, expr ->
+      args.add(emitExpr(expr))
     }
     return builder.emit(
       IrCall(
@@ -841,7 +859,7 @@ class ExprEmitter(
   private fun retargetPointer(value: IrValue, targetType: IrPointer): IrValue =
     if (value.type == targetType) {
       value
-    } else {
+    } else if (value.type is IrPointer) {
       builder.emit(
         IrCast(
           name = "",
@@ -850,7 +868,16 @@ class ExprEmitter(
           kind = CastKind.BITCAST,
         )
       )
+    } else {
+      error("retargetPointer on non-pointer type ${value.type}")
     }
+
+  private fun bitWidth(type: IrPrimitive): Int = when (type.kind) {
+    PrimitiveKind.BOOL -> 1
+    PrimitiveKind.CHAR -> 8
+    PrimitiveKind.I32, PrimitiveKind.U32, PrimitiveKind.ISIZE, PrimitiveKind.USIZE -> 32
+    PrimitiveKind.UNIT, PrimitiveKind.NEVER -> 0
+  }
 
   private fun isUnsigned(type: IrType): Boolean =
     (type as? IrPrimitive)?.kind in setOf(PrimitiveKind.U32, PrimitiveKind.USIZE)
