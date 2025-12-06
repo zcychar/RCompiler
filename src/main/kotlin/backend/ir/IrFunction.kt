@@ -37,9 +37,9 @@ class IrFunction(
         blocks.add(block)
     }
 
-    fun entryBlock(): IrBasicBlock {
+    fun entryBlock(label:String): IrBasicBlock {
         if (blocks.isEmpty()) {
-            createBlock("entry")
+            createBlock(label)
         }
         return blocks.first()
     }

@@ -24,7 +24,7 @@ class FunctionEmitter(
       is frontend.semantic.EnumType -> resolvedOwner.name
       else -> null
     }
-    val irName = ownerName?.let { "$it.${fnSymbol.name}" } ?: fnSymbol.name
+    val irName = if(fnSymbol.name=="main") "main" else ownerName?.let { "$it.${fnSymbol.name}." } ?: (fnSymbol.name+".")
     val parameterNames = buildList {
       fnSymbol.selfParam?.let { add("self.tmp") }
       fnSymbol.params.forEach { add(it.name + ".tmp") }
@@ -60,10 +60,10 @@ class FunctionEmitter(
     val previousScope = context.currentScope
     context.currentScope = node.body?.scope ?: previousScope
 
-    builder.positionAt(function, function.entryBlock())
+    builder.positionAt(function, function.entryBlock("entry"))
     valueEnv.pushFunction(signature.returnType)
     valueEnv.enterScope()
-
+    builder.freshLocalName("entry")
     bindParameters(fnSymbol, signature)
     val expectsValue = signature.returnType !is IrPrimitive || signature.returnType.kind != PrimitiveKind.UNIT
     val blockResult = node.body?.let { emitBlock(it, expectValue = expectsValue, expectedType = signature.returnType) }
@@ -152,19 +152,20 @@ class FunctionEmitter(
     var index = 0
     fnSymbol.selfParam?.let {
       val irParam = IrParameter(index, "self.tmp", signature.parameters[index])
-      val parmAddr = builder.borrow("self", irParam)
+      val parmAddr = builder.borrow("self..tmp", irParam)
       valueEnv.bind("self", Bind.Pointer(parmAddr))
       index++
     }
     fnSymbol.params.forEach { param ->
       val irParam = IrParameter(index, param.name + ".tmp", signature.parameters[index])
-      val parmAddr = builder.borrow(param.name, irParam)
+      val parmAddr = builder.borrow(param.name+"..tmp", irParam)
       valueEnv.bind(param.name, Bind.Pointer(parmAddr))
       index++
     }
   }
 
 }
+
 
 fun irFunctionSignature(function: Function): IrFunctionSignature {
   val params = mutableListOf<IrType>()

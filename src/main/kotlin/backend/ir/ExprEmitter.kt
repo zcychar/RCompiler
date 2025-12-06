@@ -563,9 +563,9 @@ class ExprEmitter(
     val signature = irFunctionSignature(fnSymbol)
     val irName = if (calleePath.seg2 != null) {
       val typeName = calleePath.seg1.name ?: error("type path missing name")
-      "$typeName.$fnName"
+      "$typeName.$fnName."
     } else {
-      calleePath.seg1.name ?: error("type path missing name")
+      (calleePath.seg1.name+".")
     }
     val args = node.params.mapIndexed { index, expr ->
       emitExpr(expr)
@@ -588,7 +588,7 @@ class ExprEmitter(
     val signature = irFunctionSignature(fnSymbol)
     val baseType = (receiverType as? IrPointer)?.pointee ?: receiverType
     val ownerName = (baseType as? IrStruct)?.name ?: error("method without owner")
-    val irName = "$ownerName.$fnName"
+    val irName = "$ownerName.$fnName."
     val selfParamType = signature.parameters.firstOrNull()
 
     val args = mutableListOf<IrValue>()
