@@ -2,7 +2,6 @@ package backend.ir
 
 import frontend.ast.*
 import frontend.semantic.Function
-import frontend.semantic.NeverType
 import frontend.semantic.RefType
 import frontend.semantic.Type
 
@@ -157,7 +156,14 @@ class FunctionEmitter(
         allocatedType = exprType,
       ), patternName
     )
-    if (!exprEmitter.storeAggregateToPointer(initializer, patternAddr)) {
+    // If initializer is a simple path bound to a pointer and the type is aggregate,
+    // copy pointer-to-pointer to avoid by-value aggregate moves.
+    val initPath = initializer as? PathExprNode
+    val initBinding = initPath?.takeIf { it.seg2 == null }?.seg1?.name?.let { valueEnv.resolve(it) }
+    val initPtr = (initBinding as? Bind.Pointer)?.addr
+    if (initPtr != null && isAggregate(exprType)) {
+      builder.emitMemcpy(patternAddr, initPtr, exprType)
+    } else if (!exprEmitter.storeAggregateToPointer(initializer, patternAddr)) {
       val exprValue = exprEmitter.emitExpr(initializer)
       builder.emit(
         IrStore("", IrPrimitive(PrimitiveKind.UNIT), patternAddr, exprValue)

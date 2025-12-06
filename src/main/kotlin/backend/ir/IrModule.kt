@@ -57,6 +57,7 @@ class IrModule {
 }
 
 private fun StringBuilder.emitBuiltinPrologue() {
+  appendLine("declare void @llvm.memcpy.p0.p0.i32(i8*, i8*, i32, i1)")
   appendLine("declare i32 @printf(i8*, ...)")
   appendLine("declare i32 @scanf(i8*, ...)")
   appendLine("define void @exit.(i32 %code) {")

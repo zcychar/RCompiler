@@ -115,3 +115,42 @@ fun isAggregate(type: IrType): Boolean = type is IrArray || type is IrStruct
 fun getLValueInnerType(value: IrValue): IrType {
   return (value.type as? IrPointer)?.pointee ?: error("invalid lvalue")
 }
+
+// Target-aware size/alignment calculator for RV32 (pointer and ints are 4 bytes).
+private fun alignTo(value: Int, align: Int): Int =
+  if (align <= 1) value else ((value + align - 1) / align) * align
+
+fun typeLayout(type: IrType): Pair<Int, Int> = when (type) {
+  is IrPrimitive -> when (type.kind) {
+    PrimitiveKind.BOOL, PrimitiveKind.CHAR -> 1 to 1
+    PrimitiveKind.I32, PrimitiveKind.U32, PrimitiveKind.ISIZE, PrimitiveKind.USIZE -> 4 to 4
+    PrimitiveKind.UNIT, PrimitiveKind.NEVER -> 0 to 1
+  }
+
+  is IrPointer -> 4 to 4 // RV32 pointer
+
+  is IrArray -> {
+    val (elemSize, elemAlign) = typeLayout(type.element)
+    val stride = alignTo(elemSize, elemAlign)
+    (stride * type.length) to elemAlign
+  }
+
+  is IrStruct -> {
+    var offset = 0
+    var maxAlign = 1
+    type.fields.forEach { field ->
+      val (fieldSize, fieldAlign) = typeLayout(field)
+      offset = alignTo(offset, fieldAlign)
+      offset += fieldSize
+      if (fieldAlign > maxAlign) {
+        maxAlign = fieldAlign
+      }
+    }
+    alignTo(offset, maxAlign) to maxAlign
+  }
+
+  is IrOpaque -> 0 to 1
+  is IrFunctionType -> 0 to 1
+}
+
+fun typeSize(type: IrType): Int = typeLayout(type).first
