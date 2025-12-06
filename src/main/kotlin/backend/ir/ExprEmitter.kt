@@ -567,18 +567,33 @@ class ExprEmitter(
     } else {
       (calleePath.seg1.name+".")
     }
-    val args = node.params.mapIndexed { index, expr ->
-      emitExpr(expr)
+    val args = mutableListOf<IrValue>()
+    var sretSlot: IrLocal? = null
+    signature.sretType?.let {
+      sretSlot = builder.emit(
+        IrAlloca(
+          builder.freshLocalName("sret"),
+          IrPointer(it),
+          it,
+        )
+      )
+      args.add(sretSlot!!)
+    }
+    node.params.mapIndexed { _, expr ->
+      args.add(emitExpr(expr))
     }
 
-    return builder.emit(
+    val callResult = builder.emit(
       IrCall(
         name = "",
-        type = signature.returnType,
+        type = signature.actualReturnType,
         callee = IrFunctionRef(irName, signature.toFunctionPointer()),
         arguments = args,
       ),
     )
+    return signature.sretType?.let {
+      builder.emit(IrLoad("", it, sretSlot ?: error("missing sret slot")))
+    } ?: callResult
   }
 
   private fun emitMethodCall(node: MethodCallExprNode): IrValue {
@@ -589,9 +604,24 @@ class ExprEmitter(
     val baseType = (receiverType as? IrPointer)?.pointee ?: receiverType
     val ownerName = (baseType as? IrStruct)?.name ?: error("method without owner")
     val irName = "$ownerName.$fnName."
-    val selfParamType = signature.parameters.firstOrNull()
+    val selfParamType = if (signature.sretType != null) {
+      signature.parameters.getOrNull(1)
+    } else {
+      signature.parameters.firstOrNull()
+    }
 
     val args = mutableListOf<IrValue>()
+    var sretSlot: IrLocal? = null
+    signature.sretType?.let {
+      sretSlot = builder.emit(
+        IrAlloca(
+          builder.freshLocalName("sret"),
+          IrPointer(it),
+          it,
+        )
+      )
+      args.add(sretSlot!!)
+    }
     val selfValue = if (receiverType is IrPointer) {
       val baseRef = emitExpr(node.expr)
       if (selfParamType is IrPointer) {
@@ -621,14 +651,17 @@ class ExprEmitter(
     node.params.mapIndexed { index, expr ->
       args.add(emitExpr(expr))
     }
-    return builder.emit(
+    val callResult = builder.emit(
       IrCall(
         name = "",
-        type = signature.returnType,
+        type = signature.actualReturnType,
         callee = IrFunctionRef(irName, signature.toFunctionPointer()),
         arguments = args,
       ),
     )
+    return signature.sretType?.let {
+      builder.emit(IrLoad("", it, sretSlot ?: error("missing sret slot")))
+    } ?: callResult
   }
 
   private fun emitArrayLiteral(node: ArrayExprNode): IrValue {
@@ -665,19 +698,33 @@ class ExprEmitter(
 
   private fun emitReturn(node: ReturnExprNode): IrValue {
     val expectedType = valueEnv.currentReturnType()
+    val sretPtr = valueEnv.resolve(SRET_BINDING) as? Bind.Pointer
     val value = node.expr?.let { emitExpr(it, expectedType = expectedType) }
-    val irValue = when {
-      value != null -> value
-      expectedType is IrPrimitive && expectedType.kind == PrimitiveKind.UNIT -> null
-      else -> IrUndef(expectedType)
-    }
-    builder.emitTerminator(
-      IrReturn(
-        name = "",
-        type = expectedType,
-        value = irValue,
+    if (sretPtr != null) {
+      value?.let {
+        builder.emit(IrStore("", IrPrimitive(PrimitiveKind.UNIT), sretPtr.addr, it))
+      }
+      builder.emitTerminator(
+        IrReturn(
+          name = "",
+          type = IrPrimitive(PrimitiveKind.UNIT),
+          value = null,
+        )
       )
-    )
+    } else {
+      val irValue = when {
+        value != null -> value
+        expectedType is IrPrimitive && expectedType.kind == PrimitiveKind.UNIT -> null
+        else -> IrUndef(expectedType)
+      }
+      builder.emitTerminator(
+        IrReturn(
+          name = "",
+          type = expectedType,
+          value = irValue,
+        )
+      )
+    }
     return IrUndef(IrPrimitive(PrimitiveKind.NEVER))
   }
 
@@ -992,6 +1039,107 @@ class ExprEmitter(
       if (!storeAggregateToPointer(node, elemPtr)) {
         builder.emit(IrStore("", unit, elemPtr, emitExpr(node)))
       }
+    }
+  }
+
+  /**
+   * Copy an aggregate value from [srcPtr] to [destPtr] without forming a massive
+   * by-value load/store. This walks structs field-by-field and arrays element-wise,
+   * using a simple loop for large arrays.
+   */
+  fun emitCopyAggregate(destPtr: IrValue, srcPtr: IrValue, type: IrType) {
+    require(isAggregate(type)) { "emitCopyAggregate expects aggregate type, got $type" }
+    val destPointee = (destPtr.type as? IrPointer)?.pointee
+      ?: error("destPtr is not a pointer")
+    val srcPointee = (srcPtr.type as? IrPointer)?.pointee
+      ?: error("srcPtr is not a pointer")
+    require(destPointee == type && srcPointee == type) { "copyAggregate type mismatch" }
+
+    val i32 = IrPrimitive(PrimitiveKind.I32)
+    val unit = IrPrimitive(PrimitiveKind.UNIT)
+
+    fun copyElement(elemType: IrType, destElemPtr: IrValue, srcElemPtr: IrValue) {
+      if (isAggregate(elemType)) {
+        emitCopyAggregate(destElemPtr, srcElemPtr, elemType)
+      } else {
+        val value = builder.emit(IrLoad("", elemType, srcElemPtr))
+        builder.emit(IrStore("", unit, destElemPtr, value))
+      }
+    }
+
+    when (type) {
+      is IrStruct -> {
+        type.fields.forEachIndexed { idx, fieldTy ->
+          val destField = builder.emit(
+            IrGep(
+              "", IrPointer(fieldTy), destPtr,
+              listOf(IrConstant(0, i32), IrConstant(idx.toLong(), i32))
+            )
+          )
+          val srcField = builder.emit(
+            IrGep(
+              "", IrPointer(fieldTy), srcPtr,
+              listOf(IrConstant(0, i32), IrConstant(idx.toLong(), i32))
+            )
+          )
+          copyElement(fieldTy, destField, srcField)
+        }
+      }
+
+      is IrArray -> {
+        val len = type.length
+        if (len == 0) return
+        val unrollThreshold = 8
+        if (len <= unrollThreshold) {
+          repeat(len) { idx ->
+            val idxConst = IrConstant(idx.toLong(), i32)
+            val destElem = builder.emit(
+              IrGep("", IrPointer(type.element), destPtr, listOf(IrConstant(0, i32), idxConst))
+            )
+            val srcElem = builder.emit(
+              IrGep("", IrPointer(type.element), srcPtr, listOf(IrConstant(0, i32), idxConst))
+            )
+            copyElement(type.element, destElem, srcElem)
+          }
+        } else {
+          val idxPtr = builder.emit(IrAlloca(builder.freshLocalName("copy.idx"), IrPointer(i32), i32))
+          builder.emit(IrStore("", unit, idxPtr, IrConstant(0, i32)))
+
+          val fn = context.currentFunction ?: error("No active function for aggregate copy")
+          val condLabel = builder.freshLocalName("copy.cond")
+          val bodyLabel = builder.freshLocalName("copy.body")
+          val exitLabel = builder.freshLocalName("copy.exit")
+
+          builder.emitTerminator(IrJump("", unit, condLabel))
+
+          val condBlock = builder.ensureBlock(condLabel)
+          builder.positionAt(fn, condBlock)
+          val idxVal = builder.emit(IrLoad("", i32, idxPtr))
+          val cmp = builder.emit(
+            IrCmp("", IrPrimitive(PrimitiveKind.BOOL), ComparePredicate.SLT, idxVal, IrConstant(len.toLong(), i32))
+          )
+          builder.emitTerminator(IrBranch("", unit, cmp, bodyLabel, exitLabel))
+
+          val bodyBlock = builder.ensureBlock(bodyLabel)
+          builder.positionAt(fn, bodyBlock)
+          val curIdx = builder.emit(IrLoad("", i32, idxPtr))
+          val destElem = builder.emit(
+            IrGep("", IrPointer(type.element), destPtr, listOf(IrConstant(0, i32), curIdx))
+          )
+          val srcElem = builder.emit(
+            IrGep("", IrPointer(type.element), srcPtr, listOf(IrConstant(0, i32), curIdx))
+          )
+          copyElement(type.element, destElem, srcElem)
+          val nextIdx = builder.emit(IrBinary("", i32, BinaryOperator.ADD, curIdx, IrConstant(1, i32)))
+          builder.emit(IrStore("", unit, idxPtr, nextIdx))
+          builder.emitTerminator(IrJump("", unit, condLabel))
+
+          val exitBlock = builder.ensureBlock(exitLabel)
+          builder.positionAt(fn, exitBlock)
+        }
+      }
+
+      else -> error("Unexpected aggregate kind $type")
     }
   }
 

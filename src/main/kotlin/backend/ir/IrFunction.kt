@@ -3,12 +3,21 @@ package backend.ir
 import frontend.semantic.Function
 import frontend.semantic.RefType
 
+
 data class IrFunctionSignature(
     val parameters: List<IrType>,
+    /**
+     * Logical return type from the language. If [sretType] is set, the physical
+     * return type becomes void and the value is written to the hidden sret pointer.
+     */
     val returnType: IrType,
+    val sretType: IrType? = null,
 ) {
+    val actualReturnType: IrType
+        get() = if (sretType != null) IrPrimitive(PrimitiveKind.UNIT) else returnType
+
     fun render(): String = buildString {
-        append(returnType.render())
+        append(actualReturnType.render())
         append(" (")
         parameters.forEachIndexed { index, param ->
             if (index > 0) append(", ")
@@ -17,7 +26,7 @@ data class IrFunctionSignature(
         append(')')
     }
 
-    fun toFunctionPointer(): IrType = IrPointer(IrFunctionType(parameters, returnType))
+    fun toFunctionPointer(): IrType = IrPointer(IrFunctionType(parameters, actualReturnType))
 }
 
 class IrFunction(
@@ -46,14 +55,18 @@ class IrFunction(
 
     fun render(): String = buildString {
         append("define ")
-        append(signature.returnType.render())
+        append(signature.actualReturnType.render())
         append(" @")
         append(name)
         append('(')
         append(
             signature.parameters.mapIndexed { index, param ->
                 val paramName = parameterNames.getOrNull(index)?.takeIf { it.isNotEmpty() } ?: "arg$index"
-                "${param.render()} %$paramName"
+                if (index == 0 && signature.sretType != null) {
+                    "${param.render()} sret(${signature.sretType.render()}) %$paramName"
+                } else {
+                    "${param.render()} %$paramName"
+                }
             }.joinToString(", "),
         )
         append(')')
@@ -70,4 +83,3 @@ class IrFunction(
         append('}')
     }
 }
-

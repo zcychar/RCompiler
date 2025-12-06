@@ -26,6 +26,7 @@ class FunctionEmitter(
     }
     val irName = if(fnSymbol.name=="main") "main" else ownerName?.let { "$it.${fnSymbol.name}." } ?: (fnSymbol.name+".")
     val parameterNames = buildList {
+      signature.sretType?.let { add("ret.slot") }
       fnSymbol.selfParam?.let { add("self.tmp") }
       fnSymbol.params.forEach { add(it.name + ".tmp") }
     }
@@ -67,23 +68,40 @@ class FunctionEmitter(
     bindParameters(fnSymbol, signature)
     val expectsValue = signature.returnType !is IrPrimitive || signature.returnType.kind != PrimitiveKind.UNIT
     val blockResult = node.body?.let { emitBlock(it, expectValue = expectsValue, expectedType = signature.returnType) }
+    val sretPtr = valueEnv.resolve(SRET_BINDING) as? Bind.Pointer
 
     if (builder.hasInsertionPoint()) {
-      val returnValue = when {
-        signature.returnType is IrPrimitive && signature.returnType.kind == PrimitiveKind.UNIT -> null
-        blockResult != null &&
-            ((blockResult.type !is IrPrimitive) || (blockResult.type as IrPrimitive).kind != PrimitiveKind.NEVER) &&
-            blockResult.type == signature.returnType -> blockResult
-
-        else -> IrUndef(signature.returnType)
-      }
-      builder.emitTerminator(
-        IrReturn(
-          name = "",
-          type = signature.returnType,
-          value = returnValue,
+      if (sretPtr != null) {
+        if (blockResult != null &&
+          ((blockResult.type !is IrPrimitive) || (blockResult.type as IrPrimitive).kind != PrimitiveKind.NEVER) &&
+          blockResult.type == signature.returnType
+        ) {
+          builder.emit(IrStore("", IrPrimitive(PrimitiveKind.UNIT), sretPtr.addr, blockResult))
+        }
+        builder.emitTerminator(
+          IrReturn(
+            name = "",
+            type = signature.actualReturnType,
+            value = null,
+          )
         )
-      )
+      } else {
+        val returnValue = when {
+          signature.returnType is IrPrimitive && signature.returnType.kind == PrimitiveKind.UNIT -> null
+          blockResult != null &&
+              ((blockResult.type !is IrPrimitive) || (blockResult.type as IrPrimitive).kind != PrimitiveKind.NEVER) &&
+              blockResult.type == signature.returnType -> blockResult
+
+          else -> IrUndef(signature.returnType)
+        }
+        builder.emitTerminator(
+          IrReturn(
+            name = "",
+            type = signature.returnType,
+            value = returnValue,
+          )
+        )
+      }
     }
 
     valueEnv.leaveScope()
@@ -150,6 +168,11 @@ class FunctionEmitter(
 
   private fun bindParameters(fnSymbol: Function, signature: IrFunctionSignature) {
     var index = 0
+    signature.sretType?.let {
+      val irParam = IrParameter(index, "ret.slot", signature.parameters[index])
+      valueEnv.bind(SRET_BINDING, Bind.Pointer(irParam))
+      index++
+    }
     fnSymbol.selfParam?.let {
       val irParam = IrParameter(index, "self.tmp", signature.parameters[index])
       val parmAddr = builder.borrow("self..tmp", irParam)
@@ -176,5 +199,12 @@ fun irFunctionSignature(function: Function): IrFunctionSignature {
   }
   params += function.params.map { param -> toIrType(param.type) }
   val ret = toIrType(function.returnType)
-  return IrFunctionSignature(params, ret)
+  return if (isAggregate(ret)) {
+    val sretParam = mutableListOf<IrType>()
+    sretParam += IrPointer(ret)
+    sretParam.addAll(params)
+    IrFunctionSignature(sretParam, ret, ret)
+  } else {
+    IrFunctionSignature(params, ret)
+  }
 }

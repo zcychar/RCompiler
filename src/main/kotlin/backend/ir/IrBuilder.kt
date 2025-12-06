@@ -87,17 +87,6 @@ class IrBuilder(
     return ret
   }
 
-  //naive
-  fun copy(fromDst: IrValue,toDst: IrValue){
-    if ( fromDst .type !is IrPointer )error("try loading from a non_pointer ptr!")
-    val ret = emit(
-      IrLoad("", (fromDst.type as IrPointer).pointee,fromDst)
-    )
-    emit(
-      IrStore("", IrPrimitive(PrimitiveKind.UNIT),toDst,ret)
-    )
-  }
-
 }
 
 // Extension to produce a copy with a new id for convenience.

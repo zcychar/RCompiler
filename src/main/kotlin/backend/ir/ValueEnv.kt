@@ -58,11 +58,17 @@ sealed interface Bind {
   data class Value(val value: IrValue) : Bind
   data class Pointer(val addr: IrValue) : Bind{
     fun getPointeeType(): IrType{
-      return ( (addr as? IrLocal)?.type as? IrPointer)?.pointee ?: error("Pointer bind with non IrPointer type addr")
+      val pointerType = when (addr) {
+        is IrLocal -> addr.type
+        is IrParameter -> addr.type
+        else -> null
+      }
+      return (pointerType as? IrPointer)?.pointee ?: error("Pointer bind with non IrPointer type addr")
     }
   }
 }
 
+const val SRET_BINDING = "__sret"
 
 
 private data class FunctionFrame(
