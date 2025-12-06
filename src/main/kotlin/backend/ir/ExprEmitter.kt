@@ -931,50 +931,66 @@ class ExprEmitter(
   }
 
   fun storeArrayToPointer(valueExpr: ArrayExprNode, toDst: IrValue) {
-    val type = valueExpr.type as? ArrayType ?: error("array literal without type")
-    val irType = toIrType(type) as IrArray
+    val arrType = valueExpr.type as? ArrayType ?: error("array literal without type")
+    val irArray = toIrType(arrType) as IrArray
+    val elemType = irArray.element
+    val i32 = IrPrimitive(PrimitiveKind.I32)
+    val unit = IrPrimitive(PrimitiveKind.UNIT)
+
     if (valueExpr.repeatOp != null && valueExpr.lengthOp != null) {
-      var elemRecord: IrValue? = null
       val count = valueExpr.evaluatedSize.takeIf { it >= 0 }?.toInt()
         ?: error("array repeat size unknown")
-      for (index in 0..count - 1) {
-        val indexAddr = builder.emit(
-          IrGep(
-            "",
-            IrPointer(irType.element),
-            toDst,
-            listOf(
-              IrConstant(0, IrPrimitive(PrimitiveKind.I32)),
-              IrConstant(index.toLong(), IrPrimitive(PrimitiveKind.I32))
-            )
-          )
-        )
-        if (storeAggregateToPointer(valueExpr.repeatOp, indexAddr)) {
-          continue
-        }
-        if (elemRecord == null) elemRecord = emitExpr(valueExpr.repeatOp)
-        builder.emit(
-          IrStore("", IrPrimitive(PrimitiveKind.UNIT), indexAddr, elemRecord)
-        )
+      if (count == 0) return
+
+      val idxPtr = builder.emit(IrAlloca(builder.freshLocalName("fill.idx"), IrPointer(i32), i32))
+      builder.emit(IrStore("", unit, idxPtr, IrConstant(0, i32)))
+
+      val fn = context.currentFunction ?: error("no active function")
+      val condLabel = builder.freshLocalName("array.fill.cond")
+      val bodyLabel = builder.freshLocalName("array.fill.body")
+      val endLabel = builder.freshLocalName("array.fill.end")
+
+      builder.emitTerminator(IrJump("", unit, condLabel))
+
+      // cond
+      val condBlock = builder.ensureBlock(condLabel)
+      builder.positionAt(fn, condBlock)
+      val idxVal = builder.emit(IrLoad("", i32, idxPtr))
+      val cmp = builder.emit(
+        IrCmp("", IrPrimitive(PrimitiveKind.BOOL), ComparePredicate.SLT, idxVal, IrConstant(count.toLong(), i32))
+      )
+      builder.emitTerminator(IrBranch("", unit, cmp, bodyLabel, endLabel))
+
+      // body
+      val bodyBlock = builder.ensureBlock(bodyLabel)
+      builder.positionAt(fn, bodyBlock)
+      val curIdx = builder.emit(IrLoad("", i32, idxPtr))
+      val elemPtr = builder.emit(
+        IrGep("", IrPointer(elemType), toDst, listOf(IrConstant(0, i32), curIdx))
+      )
+      if (!storeAggregateToPointer(valueExpr.repeatOp, elemPtr)) {
+        val repeated = emitExpr(valueExpr.repeatOp)
+        builder.emit(IrStore("", unit, elemPtr, repeated))
       }
-    } else {
-      valueExpr.elements.forEachIndexed { index, node ->
-        val indexAddr = builder.emit(
-          IrGep(
-            "",
-            IrPointer(irType.element),
-            toDst,
-            listOf(
-              IrConstant(0, IrPrimitive(PrimitiveKind.I32)),
-              IrConstant(index.toLong(), IrPrimitive(PrimitiveKind.I32))
-            )
-          )
-        )
-        if (!storeAggregateToPointer(node, indexAddr)) {
-          builder.emit(
-            IrStore("", IrPrimitive(PrimitiveKind.UNIT), indexAddr, emitExpr(node))
-          )
-        }
+      val nextIdx = builder.emit(
+        IrBinary("", i32, BinaryOperator.ADD, curIdx, IrConstant(1, i32))
+      )
+      builder.emit(IrStore("", unit, idxPtr, nextIdx))
+      builder.emitTerminator(IrJump("", unit, condLabel))
+
+      // end
+      val endBlock = builder.ensureBlock(endLabel)
+      builder.positionAt(fn, endBlock)
+      return
+    }
+
+    // Explicit element list
+    valueExpr.elements.forEachIndexed { idx, node ->
+      val elemPtr = builder.emit(
+        IrGep("", IrPointer(elemType), toDst, listOf(IrConstant(0, i32), IrConstant(idx.toLong(), i32)))
+      )
+      if (!storeAggregateToPointer(node, elemPtr)) {
+        builder.emit(IrStore("", unit, elemPtr, emitExpr(node)))
       }
     }
   }
