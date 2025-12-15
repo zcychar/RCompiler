@@ -392,9 +392,13 @@ class ExprEmitter(
   }
 
   private fun emitBorrow(node: BorrowExprNode): IrValue {
-    val baseAddr = emitLValue(node.expr)
     val expectType = toIrType(node.type!!) as? IrPointer ?: error("borrow expr with non-pointer type")
-    return retargetPointer(baseAddr, expectType)
+    val baseAddr = tryLValue(node.expr)
+    if (baseAddr != null) return retargetPointer(baseAddr, expectType)
+
+    val value = emitExpr(node.expr)
+    val tmpAddr = builder.borrow(null, value)
+    return retargetPointer(tmpAddr, expectType)
   }
 
   private fun emitDeref(node: DerefExprNode): IrValue {
@@ -525,7 +529,7 @@ class ExprEmitter(
       IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = exitLabel)
     )
 
-    val exitBlock = builder.ensureBlock(exitLabel)
+
 
     val bodyBlock = builder.ensureBlock(bodyLabel)
     builder.positionAt(function, bodyBlock)
@@ -536,7 +540,7 @@ class ExprEmitter(
       builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = condLabel))
     }
 
-
+    val exitBlock = builder.ensureBlock(exitLabel)
     builder.positionAt(function, exitBlock)
     return unitValue()
   }
