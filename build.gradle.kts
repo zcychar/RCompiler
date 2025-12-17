@@ -1,8 +1,10 @@
 import groovy.json.JsonSlurper
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
     kotlin("jvm") version "2.2.0"
     application
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 group = "org.example"
@@ -144,4 +146,14 @@ tasks.named<JavaExec>("run") {
 
 application {
     mainClass.set("MainKt")
+}
+
+tasks.withType<Jar> {
+    manifest {
+        attributes["Main-Class"] = "MainKt"
+    }
+}
+
+tasks.named<ShadowJar>("shadowJar") {
+    archiveClassifier.set("all")
 }

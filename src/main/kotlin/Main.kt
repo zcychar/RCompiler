@@ -2,11 +2,7 @@ import backend.ir.IrBackend
 import frontend.RLexer
 import frontend.RParser
 import frontend.RPreprocessor
-import frontend.semantic.RImplInjector
-import frontend.semantic.RSemanticChecker
-import frontend.semantic.RSymbolCollector
-import frontend.semantic.RSymbolResolver
-import frontend.semantic.toPrelude
+import frontend.semantic.*
 import utils.*
 import java.nio.file.Files
 import java.nio.file.Paths
