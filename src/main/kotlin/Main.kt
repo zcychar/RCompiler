@@ -93,6 +93,7 @@ fun main(args: Array<String>) {
             return
         }
 
+        exitProcess(0)
     } catch (e: CompileError) {
         System.err.println("\n❌ Compilation failed:")
         System.err.println("   ${e.message}")
