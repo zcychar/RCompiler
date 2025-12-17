@@ -66,27 +66,31 @@ fun main(args: Array<String>) {
         checker.process()
 
         // Drive IR backend after successful semantics.
-        val backend = IrBackend()
-        val irText = backend.generate(crate, preludeScope)
+        try {
+            val backend = IrBackend()
+            val irText = backend.generate(crate, preludeScope)
 
-        val irWrittenToStdout = options.irOutPath == "-"
-        options.irOutPath?.let {
-            if (it == "-") {
-                println(irText)
-            } else {
-                val outPath = Paths.get(it)
-                outPath.parent?.let { parent -> Files.createDirectories(parent) }
-                Files.writeString(outPath, irText)
-                if (options.debugIr) {
-                    System.err.println("\n[debug] IR written to ${outPath.toAbsolutePath()}")
+            val irWrittenToStdout = options.irOutPath == "-"
+            options.irOutPath?.let {
+                if (it == "-") {
+                    println(irText)
+                } else {
+                    val outPath = Paths.get(it)
+                    outPath.parent?.let { parent -> Files.createDirectories(parent) }
+                    Files.writeString(outPath, irText)
+                    if (options.debugIr) {
+                        System.err.println("\n[debug] IR written to ${outPath.toAbsolutePath()}")
+                    }
                 }
             }
-        }
-        if (options.debugIr && !irWrittenToStdout) {
-            System.err.println("\n✅ Compilation successful!")
-            System.err.println(irText)
-        } else if (!irWrittenToStdout && options.debugIr) {
-            System.err.println("\n✅ Compilation successful!")
+            if (options.debugIr && !irWrittenToStdout) {
+                System.err.println("\n✅ Compilation successful!")
+                System.err.println(irText)
+            } else if (!irWrittenToStdout && options.debugIr) {
+                System.err.println("\n✅ Compilation successful!")
+            }
+        } catch (e: Exception) {
+            return
         }
 
     } catch (e: CompileError) {
