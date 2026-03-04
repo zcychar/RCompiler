@@ -32,6 +32,7 @@ ROOT="$(find_root)" || { echo "Cannot locate repo root (expected src/main/resour
 IR_DIR="$ROOT/src/main/resources/RCompiler-Testcases/IR-1"
 TESTER="$IR_DIR/test_llvm.bash"
 BUILTIN="$IR_DIR/builtin/builtin.c"
+export MAKE="make -s --no-print-directory -C $ROOT"
 EXIT_ON_FAIL=0
 RANGE_START=""
 RANGE_END=""

@@ -18,7 +18,7 @@ enum class BinaryOperator(val llvmName: String) {
     UDIV("udiv"),
     SREM("srem"),
     UREM("urem"),
-    AND("and"),
+    AND("and      "),
     OR("or"),
     XOR("xor"),
     SHL("shl"),

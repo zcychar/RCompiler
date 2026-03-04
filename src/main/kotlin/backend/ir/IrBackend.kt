@@ -1,5 +1,7 @@
 package backend.ir
 
+import backend.ir.opt.PassPipeline
+import backend.ir.opt.Mem2RegPass
 import frontend.ast.*
 import frontend.semantic.*
 import frontend.semantic.Function
@@ -9,7 +11,14 @@ import frontend.semantic.Function
  * so the pipeline can be exercised end-to-end.
  */
 class IrBackend(
+    private val enableOptimization: Boolean = true,
 ) {
+    private val passPipeline = PassPipeline(
+        functionPasses = listOf(
+            Mem2RegPass(),
+        )
+    )
+
     fun generate(crate: CrateNode, globalScope: Scope): String {
         val context = CodegenContext(rootScope = crate.scope ?: globalScope)
         val functionEmitter = FunctionEmitter(context)
@@ -32,6 +41,9 @@ class IrBackend(
                 is FunctionItemNode -> context.emitFunction(scope, functionEmitter, item)
                 else -> Unit
             }
+        }
+        if (enableOptimization) {
+            passPipeline.run(context.module)
         }
         return context.module.render()
     }

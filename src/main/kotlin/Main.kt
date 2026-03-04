@@ -67,7 +67,7 @@ fun main(args: Array<String>) {
 
         // Drive IR backend after successful semantics.
         try {
-            val backend = IrBackend()
+            val backend = IrBackend(enableOptimization = options.optimize)
             val irText = backend.generate(crate, preludeScope)
 
             val irWrittenToStdout = options.irOutPath == "-"

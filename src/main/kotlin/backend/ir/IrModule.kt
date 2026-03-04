@@ -42,6 +42,8 @@ class IrModule {
     return globals.find { it.name==name }?.initializer
   }
 
+  fun declaredFunctions(): List<IrFunction> = functions.toList()
+
   fun render(): String = buildString {
     emitBuiltinPrologue()
     types.values.filterIsInstance<IrStruct>().filter { it.name != null }.forEach { struct ->

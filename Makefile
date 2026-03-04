@@ -7,7 +7,7 @@ build:
 
 # Read source from stdin, emit LLVM IR to stdout via the fat jar.
 run: build
-	@java -jar "$(JAR)" --ir-out=- -
+	@java -jar "$(JAR)" --ir-out=- - --no-opt
 
 # Remove built jars if you want a clean state (does not invoke Gradle).
 clean:

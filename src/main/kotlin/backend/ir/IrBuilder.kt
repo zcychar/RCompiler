@@ -49,19 +49,6 @@ class IrBuilder(
     if (block.terminator != null) {
       CompileError.fail("", "block ${block.label} is already terminated")
     }
-    // Peephole: collapse aggregate load->store into a field-wise copy to avoid massive
-    // by-value moves that explode DAG. We scan backwards for the matching load as long
-    // as there are no intervening side effects, and rely on DCE to drop the unused load.
-    if (instruction is IrStore) {
-      if (typeSize(instruction.value.type) > 16) {
-        val matchedLoad = findLoadForStore(block, instruction)
-        if (matchedLoad != null) {
-          val loadedType = matchedLoad.type
-          emitMemcpy(instruction.address, matchedLoad.address, loadedType)
-          return IrLocal(returnName ?: "", loadedType)
-        }
-      }
-    }
     return when (instruction) {
       is IrAlloca -> {
         val idInstruction = instruction.withId(returnName ?: freshTempName())

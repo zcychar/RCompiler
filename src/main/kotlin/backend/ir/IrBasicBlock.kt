@@ -20,4 +20,8 @@ class IrBasicBlock(val label: String) {
         }
         terminator = term
     }
+
+    fun replaceTerminator(term: IrTerminator) {
+        terminator = term
+    }
 }

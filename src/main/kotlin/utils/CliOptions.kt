@@ -7,6 +7,8 @@ package utils
  *  - --debug=LIST   where LIST is comma-separated stages: parse, semantic, ir, all
  *  - --debug        shorthand for --debug=all (backward compatible)
  *  - --ir-out=PATH  write IR to PATH
+ *  - --opt=on|off   toggle backend optimization passes (default: on)
+ *  - --no-opt       shorthand for --opt=off
  *
  * Positional arg: input path (or "-" for stdin). If omitted, stdin is used.
  */
@@ -14,6 +16,7 @@ data class CliOptions(
     val inputPath: String?,
     val debugStages: Set<DebugStage>,
     val irOutPath: String?,
+    val optimize: Boolean = true,
 ) {
     val debugParse: Boolean get() = debugStages.contains(DebugStage.PARSE) || debugAll
     val debugSemantic: Boolean get() = debugStages.contains(DebugStage.SEMANTIC) || debugAll
@@ -24,6 +27,7 @@ data class CliOptions(
         fun parse(args: Array<String>): CliOptions {
             val stages = mutableSetOf<DebugStage>()
             var irOut: String? = null
+            var optimize = true
             val positional = mutableListOf<String>()
 
             args.forEach { arg ->
@@ -38,6 +42,14 @@ data class CliOptions(
                         }
                     }
                     arg.startsWith("--ir-out=") -> irOut = arg.substringAfter("=")
+                    arg == "--no-opt" -> optimize = false
+                    arg.startsWith("--opt=") -> {
+                        when (arg.substringAfter("=").trim().lowercase()) {
+                            "on", "true", "1", "yes", "y" -> optimize = true
+                            "off", "false", "0", "no", "n" -> optimize = false
+                            else -> throw IllegalArgumentException("Unknown --opt value (use on/off)")
+                        }
+                    }
                     arg.startsWith("--") -> {
                         // ignore unknown flags for now
                     }
@@ -46,7 +58,7 @@ data class CliOptions(
             }
 
             val input = positional.firstOrNull()
-            return CliOptions(input, stages, irOut)
+            return CliOptions(input, stages, irOut, optimize)
         }
     }
 }
