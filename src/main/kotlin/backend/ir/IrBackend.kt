@@ -2,6 +2,7 @@ package backend.ir
 
 import backend.ir.opt.PassPipeline
 import backend.ir.opt.Mem2RegPass
+import backend.ir.opt.PhiLoweringPass
 import frontend.ast.*
 import frontend.semantic.*
 import frontend.semantic.Function
@@ -16,6 +17,7 @@ class IrBackend(
     private val passPipeline = PassPipeline(
         functionPasses = listOf(
             Mem2RegPass(),
+            PhiLoweringPass(),
         )
     )
 
