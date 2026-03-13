@@ -49,19 +49,6 @@ class IrBuilder(
     if (block.terminator != null) {
       CompileError.fail("", "block ${block.label} is already terminated")
     }
-    // Peephole: collapse aggregate load->store into a field-wise copy to avoid massive
-    // by-value moves that explode DAG. We scan backwards for the matching load as long
-    // as there are no intervening side effects, and rely on DCE to drop the unused load.
-    if (instruction is IrStore) {
-      if (typeSize(instruction.value.type) > 16) {
-        val matchedLoad = findLoadForStore(block, instruction)
-        if (matchedLoad != null) {
-          val loadedType = matchedLoad.type
-          emitMemcpy(instruction.address, matchedLoad.address, loadedType)
-          return IrLocal(returnName ?: "", loadedType)
-        }
-      }
-    }
     return when (instruction) {
       is IrAlloca -> {
         val idInstruction = instruction.withId(returnName ?: freshTempName())
@@ -112,18 +99,74 @@ class IrBuilder(
     return ret
   }
 
-  fun emitMemcpy(destPtr: IrValue, srcPtr: IrValue, type: IrType) {
-    val destPointee = (destPtr.type as? IrPointer)?.pointee ?: return
-    val srcPointee = (srcPtr.type as? IrPointer)?.pointee ?: return
-    if (destPointee != type || srcPointee != type) return
-    val size = typeSize(type).toLong()
+  /**
+   * Copy an aggregate value from [srcPtr] to [destPtr] field-by-field.
+   * For structs, emits a GEP+load+store per field (recursively for nested aggregates).
+   * For arrays, emits element-wise copies.
+   * For scalars, emits a single load+store.
+   * For very large aggregates (> 256 bytes), falls back to a memcpy call.
+   */
+  fun emitAggregateCopy(destPtr: IrValue, srcPtr: IrValue, type: IrType) {
+    val size = typeSize(type)
+    if (size == 0) return
 
-    if (size == 0L) return
-    if (size <= 16) {
-      val v = emit(IrLoad("", type, srcPtr))
-      emit(IrStore("", IrPrimitive(PrimitiveKind.UNIT), destPtr, v))
+    // For very large aggregates, use memcpy call
+    if (size > 256) {
+      emitMemcpyCall(destPtr, srcPtr, size.toLong())
       return
     }
+
+    when (type) {
+      is IrStruct -> {
+        type.fields.forEachIndexed { index, fieldType ->
+          val i32 = IrPrimitive(PrimitiveKind.I32)
+          val srcField = emit(
+            IrGep(
+              "", IrPointer(fieldType), srcPtr,
+              listOf(IrConstant(0, i32), IrConstant(index.toLong(), i32))
+            )
+          )
+          val dstField = emit(
+            IrGep(
+              "", IrPointer(fieldType), destPtr,
+              listOf(IrConstant(0, i32), IrConstant(index.toLong(), i32))
+            )
+          )
+          emitAggregateCopy(dstField, srcField, fieldType)
+        }
+      }
+
+      is IrArray -> {
+        val i32 = IrPrimitive(PrimitiveKind.I32)
+        for (i in 0 until type.length) {
+          val srcElem = emit(
+            IrGep(
+              "", IrPointer(type.element), srcPtr,
+              listOf(IrConstant(0, i32), IrConstant(i.toLong(), i32))
+            )
+          )
+          val dstElem = emit(
+            IrGep(
+              "", IrPointer(type.element), destPtr,
+              listOf(IrConstant(0, i32), IrConstant(i.toLong(), i32))
+            )
+          )
+          emitAggregateCopy(dstElem, srcElem, type.element)
+        }
+      }
+
+      else -> {
+        // Scalar: simple load + store
+        val v = emit(IrLoad("", type, srcPtr))
+        emit(IrStore("", IrPrimitive(PrimitiveKind.UNIT), destPtr, v))
+      }
+    }
+  }
+
+  /**
+   * Emit an @llvm.memcpy call for large copies.
+   */
+  private fun emitMemcpyCall(destPtr: IrValue, srcPtr: IrValue, size: Long) {
     val i8Ptr = IrPointer(IrPrimitive(PrimitiveKind.CHAR))
     val i32 = IrPrimitive(PrimitiveKind.I32)
     val i1 = IrPrimitive(PrimitiveKind.BOOL)
@@ -141,38 +184,6 @@ class IrBuilder(
       )
     )
   }
-
-  private fun findLoadForStore(block: IrBasicBlock, store: IrStore): IrLoad? {
-    val storeValue = store.value as? IrLocal ?: return null
-    var idx = block.instructions.lastIndex
-    while (idx >= 0) {
-      val inst = block.instructions[idx]
-      when {
-        inst is IrLoad && inst.name == storeValue.name -> {
-          val loadedType = inst.type
-          if (!isAggregate(loadedType)) return null
-          val destPtrType = (store.address.type as? IrPointer)?.pointee
-          val srcPtrType = (inst.address.type as? IrPointer)?.pointee
-          return if (
-            destPtrType == loadedType &&
-            srcPtrType == loadedType &&
-            store.address != inst.address
-          ) {
-            inst
-          } else {
-            null
-          }
-        }
-
-        hasSideEffect(inst) -> return null
-        else -> idx--
-      }
-    }
-    return null
-  }
-
-  private fun hasSideEffect(inst: IrInstruction): Boolean =
-    inst is IrStore || inst is IrCall
 }
 
 // Extension to produce a copy with a new id for convenience.

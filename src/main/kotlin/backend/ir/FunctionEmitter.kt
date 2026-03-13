@@ -8,6 +8,13 @@ import frontend.semantic.Type
 /**
  * &self also store self copy too
  * other param's name is changed to param.tmp (ssa value) would be stored immediately at entry block with true names.
+ *
+ * ## Aggregate Strategy
+ *
+ * Aggregates flow through [destPtr] parameters. When the caller knows the final
+ * destination for an aggregate (e.g. a `let` binding's alloca, an sret slot),
+ * it passes that pointer so the expression stores directly — no temporary, no
+ * whole-aggregate load/store.
  */
 class FunctionEmitter(
   private val context: CodegenContext,
@@ -66,16 +73,33 @@ class FunctionEmitter(
     builder.freshLocalName("entry")
     bindParameters(fnSymbol, signature)
     val expectsValue = signature.returnType !is IrPrimitive || signature.returnType.kind != PrimitiveKind.UNIT
-    val blockResult = node.body?.let { emitBlock(it, expectValue = expectsValue, expectedType = signature.returnType) }
     val sretPtr = valueEnv.resolve(SRET_BINDING) as? Bind.Pointer
+
+    // For aggregate-returning functions, pass the sret pointer as the destination
+    // for the block's final expression so it stores directly without temporaries.
+    val blockDestPtr = if (sretPtr != null && expectsValue) sretPtr.addr else null
+    val blockResult = node.body?.let {
+      emitBlock(it, expectValue = expectsValue, expectedType = signature.returnType, destPtr = blockDestPtr)
+    }
 
     if (builder.hasInsertionPoint()) {
       if (sretPtr != null) {
         if (blockResult != null &&
-          ((blockResult.type !is IrPrimitive) || (blockResult.type as IrPrimitive).kind != PrimitiveKind.NEVER) &&
-          blockResult.type == signature.returnType
+          ((blockResult.type !is IrPrimitive) || (blockResult.type as IrPrimitive).kind != PrimitiveKind.NEVER)
         ) {
-          builder.emit(IrStore("", IrPrimitive(PrimitiveKind.UNIT), sretPtr.addr, blockResult))
+          // If blockResult is the sret pointer itself (destination-passing worked),
+          // nothing to do — the value is already there.
+          // If blockResult is something else (a scalar value, or a different pointer),
+          // we need to store it.
+          if (blockResult !== blockDestPtr && blockResult != blockDestPtr) {
+            val retType = signature.returnType
+            if (isAggregate(retType) && blockResult.type is IrPointer) {
+              // blockResult is a pointer to the aggregate — field-wise copy to sret.
+              builder.emitAggregateCopy(sretPtr.addr, blockResult, retType)
+            } else if (blockResult.type == retType) {
+              builder.emit(IrStore("", IrPrimitive(PrimitiveKind.UNIT), sretPtr.addr, blockResult))
+            }
+          }
         }
         builder.emitTerminator(
           IrReturn(
@@ -114,27 +138,39 @@ class FunctionEmitter(
     return emitFunction(fnSymbol, node, implType)
   }
 
-  fun emitBlock(block: BlockExprNode, expectValue: Boolean, expectedType: IrType? = null): IrValue? {
+  /**
+   * Emit a block expression.
+   *
+   * @param destPtr  If non-null and the block's final expression produces an aggregate,
+   *                 pass this destination through so the value is stored directly.
+   */
+  fun emitBlock(block: BlockExprNode, expectValue: Boolean, expectedType: IrType? = null, destPtr: IrValue? = null): IrValue? {
     valueEnv.enterScope()
 
     var result: IrValue? = null
     for ((index, stmt) in block.stmts.withIndex()) {
       val isLastExpr = expectValue && index == block.stmts.lastIndex && stmt is ExprStmtNode && !stmt.hasSemiColon
-      result = emitStmt(stmt, isLastExpr, expectedType)
+      result = emitStmt(stmt, isLastExpr, expectedType, if (isLastExpr) destPtr else null)
       if (!builder.hasInsertionPoint()) break
     }
     valueEnv.leaveScope()
     return result
   }
 
-  private fun emitStmt(stmt: StmtNode, expectValue: Boolean, expectedType: IrType?): IrValue? = when (stmt) {
+  /**
+   * Emit a statement.
+   *
+   * @param destPtr  Passed through to the expression emitter for the final
+   *                 expression of a block (aggregate destination-passing).
+   */
+  private fun emitStmt(stmt: StmtNode, expectValue: Boolean, expectedType: IrType?, destPtr: IrValue? = null): IrValue? = when (stmt) {
     is LetStmtNode -> {
       emitLet(stmt)
       null
     }
 
     is ExprStmtNode -> {
-      val value = exprEmitter.emitExpr(stmt.expr, expectedType.takeIf { expectValue })
+      val value = exprEmitter.emitExpr(stmt.expr, expectedType.takeIf { expectValue }, destPtr = if (expectValue) destPtr else null)
       if (expectValue) value else null
     }
 
@@ -142,6 +178,13 @@ class FunctionEmitter(
     NullStmtNode -> null
   }
 
+  /**
+   * Emit a let binding.
+   *
+   * For aggregate types, uses destination-passing: the alloca for the binding is
+   * passed as [destPtr] to [ExprEmitter.emitExpr], so the initializer stores
+   * directly into the binding's storage — no temporary, no whole-aggregate copy.
+   */
   private fun emitLet(stmt: LetStmtNode) {
     val pattern = stmt.pattern as? IdentifierPatternNode
       ?: error("Only identifier patterns are supported in codegen")
@@ -156,14 +199,14 @@ class FunctionEmitter(
         allocatedType = exprType,
       ), patternName
     )
-    // If initializer is a simple path bound to a pointer and the type is aggregate,
-    // copy pointer-to-pointer to avoid by-value aggregate moves.
-    val initPath = initializer as? PathExprNode
-    val initBinding = initPath?.takeIf { it.seg2 == null }?.seg1?.name?.let { valueEnv.resolve(it) }
-    val initPtr = (initBinding as? Bind.Pointer)?.addr
-    if (initPtr != null && isAggregate(exprType)) {
-      builder.emitMemcpy(patternAddr, initPtr, exprType)
-    } else if (!exprEmitter.storeAggregateToPointer(initializer, patternAddr)) {
+
+    if (isAggregate(exprType)) {
+      // Aggregate: use destination-passing. The expression will store directly
+      // into patternAddr (either via storeStructToPointer, emitAggregateCopy,
+      // or by passing it as an sret pointer to a call).
+      exprEmitter.emitExpr(initializer, destPtr = patternAddr)
+    } else {
+      // Scalar: evaluate the expression and store the resulting value.
       val exprValue = exprEmitter.emitExpr(initializer)
       builder.emit(
         IrStore("", IrPrimitive(PrimitiveKind.UNIT), patternAddr, exprValue)
@@ -181,14 +224,46 @@ class FunctionEmitter(
     }
     fnSymbol.selfParam?.let {
       val irParam = IrParameter(index, "self.tmp", signature.parameters[index])
-      val parmAddr = builder.borrow("self..tmp", irParam)
-      valueEnv.bind("self", Bind.Pointer(parmAddr))
+      // Check the *semantic* self type to decide if this was an aggregate we wrapped.
+      // If selfParam.isRef is true, the parameter was already a pointer (a reference)
+      // — NOT an aggregate we wrapped. Only non-ref aggregate self gets the copy treatment.
+      val rawSelf = fnSymbol.self ?: error("method missing self target")
+      val selfSemantic = if (it.isRef) RefType(rawSelf, it.isMut) else rawSelf
+      val originalIr = toIrType(selfSemantic)
+      if (isAggregate(originalIr)) {
+        // Aggregate self passed by pointer (our new convention).
+        // Copy into a local alloca field-wise so the callee can mutate its own
+        // copy without affecting the caller's storage.
+        val localAddr = builder.emit(
+          IrAlloca("self..local", IrPointer(originalIr), originalIr), "self..local"
+        )
+        builder.emitAggregateCopy(localAddr, irParam, originalIr)
+        valueEnv.bind("self", Bind.Pointer(localAddr))
+      } else {
+        val parmAddr = builder.borrow("self..tmp", irParam)
+        valueEnv.bind("self", Bind.Pointer(parmAddr))
+      }
       index++
     }
     fnSymbol.params.forEach { param ->
       val irParam = IrParameter(index, param.name + ".tmp", signature.parameters[index])
-      val parmAddr = builder.borrow(param.name+"..tmp", irParam)
-      valueEnv.bind(param.name, Bind.Pointer(parmAddr))
+      // Check the *semantic* param type to decide if this was an aggregate we wrapped.
+      // RefType params (e.g. &Food, &mut [SegT; N]) are already pointers in the
+      // original IR — they must NOT be treated as aggregate-by-pointer.
+      val originalIr = toIrType(param.type)
+      if (isAggregate(originalIr)) {
+        // Aggregate param passed by pointer (our new convention).
+        // Copy into a local alloca field-wise so the callee can mutate its own
+        // copy without affecting the caller's storage.
+        val localAddr = builder.emit(
+          IrAlloca(param.name + "..local", IrPointer(originalIr), originalIr), param.name + "..local"
+        )
+        builder.emitAggregateCopy(localAddr, irParam, originalIr)
+        valueEnv.bind(param.name, Bind.Pointer(localAddr))
+      } else {
+        val parmAddr = builder.borrow(param.name + "..tmp", irParam)
+        valueEnv.bind(param.name, Bind.Pointer(parmAddr))
+      }
       index++
     }
   }
@@ -201,9 +276,16 @@ fun irFunctionSignature(function: Function): IrFunctionSignature {
   function.selfParam?.let {
     val rawSelf = function.self ?: error("method missing self target")
     val selfSemantic = if (it.isRef) RefType(rawSelf, it.isMut) else rawSelf
-    params += toIrType(selfSemantic)
+    val selfIr = toIrType(selfSemantic)
+    // Aggregate self params are passed by pointer so the callee has an address
+    // for field access and no whole-aggregate value needs to exist in the IR.
+    params += if (isAggregate(selfIr)) IrPointer(selfIr) else selfIr
   }
-  params += function.params.map { param -> toIrType(param.type) }
+  params += function.params.map { param ->
+    val irType = toIrType(param.type)
+    // Aggregate params are passed by pointer — same rationale as self.
+    if (isAggregate(irType)) IrPointer(irType) else irType
+  }
   val ret = toIrType(function.returnType)
   return if (isAggregate(ret)) {
     val sretParam = mutableListOf<IrType>()

@@ -1,32 +1,9 @@
 package backend.ir.opt
 
-import backend.ir.IrAlloca
-import backend.ir.IrBinary
-import backend.ir.IrBranch
-import backend.ir.IrCall
-import backend.ir.IrCast
-import backend.ir.IrCmp
-import backend.ir.IrFunction
-import backend.ir.IrGep
-import backend.ir.IrInstruction
-import backend.ir.IrLoad
-import backend.ir.IrLocal
-import backend.ir.IrModule
-import backend.ir.IrPhi
-import backend.ir.IrPointer
-import backend.ir.IrPrimitive
-import backend.ir.IrReturn
-import backend.ir.IrStore
-import backend.ir.IrType
-import backend.ir.IrUnary
-import backend.ir.IrValue
-import backend.ir.IrJump
-import backend.ir.IrUndef
-import backend.ir.PhiBranch
+import backend.ir.*
 import backend.ir.analysis.buildCfg
 import backend.ir.analysis.computeDominanceFrontier
 import backend.ir.analysis.computeDominators
-import kotlin.collections.ArrayDeque
 
 class Mem2RegPass : FunctionPass {
   override val name: String = "mem2reg"
