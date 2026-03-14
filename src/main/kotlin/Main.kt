@@ -10,6 +10,12 @@ import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     val options = CliOptions.parse(args)
+
+    if (options.showHelp) {
+        System.err.println(CliOptions.HELP_TEXT)
+        exitProcess(0)
+    }
+
     val filePath = options.inputPath
 
     val rawText: String = when {
@@ -18,24 +24,23 @@ fun main(args: Array<String>) {
     }
 
     try {
+        // ── Frontend ────────────────────────────────────────────────────
         if (options.debugParse) System.err.println("----- 1. Preprocessing -----")
         val preprocessor = RPreprocessor(rawText)
         val processedText = preprocessor.process()
 
-        if (options.debugParse) {
-            System.err.println("\n----- 2. Lexing -----")
-        }
+        if (options.debugParse) System.err.println("\n----- 2. Lexing -----")
         val lexer = RLexer(processedText)
         val tokens = lexer.process()
 
         if (options.debugParse) System.err.println("\n----- 3. Parsing -----")
         val parser = RParser(tokens)
         val crate = parser.process()
-        val debugSemantic = false
-        if (debugSemantic) {
-            System.err.println("\n----- 4. Semantic Analysis -----")
-        }
+
+        val debugSemantic = options.debugSemantic
+        if (debugSemantic) System.err.println("\n----- 4. Semantic Analysis -----")
         val preludeScope = toPrelude()
+
         if (debugSemantic) System.err.println("\n--- Running Pass 1: Symbol Collector ---")
         val symbolCollector = RSymbolCollector(preludeScope, crate)
         symbolCollector.process()
@@ -51,6 +56,7 @@ fun main(args: Array<String>) {
             val resolverDumper = RResolvedSymbolDumper(crate)
             resolverDumper.dump()
         }
+
         if (debugSemantic) System.err.println("\n--- Running Pass 3: Impl Injector ---")
         val implInjector = RImplInjector(preludeScope, crate)
         implInjector.process()
@@ -60,65 +66,50 @@ fun main(args: Array<String>) {
         }
 
         if (debugSemantic) System.err.println("\n--- Running Pass 4: Semantic Checker ---")
-
         val checker: RSemanticChecker =
             if (debugSemantic) TracedSemanticChecker(preludeScope, crate) else RSemanticChecker(preludeScope, crate)
         checker.process()
 
-        // Drive IR backend after successful semantics.
+        // ── Backend ─────────────────────────────────────────────────────
         try {
             val backend = IrBackend(enableOptimization = options.optimize)
 
-            // --- IR output (optional) ---
-            val irWrittenToStdout = options.irOutPath == "-"
-            if (options.irOutPath != null || options.debugIr) {
-                val irText = backend.generate(crate, preludeScope)
-                options.irOutPath?.let {
-                    if (it == "-") {
-                        println(irText)
-                    } else {
-                        val outPath = Paths.get(it)
-                        outPath.parent?.let { parent -> Files.createDirectories(parent) }
-                        Files.writeString(outPath, irText)
-                        if (options.debugIr) {
-                            System.err.println("\n[debug] IR written to ${outPath.toAbsolutePath()}")
-                        }
+            val outputText: String = when (options.emit) {
+                EmitMode.IR -> {
+                    val irText = backend.generate(crate, preludeScope)
+                    if (options.debugIr) {
+                        System.err.println("\n✅ IR generation successful!")
+                        System.err.println(irText)
                     }
+                    irText
                 }
-                if (options.debugIr && !irWrittenToStdout) {
-                    System.err.println("\n✅ IR generation successful!")
-                    System.err.println(irText)
+                EmitMode.ASM -> {
+                    // When emitting assembly, also dump IR if its debug flag is on.
+                    if (options.debugIr) {
+                        val irText = backend.generate(crate, preludeScope)
+                        System.err.println("\n✅ IR (before codegen):")
+                        System.err.println(irText)
+                    }
+                    val asmText = backend.generateAsm(crate, preludeScope, debugDump = options.debugCodegen)
+                    if (options.debugCodegen) {
+                        System.err.println("\n✅ Codegen successful!")
+                        System.err.println(asmText)
+                    }
+                    asmText
                 }
             }
 
-            // --- RISC-V assembly output (optional) ---
-            val asmWrittenToStdout = options.asmOutPath == "-"
-            if (options.asmOutPath != null || options.debugCodegen) {
-                val asmText = backend.generateAsm(crate, preludeScope, debugDump = options.debugCodegen)
-                options.asmOutPath?.let {
-                    if (it == "-") {
-                        println(asmText)
-                    } else {
-                        val outPath = Paths.get(it)
-                        outPath.parent?.let { parent -> Files.createDirectories(parent) }
-                        Files.writeString(outPath, asmText)
-                        if (options.debugCodegen) {
-                            System.err.println("\n[debug] Assembly written to ${outPath.toAbsolutePath()}")
-                        }
-                    }
+            // Write output to file or stdout.
+            val outPath = options.outputPath
+            if (outPath != null && outPath != "-") {
+                val p = Paths.get(outPath)
+                p.parent?.let { parent -> Files.createDirectories(parent) }
+                Files.writeString(p, outputText)
+                if (options.debugIr || options.debugCodegen) {
+                    System.err.println("\n[debug] Output written to ${p.toAbsolutePath()}")
                 }
-                if (options.debugCodegen && !asmWrittenToStdout) {
-                    System.err.println("\n✅ Codegen successful!")
-                    System.err.println(asmText)
-                }
-            }
-
-            // If neither IR nor ASM was requested, just validate that codegen works
-            // by running it silently when --asm-out is not given but no --ir-out either.
-            if (options.irOutPath == null && options.asmOutPath == null && !options.debugIr && !options.debugCodegen) {
-                // Default: just generate IR text to stdout for backward compatibility.
-                val irText = backend.generate(crate, preludeScope)
-                println(irText)
+            } else {
+                println(outputText)
             }
         } catch (e: Exception) {
             return
@@ -130,7 +121,6 @@ fun main(args: Array<String>) {
         System.err.println("   ${e.message}")
         exitProcess(1)
     } catch (e: Exception) {
-
         System.err.println("\n💥 An internal compiler error occurred:")
         e.printStackTrace()
         exitProcess(1)
