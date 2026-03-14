@@ -68,26 +68,57 @@ fun main(args: Array<String>) {
         // Drive IR backend after successful semantics.
         try {
             val backend = IrBackend(enableOptimization = options.optimize)
-            val irText = backend.generate(crate, preludeScope)
 
+            // --- IR output (optional) ---
             val irWrittenToStdout = options.irOutPath == "-"
-            options.irOutPath?.let {
-                if (it == "-") {
-                    println(irText)
-                } else {
-                    val outPath = Paths.get(it)
-                    outPath.parent?.let { parent -> Files.createDirectories(parent) }
-                    Files.writeString(outPath, irText)
-                    if (options.debugIr) {
-                        System.err.println("\n[debug] IR written to ${outPath.toAbsolutePath()}")
+            if (options.irOutPath != null || options.debugIr) {
+                val irText = backend.generate(crate, preludeScope)
+                options.irOutPath?.let {
+                    if (it == "-") {
+                        println(irText)
+                    } else {
+                        val outPath = Paths.get(it)
+                        outPath.parent?.let { parent -> Files.createDirectories(parent) }
+                        Files.writeString(outPath, irText)
+                        if (options.debugIr) {
+                            System.err.println("\n[debug] IR written to ${outPath.toAbsolutePath()}")
+                        }
                     }
                 }
+                if (options.debugIr && !irWrittenToStdout) {
+                    System.err.println("\n✅ IR generation successful!")
+                    System.err.println(irText)
+                }
             }
-            if (options.debugIr && !irWrittenToStdout) {
-                System.err.println("\n✅ Compilation successful!")
-                System.err.println(irText)
-            } else if (!irWrittenToStdout && options.debugIr) {
-                System.err.println("\n✅ Compilation successful!")
+
+            // --- RISC-V assembly output (optional) ---
+            val asmWrittenToStdout = options.asmOutPath == "-"
+            if (options.asmOutPath != null || options.debugCodegen) {
+                val asmText = backend.generateAsm(crate, preludeScope, debugDump = options.debugCodegen)
+                options.asmOutPath?.let {
+                    if (it == "-") {
+                        println(asmText)
+                    } else {
+                        val outPath = Paths.get(it)
+                        outPath.parent?.let { parent -> Files.createDirectories(parent) }
+                        Files.writeString(outPath, asmText)
+                        if (options.debugCodegen) {
+                            System.err.println("\n[debug] Assembly written to ${outPath.toAbsolutePath()}")
+                        }
+                    }
+                }
+                if (options.debugCodegen && !asmWrittenToStdout) {
+                    System.err.println("\n✅ Codegen successful!")
+                    System.err.println(asmText)
+                }
+            }
+
+            // If neither IR nor ASM was requested, just validate that codegen works
+            // by running it silently when --asm-out is not given but no --ir-out either.
+            if (options.irOutPath == null && options.asmOutPath == null && !options.debugIr && !options.debugCodegen) {
+                // Default: just generate IR text to stdout for backward compatibility.
+                val irText = backend.generate(crate, preludeScope)
+                println(irText)
             }
         } catch (e: Exception) {
             return
