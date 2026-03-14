@@ -16,6 +16,6 @@ GNU-style RISC-V assembly.
 ```
 
 ## Optimizations
-- inlining [ ]
-- dead code elimination [ ]
-- ...
+- [ ] inlining 
+- [ ] dead code elimination
+- [ ] ...

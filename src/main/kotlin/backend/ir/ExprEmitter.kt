@@ -165,6 +165,17 @@ class ExprEmitter(
   }
 
   private fun emitBinaryOp(node: BinaryExprNode): IrValue {
+    // For short-circuit operators, the RHS must not be eagerly evaluated —
+    // it is only emitted inside the guarded basic block by the thunk.
+    if (node.op == Punctuation.AND_AND) {
+      val lhs = emitExpr(node.lhs)
+      return emitShortCircuitAnd(lhs) { emitExpr(node.rhs) }
+    }
+    if (node.op == Punctuation.OR_OR) {
+      val lhs = emitExpr(node.lhs)
+      return emitShortCircuitOr(lhs) { emitExpr(node.rhs) }
+    }
+
     val lhs = emitExpr(node.lhs)
     val rhs = emitExpr(node.rhs)
     return when (node.op) {
@@ -219,8 +230,6 @@ class ExprEmitter(
       Punctuation.AMPERSAND -> emitLogical(BinaryOperator.AND, lhs, rhs)
       Punctuation.PIPE -> emitLogical(BinaryOperator.OR, lhs, rhs)
       Punctuation.CARET -> emitLogical(BinaryOperator.XOR, lhs, rhs)
-      Punctuation.AND_AND -> emitShortCircuitAnd(lhs) { emitExpr(node.rhs) }
-      Punctuation.OR_OR -> emitShortCircuitOr(lhs) { emitExpr(node.rhs) }
       else -> error("Unsupported binary operator ${node.op}")
     }
   }

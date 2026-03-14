@@ -248,7 +248,10 @@ class InstructionSelector(
                     // Argument is on the stack (overflow area). The frame layout will
                     // place these at known offsets above the caller's sp. For now emit
                     // a load from a placeholder offset. Frame finalization patches it.
+                    // The "# overflow_arg" comment is a marker so patchIncomingArgs can
+                    // reliably identify these loads (vs. spill loads or prologue code).
                     val overflowOffset = (i - argRegs.size) * 4
+                    entryBlock.append(RvInst.Comment("overflow_arg $overflowOffset"))
                     entryBlock.append(
                         RvInst.Load(MemWidth.WORD, dstReg, phys(RvPhysReg.SP), overflowOffset)
                     )

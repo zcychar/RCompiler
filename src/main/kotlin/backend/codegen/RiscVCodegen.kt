@@ -2,6 +2,7 @@ package backend.codegen
 
 import backend.codegen.riscv.*
 import backend.ir.*
+import backend.codegen.BranchRelaxation
 
 /**
  * Top-level RISC-V code generator.
@@ -65,7 +66,20 @@ object RiscVCodegen {
             }
         }
 
-        // Phase 4: Assembly Emission — produce final assembly text.
+        // Phase 4: Branch Relaxation — rewrite far conditional branches into
+        //          inverted-branch + jump sequences to stay within B-type ±4KB range.
+        for (mf in machineFunctions) {
+            BranchRelaxation.relax(mf)
+        }
+
+        if (debugDump) {
+            System.err.println("===== After Branch Relaxation =====")
+            for (mf in machineFunctions) {
+                System.err.println(mf.debugRender())
+            }
+        }
+
+        // Phase 5: Assembly Emission — produce final assembly text.
         return AsmEmitter.emit(machineFunctions, irModule)
     }
 }

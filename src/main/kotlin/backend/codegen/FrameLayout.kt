@@ -30,7 +30,7 @@ import backend.codegen.riscv.*
 //      references a stack slot (alloca addresses and spill loads/stores)
 //      so that its immediate encodes the final offset.  When the offset
 //      does not fit in a 12-bit signed immediate, a multi-instruction
-//      sequence is emitted instead. 
+//      sequence is emitted instead.
 //
 //  C.  **Insert prologue** — at the top of the entry block, emit:
 //        addi sp, sp, -frameSize
@@ -92,6 +92,7 @@ object FrameLayout {
         patchOffsets(mf, layout)
         insertPrologue(mf, layout)
         insertEpilogue(mf, layout)
+        patchIncomingArgs(mf, layout.totalFrameSize)
         mf.frameSize = layout.totalFrameSize
     }
 
@@ -564,46 +565,46 @@ object FrameLayout {
      * if the function has overflow parameters.
      */
     internal fun patchIncomingArgs(mf: RvMachineFunction, totalFrameSize: Int) {
+        if (totalFrameSize == 0) return
         if (mf.blocks.isEmpty()) return
         val entry = mf.entryBlock()
         val newInsts = mutableListOf<RvInst>()
+        val insts = entry.instructions
+        var i = 0
 
-        for (inst in entry.instructions) {
-            // Look for loads from sp with small non-negative offsets that look
-            // like overflow arg loads (offset = N * 4 where N >= 0).
-            // These were emitted by lowerParameters as:
-            //   lw dstReg, <overflowOffset>(sp)
-            // where overflowOffset = (i - 8) * 4.
-            //
-            // After frame allocation, the actual offset is:
-            //   totalFrameSize + overflowOffset
-            // because the caller placed args above the callee's frame.
-            //
-            // We detect these by looking for `lw` from sp with offsets that are
-            // multiples of 4 in the range [0, 32) (covering up to 8 overflow args).
-            // This is a heuristic; in practice the selector only emits these in
-            // the entry block's parameter-loading preamble.
-            if (inst is RvInst.Load
-                && inst.base == phys(RvPhysReg.SP)
-                && inst.offset >= 0
-                && inst.offset < 32
-                && inst.offset % 4 == 0
-                && totalFrameSize > 0
-            ) {
-                // Check if this is before any non-Mv/non-Load instruction
-                // to avoid false positives. This is the parameter loading area.
-                val adjustedOffset = totalFrameSize + inst.offset
-                if (fitsIn12Bit(adjustedOffset)) {
-                    newInsts.add(inst.copy(offset = adjustedOffset))
-                } else {
-                    // Large offset: materialise address in rd, then load.
-                    newInsts.add(RvInst.Li(inst.rd, adjustedOffset))
-                    newInsts.add(RvInst.RType(RvArithOp.ADD, inst.rd, phys(RvPhysReg.SP), inst.rd))
-                    newInsts.add(RvInst.Load(inst.width, inst.rd, inst.rd, 0))
+        while (i < insts.size) {
+            val inst = insts[i]
+
+            // Look for the marker comment emitted by InstructionSelector:
+            //   # overflow_arg <offset>
+            // followed by a load from sp with that same offset.
+            if (inst is RvInst.Comment && inst.text.startsWith("overflow_arg ")) {
+                val originalOffset = inst.text.removePrefix("overflow_arg ").trim().toIntOrNull()
+                if (originalOffset != null && i + 1 < insts.size) {
+                    val load = insts[i + 1]
+                    if (load is RvInst.Load
+                        && load.base == phys(RvPhysReg.SP)
+                        && load.offset == originalOffset
+                    ) {
+                        // Patch the offset: the overflow arg is above the callee's frame.
+                        val adjustedOffset = totalFrameSize + originalOffset
+                        // Drop the marker comment.
+                        if (fitsIn12Bit(adjustedOffset)) {
+                            newInsts.add(load.copy(offset = adjustedOffset))
+                        } else {
+                            // Large offset: materialise address in rd, then load.
+                            newInsts.add(RvInst.Li(load.rd, adjustedOffset))
+                            newInsts.add(RvInst.RType(RvArithOp.ADD, load.rd, phys(RvPhysReg.SP), load.rd))
+                            newInsts.add(RvInst.Load(load.width, load.rd, load.rd, 0))
+                        }
+                        i += 2  // skip marker comment + load
+                        continue
+                    }
                 }
-                continue
             }
+
             newInsts.add(inst)
+            i++
         }
 
         entry.instructions.clear()

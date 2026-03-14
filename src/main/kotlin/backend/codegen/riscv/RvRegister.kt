@@ -91,19 +91,21 @@ val CALLEE_SAVED_REGS: Set<RvPhysReg> = SAVED_REGS.toSet()
 /**
  * All registers available for the graph-coloring allocator.
  *
- * Excludes: zero, ra, sp, gp, tp (these are reserved for ABI use
- * and should never be assigned by the allocator).
+ * Excludes: zero, ra, sp, gp, tp (reserved for ABI use), and t0 (reserved
+ * as a scratch register for frame-layout large-offset sequences).
  *
- * **K = 27** — the chromatic number budget for Chaitin-Briggs.
+ * **K = 26** — the chromatic number budget for Chaitin-Briggs.
  */
 val ALLOCATABLE_REGS: List<RvPhysReg> = buildList {
-    addAll(TEMP_REGS)   // t0–t6   (7)
+    // t0 is reserved as a scratch register for FrameLayout (large-offset
+    // spill loads/stores and SP adjustments).  Only t1–t6 are allocatable.
+    addAll(TEMP_REGS.filter { it != RvPhysReg.T0 })  // t1–t6   (6)
     addAll(ARG_REGS)    // a0–a7   (8)
     addAll(SAVED_REGS)  // s0–s11  (12)
 }
 
 /** The number of colors available for graph coloring (K). */
-const val NUM_ALLOCATABLE: Int = 27   // 7 + 8 + 12
+const val NUM_ALLOCATABLE: Int = 26   // 6 + 8 + 12
 
 /** Reserved registers — never handed out by the allocator. */
 val RESERVED_REGS: Set<RvPhysReg> = setOf(
@@ -112,6 +114,7 @@ val RESERVED_REGS: Set<RvPhysReg> = setOf(
     RvPhysReg.SP,
     RvPhysReg.GP,
     RvPhysReg.TP,
+    RvPhysReg.T0,   // reserved as scratch for FrameLayout large-offset sequences
 )
 
 // ---------------------------------------------------------------------------
