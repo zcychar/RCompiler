@@ -700,8 +700,10 @@ class LivenessAnalysisTest {
 
         val edges = result.interferenceEdges()
 
-        // v0 should interfere with every caller-saved register.
+        // v0 should interfere with every caller-saved register that is allocatable
+        // (t0 is reserved as a scratch register so it's excluded from liveness).
         for (csr in CALLER_SAVED_REGS) {
+            if (csr in RESERVED_REGS) continue
             val pair = LivenessResult.orderedPair(vk(0), pk(csr))
             assertContains(edges, pair, "v0 should interfere with ${csr.abiName} (call clobber)")
         }
@@ -749,8 +751,8 @@ class LivenessAnalysisTest {
 
     @Test
     fun `toRegKey returns valid key for allocatable phys regs`() {
-        val key = RvOperand.PhysReg(RvPhysReg.T0).toRegKey()
-        assertEquals(RegKey.Phys(RvPhysReg.T0), key)
+        val key = RvOperand.PhysReg(RvPhysReg.T1).toRegKey()
+        assertEquals(RegKey.Phys(RvPhysReg.T1), key)
     }
 
     @Test
