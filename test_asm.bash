@@ -11,6 +11,10 @@
 # Unlike test_llvm.bash, this does NOT need clang or builtin.c — the compiler
 # emits RISC-V assembly directly and REIMU handles builtins at the simulator
 # level.
+#
+# Environment variables:
+#   ASM_SHOW_STATS=1   Print REIMU stats for this testcase to stderr on success
+#   ASM_STATS_FILE     Write extracted REIMU stats to this file
 
 set -u
 
@@ -44,6 +48,28 @@ export MAKE="make -s --no-print-directory -C $ROOT"
 
 print_red()   { echo -e "\033[31m$1\033[0m" >&2; }
 print_green() { echo -e "\033[32m$1\033[0m" >&2; }
+
+extract_reimu_stats() {
+  awk '
+    /^Exit code:/ { capture=1 }
+    capture { print }
+  ' "$1"
+}
+
+write_reimu_stats() {
+  local source_file="$1"
+  local stats_file="$2"
+  {
+    echo "testcase=$TESTCASE"
+    extract_reimu_stats "$source_file"
+  } > "$stats_file"
+}
+
+show_reimu_stats() {
+  local source_file="$1"
+  echo "REIMU stats for $TESTCASE:" >&2
+  extract_reimu_stats "$source_file" >&2
+}
 
 # ── Usage ───────────────────────────────────────────────────────────────
 
@@ -137,8 +163,15 @@ REIMU_EXIT=$?
 if [ $REIMU_EXIT -ne 0 ]; then
   echo "Error: REIMU exited with code $REIMU_EXIT." >&2
   cat "$TEMPDIR/reimu_err.txt" >&2
+  if [ -n "${ASM_STATS_FILE:-}" ]; then
+    write_reimu_stats "$TEMPDIR/reimu_err.txt" "$ASM_STATS_FILE"
+  fi
   print_temp_dir
   exit 1
+fi
+
+if [ -n "${ASM_STATS_FILE:-}" ]; then
+  write_reimu_stats "$TEMPDIR/reimu_err.txt" "$ASM_STATS_FILE"
 fi
 
 # ── 4. Compare output ──────────────────────────────────────────────────
@@ -153,6 +186,9 @@ fi
 
 if [ $HAS_PROBLEM -eq 0 ]; then
   print_green "PASSED  $TESTCASE"
+  if [ "${ASM_SHOW_STATS:-0}" = "1" ]; then
+    show_reimu_stats "$TEMPDIR/reimu_err.txt"
+  fi
   clean
   exit 0
 else
