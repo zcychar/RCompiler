@@ -2,6 +2,7 @@ package backend.ir
 
 import backend.codegen.RiscVCodegen
 import backend.ir.opt.PassPipeline
+import backend.ir.opt.InlinePass
 import backend.ir.opt.Mem2RegPass
 import frontend.ast.*
 import frontend.semantic.*
@@ -82,6 +83,7 @@ class IrBackend(
             }
         }
         if (enableOptimization) {
+            InlinePass().run(context.module)
             passPipeline.run(context.module)
         }
         return context.module
