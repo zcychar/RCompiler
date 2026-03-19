@@ -12,6 +12,7 @@ import backend.ir.*
  */
 class InlinePass(
   private val instructionThreshold: Int = 100,
+  private val callerInstructionBudget: Int = 300,
 ) {
   private var inlineCounter = 0
 
@@ -124,6 +125,7 @@ class InlinePass(
       if (calls.isEmpty()) continue
       for (call in calls.reversed()) {
         val callee = fnByName[call.callee.name] ?: continue
+        if (!canInlineIntoCaller(fn, callee)) continue
         inlineCallSite(fn, block, call, callee)
       }
     }
@@ -144,6 +146,14 @@ class InlinePass(
 
   private fun instructionCount(fn: IrFunction): Int =
     fn.blocks.sumOf { it.instructions.size + (if (it.terminator != null) 1 else 0) }
+
+  private fun canInlineIntoCaller(
+    caller: IrFunction,
+    callee: IrFunction,
+  ): Boolean {
+    val projected = instructionCount(caller) + instructionCount(callee) - 1
+    return projected <= callerInstructionBudget
+  }
 
   // ── call-site splicing ──────────────────────────────────────────────
 
@@ -202,6 +212,7 @@ class InlinePass(
     // ── 2. clone callee body ──
 
     val clonedBlocks = mutableListOf<IrBasicBlock>()
+    val hoistedAllocas = mutableListOf<IrAlloca>()
     val returnSites = mutableListOf<Pair<String, IrValue?>>()
 
     for (calleeBlock in callee.blocks) {
@@ -209,9 +220,12 @@ class InlinePass(
       val cloned = IrBasicBlock(clonedLabel)
 
       for (inst in calleeBlock.instructions) {
-        cloned.instructions.add(
-          cloneInstruction(inst, ::remapValue, ::remapName, ::remapLabel)
-        )
+        val clonedInst = cloneInstruction(inst, ::remapValue, ::remapName, ::remapLabel)
+        if (clonedInst is IrAlloca) {
+          hoistedAllocas.add(clonedInst)
+        } else {
+          cloned.instructions.add(clonedInst)
+        }
       }
 
       when (val term = calleeBlock.terminator) {
@@ -239,6 +253,8 @@ class InlinePass(
     }
 
     // ── 3. insert blocks into caller (must happen before value replacement) ──
+
+    insertHoistedAllocas(caller, hoistedAllocas)
 
     val insertPos = caller.blocks.indexOf(block) + 1
     for ((i, clonedBlock) in clonedBlocks.withIndex()) {
@@ -383,5 +399,16 @@ class InlinePass(
     is IrReturn -> term.copy(value = term.value?.let(remap))
     is IrBranch -> term.copy(condition = remap(term.condition))
     is IrJump -> term
+  }
+
+  private fun insertHoistedAllocas(
+    caller: IrFunction,
+    allocas: List<IrAlloca>,
+  ) {
+    if (allocas.isEmpty()) return
+    val entryBlock = caller.blocks.firstOrNull() ?: return
+    val insertPos = entryBlock.instructions.indexOfLast { it is IrAlloca }
+      .let { if (it >= 0) it + 1 else 0 }
+    entryBlock.instructions.addAll(insertPos, allocas)
   }
 }

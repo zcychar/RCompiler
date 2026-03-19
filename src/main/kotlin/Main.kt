@@ -112,7 +112,9 @@ fun main(args: Array<String>) {
                 println(outputText)
             }
         } catch (e: Exception) {
-            return
+            System.err.println("\n💥 A backend error occurred:")
+            e.printStackTrace()
+            exitProcess(1)
         }
 
         exitProcess(0)

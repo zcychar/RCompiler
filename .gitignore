@@ -60,3 +60,6 @@ REIMU
 test_llvm_local.bash
 .tmp
 builtin.c
+
+benchmark-results
+skills
