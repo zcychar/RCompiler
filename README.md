@@ -42,7 +42,9 @@ compiler-test task names.
 - [x] Mem2Reg scalar/pointer alloca promotion
 - [x] Function inlining
 - [x] Constant propagation and branch folding
+- [x] CFG simplification for empty jump blocks and same-target branches
 - [x] Dead code elimination
 - [x] Conservative aggressive dead code elimination
-- [ ] Aggregate SROA
+- [x] Fallthrough jump elimination in RISC-V codegen
+- [x] Conservative aggregate SROA
 - [ ] Control-dependence ADCE

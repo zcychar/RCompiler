@@ -70,10 +70,11 @@ object RiscVCodegen {
         //          inverted-branch + jump sequences to stay within B-type ±4KB range.
         for (mf in machineFunctions) {
             BranchRelaxation.relax(mf)
+            FallthroughJumpElimination.run(mf)
         }
 
         if (debugDump) {
-            System.err.println("===== After Branch Relaxation =====")
+            System.err.println("===== After Branch Relaxation / Fallthrough Cleanup =====")
             for (mf in machineFunctions) {
                 System.err.println(mf.debugRender())
             }

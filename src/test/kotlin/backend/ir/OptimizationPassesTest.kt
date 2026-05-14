@@ -1,6 +1,7 @@
 package backend.ir
 
 import backend.ir.opt.AggressiveDeadCodeEliminationPass
+import backend.ir.opt.CfgSimplificationPass
 import backend.ir.opt.ConstantPropagationPass
 import backend.ir.opt.DeadCodeEliminationPass
 import backend.ir.opt.PassPipeline
@@ -110,6 +111,60 @@ class OptimizationPassesTest {
   }
 
   @Test
+  fun `cfg simplification rewrites branch with identical targets to jump`() {
+    val (module, function, builder) = newFunction("sameTarget.", unit)
+    val entry = function.entryBlock("entry")
+    function.createBlock("exit")
+
+    builder.positionAt(function, entry)
+    builder.emitTerminator(IrBranch("", unit, IrLocal("cond", bool), "exit", "exit"))
+
+    CfgSimplificationPass().run(module, function)
+
+    val rendered = function.render()
+    assertTrue(rendered.contains("br label %exit"), "same-target branch should become jump")
+    assertFalse(rendered.contains("br i1 %cond"), "dead condition branch should be removed")
+  }
+
+  @Test
+  fun `cfg simplification bypasses empty jump block and rewrites phi predecessors`() {
+    val (module, function, builder) = newFunction("emptyBlock.", i32)
+    val entry = function.entryBlock("entry")
+    val left = function.createBlock("left")
+    val right = function.createBlock("right")
+    val linker = function.createBlock("linker")
+    val merge = function.createBlock("merge")
+
+    builder.positionAt(function, entry)
+    builder.emitTerminator(IrBranch("", unit, IrLocal("cond", bool), "left", "right"))
+
+    builder.positionAt(function, left)
+    builder.emitTerminator(IrJump("", unit, "linker"))
+
+    builder.positionAt(function, right)
+    builder.emitTerminator(IrJump("", unit, "linker"))
+
+    builder.positionAt(function, linker)
+    builder.emitTerminator(IrJump("", unit, "merge"))
+
+    builder.positionAt(function, merge)
+    val phi = builder.emit(
+      IrPhi("p", i32, listOf(PhiBranch(IrConstant(7, i32), "linker"))),
+      "p",
+    )
+    builder.emitTerminator(IrReturn("", i32, phi))
+
+    CfgSimplificationPass().run(module, function)
+
+    val rendered = function.render()
+    assertFalse(rendered.contains("linker:"), "empty jump-only block should be removed")
+    assertTrue(rendered.contains("br label %merge"), "predecessors should jump directly to merge")
+    assertFalse(rendered.contains("%linker"), "phi incoming should not refer to removed block")
+    assertTrue(rendered.contains("[7, %entry]"), "one empty predecessor can be bypassed to entry")
+    assertTrue(rendered.contains("[7, %right]"), "remaining predecessor value should be preserved")
+  }
+
+  @Test
   fun `optimization pipeline folds phi after constant branch cleanup`() {
     val module = IrModule()
     val function = IrFunction(
@@ -150,8 +205,10 @@ class OptimizationPassesTest {
     PassPipeline(
       listOf(
         ConstantPropagationPass(),
+        CfgSimplificationPass(),
         DeadCodeEliminationPass(),
         AggressiveDeadCodeEliminationPass(),
+        CfgSimplificationPass(),
         DeadCodeEliminationPass(),
       )
     ).run(module)
