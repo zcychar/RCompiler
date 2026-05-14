@@ -60,6 +60,10 @@ class InstructionSelector(
         /** Labels of blocks that contain φ nodes (used for critical-edge detection). */
         val blocksWithPhis = mutableSetOf<String>()
 
+        /** IR definition and use summaries used for branch-local peepholes. */
+        private val irDefinitions = collectIrDefinitions()
+        private val irUseCounts = collectIrUseCounts()
+
         fun run() {
             // Phase 0: Pre-create all machine blocks so forward references work.
             for (irBlock in irFunc.blocks) {
@@ -120,6 +124,65 @@ class InstructionSelector(
             2 -> MemWidth.HALF
             else -> MemWidth.WORD
         }
+
+        private fun collectIrDefinitions(): Map<String, IrInstruction> {
+            val definitions = linkedMapOf<String, IrInstruction>()
+            irFunc.blocks.forEach { block ->
+                block.instructions.forEach { inst ->
+                    definedName(inst)?.let { definitions[it] = inst }
+                }
+            }
+            return definitions
+        }
+
+        private fun collectIrUseCounts(): Map<String, Int> {
+            val counts = mutableMapOf<String, Int>()
+
+            fun record(value: IrValue?) {
+                val local = value as? IrLocal ?: return
+                counts[local.name] = counts.getOrDefault(local.name, 0) + 1
+            }
+
+            irFunc.blocks.forEach { block ->
+                block.instructions.forEach { inst ->
+                    usedValues(inst).forEach(::record)
+                }
+                block.terminator?.let { term ->
+                    usedValues(term).forEach(::record)
+                }
+            }
+            return counts
+        }
+
+        private fun definedName(inst: IrInstruction): String? {
+            if (inst.name.isBlank()) return null
+            return when (inst) {
+                is IrStore, is IrReturn, is IrBranch, is IrJump -> null
+                is IrCall -> inst.name.takeUnless { isVoidType(inst.type) }
+                else -> inst.name
+            }
+        }
+
+        private fun usedValues(inst: IrInstruction): List<IrValue> = when (inst) {
+            is IrAlloca -> emptyList()
+            is IrConst -> emptyList()
+            is IrLoad -> listOf(inst.address)
+            is IrStore -> listOf(inst.address, inst.value)
+            is IrBinary -> listOf(inst.lhs, inst.rhs)
+            is IrUnary -> listOf(inst.operand)
+            is IrCmp -> listOf(inst.lhs, inst.rhs)
+            is IrCall -> inst.arguments
+            is IrGep -> listOf(inst.base) + inst.indices
+            is IrPhi -> inst.incoming.map { it.value }
+            is IrCast -> listOf(inst.value)
+            is IrReturn -> inst.value?.let(::listOf) ?: emptyList()
+            is IrBranch -> listOf(inst.condition)
+            is IrJump -> emptyList()
+        }
+
+        private fun isVoidType(type: IrType): Boolean =
+            (type as? IrPrimitive)?.kind == PrimitiveKind.UNIT ||
+                (type as? IrPrimitive)?.kind == PrimitiveKind.NEVER
 
         // ---------------------------------------------------------------
         //  Value mapping: IR value → RvOperand
@@ -270,10 +333,11 @@ class InstructionSelector(
             for (inst in irBlock.instructions) {
                 // Skip φ nodes — handled separately.
                 if (inst is IrPhi) continue
+                if (inst is IrCmp && isBranchOnlyCmp(inst, irBlock)) continue
                 lowerInstruction(inst, mb)
             }
 
-            irBlock.terminator?.let { lowerTerminator(it, mb) }
+            irBlock.terminator?.let { lowerTerminator(it, mb, irBlock) }
         }
 
         // ---------------------------------------------------------------
@@ -347,6 +411,8 @@ class InstructionSelector(
         private fun lowerBinary(inst: IrBinary, mb: RvMachineBlock) {
             val rd = vregFor(inst.name, inst.type)
 
+            if (tryLowerBinaryByConstant(inst, rd, mb)) return
+
             // Try to use I-type (immediate) form when RHS is a small constant.
             if (inst.rhs is IrConstant) {
                 val immVal = inst.rhs.value.toInt()
@@ -372,6 +438,68 @@ class InstructionSelector(
             val rhs = operandOf(inst.rhs, mb)
             val rvOp = binaryToRType(inst.operator)
             mb.append(RvInst.RType(rvOp, rd, lhs, rhs))
+        }
+
+        private fun tryLowerBinaryByConstant(
+            inst: IrBinary,
+            rd: RvOperand.Reg,
+            mb: RvMachineBlock,
+        ): Boolean {
+            val rhs = inst.rhs as? IrConstant ?: return false
+            val rhsValue = rhs.value.toInt()
+
+            when (inst.operator) {
+                BinaryOperator.UDIV -> {
+                    if (rhsValue == 1) {
+                        mb.append(RvInst.Mv(rd, operandOf(inst.lhs, mb)))
+                        return true
+                    }
+                    if (isPositivePowerOfTwo(rhsValue)) {
+                        mb.append(
+                            RvInst.IType(
+                                RvArithImmOp.SRLI,
+                                rd,
+                                operandOf(inst.lhs, mb),
+                                log2(rhsValue)
+                            )
+                        )
+                        return true
+                    }
+                }
+                BinaryOperator.UREM -> {
+                    if (rhsValue == 1) {
+                        mb.append(RvInst.Li(rd, 0))
+                        return true
+                    }
+                    if (isPositivePowerOfTwo(rhsValue)) {
+                        val mask = rhsValue - 1
+                        val lhs = operandOf(inst.lhs, mb)
+                        if (fitsIn12Bit(mask)) {
+                            mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, lhs, mask))
+                        } else {
+                            val maskReg = mf.newVreg()
+                            mb.append(RvInst.Li(maskReg, mask))
+                            mb.append(RvInst.RType(RvArithOp.AND, rd, lhs, maskReg))
+                        }
+                        return true
+                    }
+                }
+                BinaryOperator.SDIV -> {
+                    if (rhsValue == 1) {
+                        mb.append(RvInst.Mv(rd, operandOf(inst.lhs, mb)))
+                        return true
+                    }
+                }
+                BinaryOperator.SREM -> {
+                    if (rhsValue == 1) {
+                        mb.append(RvInst.Li(rd, 0))
+                        return true
+                    }
+                }
+                else -> Unit
+            }
+
+            return false
         }
 
         private fun binaryToRType(op: BinaryOperator): RvArithOp = when (op) {
@@ -628,11 +756,7 @@ class InstructionSelector(
                         if (elemSize == 1) {
                             addDynamic(idxReg)
                         } else {
-                            val sizeReg = mf.newVreg()
-                            mb.append(RvInst.Li(sizeReg, elemSize))
-                            val product = mf.newVreg()
-                            mb.append(RvInst.RType(RvArithOp.MUL, product, idxReg, sizeReg))
-                            addDynamic(product)
+                            addDynamic(scaleByConstant(idxReg, elemSize, mb))
                         }
                     }
                 } else {
@@ -660,11 +784,7 @@ class InstructionSelector(
                                 if (elemSize == 1) {
                                     addDynamic(idxReg)
                                 } else {
-                                    val sizeReg = mf.newVreg()
-                                    mb.append(RvInst.Li(sizeReg, elemSize))
-                                    val product = mf.newVreg()
-                                    mb.append(RvInst.RType(RvArithOp.MUL, product, idxReg, sizeReg))
-                                    addDynamic(product)
+                                    addDynamic(scaleByConstant(idxReg, elemSize, mb))
                                 }
                             }
                             currentType = currentType.element
@@ -679,11 +799,7 @@ class InstructionSelector(
                                 if (elemSize == 1) {
                                     addDynamic(idxReg)
                                 } else {
-                                    val sizeReg = mf.newVreg()
-                                    mb.append(RvInst.Li(sizeReg, elemSize))
-                                    val product = mf.newVreg()
-                                    mb.append(RvInst.RType(RvArithOp.MUL, product, idxReg, sizeReg))
-                                    addDynamic(product)
+                                    addDynamic(scaleByConstant(idxReg, elemSize, mb))
                                 }
                             }
                         }
@@ -693,6 +809,51 @@ class InstructionSelector(
 
             return if (dynamicReg != null) GepResult.Register(dynamicReg!!)
             else GepResult.Constant(accumulatedConst)
+        }
+
+        private fun scaleByConstant(
+            value: RvOperand.Reg,
+            factor: Int,
+            mb: RvMachineBlock,
+        ): RvOperand.Reg {
+            if (factor == 1) return value
+            if (factor <= 0) {
+                val zero = mf.newVreg()
+                mb.append(RvInst.Li(zero, 0))
+                return zero
+            }
+            if (isPositivePowerOfTwo(factor)) {
+                val shifted = mf.newVreg()
+                mb.append(RvInst.IType(RvArithImmOp.SLLI, shifted, value, log2(factor)))
+                return shifted
+            }
+            if (Integer.bitCount(factor) <= MAX_SHIFT_ADD_TERMS) {
+                var acc: RvOperand.Reg? = null
+                for (bit in 0 until 32) {
+                    if ((factor and (1 shl bit)) == 0) continue
+                    val term = if (bit == 0) {
+                        value
+                    } else {
+                        val shifted = mf.newVreg()
+                        mb.append(RvInst.IType(RvArithImmOp.SLLI, shifted, value, bit))
+                        shifted
+                    }
+                    acc = if (acc == null) {
+                        term
+                    } else {
+                        val sum = mf.newVreg()
+                        mb.append(RvInst.RType(RvArithOp.ADD, sum, acc, term))
+                        sum
+                    }
+                }
+                return acc ?: value
+            }
+
+            val sizeReg = mf.newVreg()
+            mb.append(RvInst.Li(sizeReg, factor))
+            val product = mf.newVreg()
+            mb.append(RvInst.RType(RvArithOp.MUL, product, value, sizeReg))
+            return product
         }
 
         // -- IrCast ----------------------------------------------------
@@ -751,10 +912,10 @@ class InstructionSelector(
         //  Terminator lowering
         // ---------------------------------------------------------------
 
-        private fun lowerTerminator(term: IrTerminator, mb: RvMachineBlock) {
+        private fun lowerTerminator(term: IrTerminator, mb: RvMachineBlock, irBlock: IrBasicBlock) {
             when (term) {
                 is IrReturn -> lowerReturn(term, mb)
-                is IrBranch -> lowerBranch(term, mb)
+                is IrBranch -> lowerBranch(term, mb, irBlock)
                 is IrJump -> lowerJump(term, mb)
             }
         }
@@ -774,13 +935,104 @@ class InstructionSelector(
             mb.append(RvInst.Ret())
         }
 
-        private fun lowerBranch(br: IrBranch, mb: RvMachineBlock) {
+        private fun lowerBranch(br: IrBranch, mb: RvMachineBlock, irBlock: IrBasicBlock) {
+            if (tryLowerBranchOnCmp(br, mb, irBlock)) return
+
             val condReg = operandOf(br.condition, mb)
             val trueLabel = machineLabel(br.trueTarget)
             val falseLabel = machineLabel(br.falseTarget)
 
-            mb.append(RvInst.Branch(RvBranchCond.BNE, condReg, phys(RvPhysReg.ZERO), trueLabel))
-            mb.append(RvInst.J(falseLabel))
+            emitConditionalBranch(
+                RvBranchCond.BNE,
+                condReg,
+                phys(RvPhysReg.ZERO),
+                trueLabel,
+                falseLabel,
+                nextMachineLabel(irBlock),
+                mb,
+            )
+        }
+
+        private fun tryLowerBranchOnCmp(
+            br: IrBranch,
+            mb: RvMachineBlock,
+            irBlock: IrBasicBlock,
+        ): Boolean {
+            val cond = br.condition as? IrLocal ?: return false
+            val cmp = irDefinitions[cond.name] as? IrCmp ?: return false
+            if (!isBranchOnlyCmp(cmp, irBlock)) return false
+
+            val selected = selectBranch(cmp)
+            val trueLabel = machineLabel(br.trueTarget)
+            val falseLabel = machineLabel(br.falseTarget)
+            emitConditionalBranch(
+                selected.cond,
+                operandOf(selected.lhs, mb),
+                operandOf(selected.rhs, mb),
+                trueLabel,
+                falseLabel,
+                nextMachineLabel(irBlock),
+                mb,
+            )
+            return true
+        }
+
+        private fun isBranchOnlyCmp(cmp: IrCmp, irBlock: IrBasicBlock): Boolean {
+            if (cmp.name.isBlank()) return false
+            if (irBlock.instructions.none { it === cmp }) return false
+            val branch = irBlock.terminator as? IrBranch ?: return false
+            val condition = branch.condition as? IrLocal ?: return false
+            return condition.name == cmp.name && irUseCounts.getOrDefault(cmp.name, 0) == 1
+        }
+
+        private fun emitConditionalBranch(
+            cond: RvBranchCond,
+            lhs: RvOperand,
+            rhs: RvOperand,
+            trueLabel: String,
+            falseLabel: String,
+            fallthroughLabel: String?,
+            mb: RvMachineBlock,
+        ) {
+            when {
+                trueLabel == falseLabel -> mb.append(RvInst.J(trueLabel))
+                trueLabel == fallthroughLabel -> {
+                    mb.append(RvInst.Branch(invertCondition(cond), lhs, rhs, falseLabel))
+                    mb.append(RvInst.J(trueLabel))
+                }
+                else -> {
+                    mb.append(RvInst.Branch(cond, lhs, rhs, trueLabel))
+                    mb.append(RvInst.J(falseLabel))
+                }
+            }
+        }
+
+        private fun selectBranch(cmp: IrCmp): BranchSelection = when (cmp.predicate) {
+            ComparePredicate.EQ -> BranchSelection(RvBranchCond.BEQ, cmp.lhs, cmp.rhs)
+            ComparePredicate.NE -> BranchSelection(RvBranchCond.BNE, cmp.lhs, cmp.rhs)
+            ComparePredicate.SLT -> BranchSelection(RvBranchCond.BLT, cmp.lhs, cmp.rhs)
+            ComparePredicate.SLE -> BranchSelection(RvBranchCond.BGE, cmp.rhs, cmp.lhs)
+            ComparePredicate.SGT -> BranchSelection(RvBranchCond.BLT, cmp.rhs, cmp.lhs)
+            ComparePredicate.SGE -> BranchSelection(RvBranchCond.BGE, cmp.lhs, cmp.rhs)
+            ComparePredicate.ULT -> BranchSelection(RvBranchCond.BLTU, cmp.lhs, cmp.rhs)
+            ComparePredicate.ULE -> BranchSelection(RvBranchCond.BGEU, cmp.rhs, cmp.lhs)
+            ComparePredicate.UGT -> BranchSelection(RvBranchCond.BLTU, cmp.rhs, cmp.lhs)
+            ComparePredicate.UGE -> BranchSelection(RvBranchCond.BGEU, cmp.lhs, cmp.rhs)
+        }
+
+        private fun invertCondition(cond: RvBranchCond): RvBranchCond = when (cond) {
+            RvBranchCond.BEQ -> RvBranchCond.BNE
+            RvBranchCond.BNE -> RvBranchCond.BEQ
+            RvBranchCond.BLT -> RvBranchCond.BGE
+            RvBranchCond.BGE -> RvBranchCond.BLT
+            RvBranchCond.BLTU -> RvBranchCond.BGEU
+            RvBranchCond.BGEU -> RvBranchCond.BLTU
+        }
+
+        private fun nextMachineLabel(irBlock: IrBasicBlock): String? {
+            val index = irFunc.blocks.indexOf(irBlock)
+            val next = irFunc.blocks.getOrNull(index + 1) ?: return null
+            return machineLabel(next.label)
         }
 
         private fun lowerJump(jmp: IrJump, mb: RvMachineBlock) {
@@ -969,4 +1221,19 @@ class InstructionSelector(
         val dst: RvOperand.Reg,
         val srcValue: IrValue,
     )
+
+    private data class BranchSelection(
+        val cond: RvBranchCond,
+        val lhs: IrValue,
+        val rhs: IrValue,
+    )
+
+    private companion object {
+        const val MAX_SHIFT_ADD_TERMS = 3
+
+        fun isPositivePowerOfTwo(value: Int): Boolean =
+            value > 0 && (value and (value - 1)) == 0
+
+        fun log2(value: Int): Int = Integer.numberOfTrailingZeros(value)
+    }
 }
