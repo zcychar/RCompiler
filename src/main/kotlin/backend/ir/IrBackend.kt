@@ -1,9 +1,12 @@
 package backend.ir
 
 import backend.codegen.RiscVCodegen
-import backend.ir.opt.PassPipeline
+import backend.ir.opt.AggressiveDeadCodeEliminationPass
+import backend.ir.opt.ConstantPropagationPass
+import backend.ir.opt.DeadCodeEliminationPass
 import backend.ir.opt.InlinePass
 import backend.ir.opt.Mem2RegPass
+import backend.ir.opt.PassPipeline
 import frontend.ast.*
 import frontend.semantic.*
 import frontend.semantic.Function
@@ -14,7 +17,7 @@ import frontend.semantic.Function
  *
  * The pipeline is:
  *   1. AST → IR (SSA form with φ nodes after Mem2Reg)
- *   2. IR optimization passes (currently just Mem2Reg)
+ *   2. IR optimization passes (inline, mem2reg, constprop, DCE/ADCE)
  *   3. (Optional) RISC-V codegen: isel → regalloc → frame layout → asm emission
  */
 class IrBackend(
@@ -23,6 +26,10 @@ class IrBackend(
     private val passPipeline = PassPipeline(
         functionPasses = listOf(
             Mem2RegPass(),
+            ConstantPropagationPass(),
+            DeadCodeEliminationPass(),
+            AggressiveDeadCodeEliminationPass(),
+            DeadCodeEliminationPass(),
             // PhiLoweringPass removed: φ nodes are kept in SSA form and
             // lowered to register moves by the instruction selector,
             // avoiding expensive memory traffic on the REIMU target.

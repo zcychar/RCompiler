@@ -727,6 +727,8 @@ class ExprEmitter(
    */
   private fun emitMethodCall(node: MethodCallExprNode, destPtr: IrValue? = null): IrValue {
     val fnName = node.pathSeg.name ?: error("method name missing")
+    emitBuiltinMethodCall(node, fnName)?.let { return it }
+
     val receiverType = toIrType(node.receiverType!!)
     val fnSymbol = node.methodSymbol!!
     val signature = irFunctionSignature(fnSymbol)
@@ -797,6 +799,15 @@ class ExprEmitter(
       sretSlot!!
     } else {
       callResult
+    }
+  }
+
+  private fun emitBuiltinMethodCall(node: MethodCallExprNode, fnName: String): IrValue? {
+    val receiverType = unwrapSemanticRef(node.receiverType ?: return null)
+    return when {
+      fnName == "len" && receiverType is ArrayType ->
+        IrConstant(receiverType.size.toLong(), IrPrimitive(PrimitiveKind.USIZE))
+      else -> null
     }
   }
 
@@ -1069,6 +1080,9 @@ class ExprEmitter(
 
     UnitTypeNode -> UnitType
   }
+
+  private tailrec fun unwrapSemanticRef(type: Type): Type =
+    if (type is RefType) unwrapSemanticRef(type.baseType) else type
 
   private fun ensureSameType(lhs: IrType, rhs: IrType) {
     if (lhs == rhs) return

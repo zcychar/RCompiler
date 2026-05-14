@@ -18,7 +18,7 @@ import backend.codegen.riscv.*
 //    6. SELECT     — pop stack and assign colors (physical registers)
 //    7. SPILL & RETRY — if actual spills found, insert load/store, restart
 //
-//  K = 27 (number of allocatable physical registers on RV32I: t0–t6, a0–a7, s0–s11)
+//  K = 26 (allocatable RV32I registers; t0 is reserved as a frame-layout scratch)
 //
 //  After successful allocation the allocator rewrites every instruction in the
 //  machine function, replacing virtual register operands with physical registers
@@ -485,11 +485,11 @@ class GraphColorRegAlloc {
          * Pick a physical register not in [usedColors].
          *
          * Preference order (for REIMU performance):
-         *   1. **Caller-saved** (t0–t6, a0–a7) for nodes NOT live across a call.
+         *   1. **Caller-saved** (t1–t6, a0–a7) for nodes NOT live across a call.
          *   2. **Callee-saved** (s0–s11) for nodes live across a call.
          *
          * For simplicity we use a static preference order:
-         *   t0–t6, a0–a7, s0–s11.
+         *   t1–t6, a0–a7, s0–s11.
          * This prefers caller-saved registers, avoiding unnecessary
          * callee-saved save/restore overhead.
          */

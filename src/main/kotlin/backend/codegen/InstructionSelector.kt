@@ -709,41 +709,32 @@ class InstructionSelector(
                 }
 
                 CastKind.ZEXT -> {
-                    val srcWidth = widthOf(srcType)
-                    if (srcWidth == 1) {
-                        // i1 → i32: andi rd, rs, 1
-                        mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, rs, 1))
-                    } else if (srcWidth == 1 || (srcType is IrPrimitive && srcType.kind == PrimitiveKind.CHAR)) {
-                        // i8 → i32: andi rd, rs, 0xFF
-                        mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, rs, 0xFF))
-                    } else {
-                        mb.append(RvInst.Mv(rd, rs))
+                    when ((srcType as? IrPrimitive)?.kind) {
+                        PrimitiveKind.BOOL -> mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, rs, 1))
+                        PrimitiveKind.CHAR -> mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, rs, 0xFF))
+                        else -> mb.append(RvInst.Mv(rd, rs))
                     }
                 }
 
                 CastKind.SEXT -> {
-                    val srcWidth = widthOf(srcType)
-                    if (srcWidth == 1 || (srcType is IrPrimitive && srcType.kind == PrimitiveKind.BOOL)) {
-                        // i1 → i32: slli rd, rs, 31; srai rd, rd, 31
-                        mb.append(RvInst.IType(RvArithImmOp.SLLI, rd, rs, 31))
-                        mb.append(RvInst.IType(RvArithImmOp.SRAI, rd, rd, 31))
-                    } else if (srcType is IrPrimitive && srcType.kind == PrimitiveKind.CHAR) {
-                        // i8 → i32: slli rd, rs, 24; srai rd, rd, 24
-                        mb.append(RvInst.IType(RvArithImmOp.SLLI, rd, rs, 24))
-                        mb.append(RvInst.IType(RvArithImmOp.SRAI, rd, rd, 24))
-                    } else {
-                        mb.append(RvInst.Mv(rd, rs))
+                    when ((srcType as? IrPrimitive)?.kind) {
+                        PrimitiveKind.BOOL -> {
+                            mb.append(RvInst.IType(RvArithImmOp.SLLI, rd, rs, 31))
+                            mb.append(RvInst.IType(RvArithImmOp.SRAI, rd, rd, 31))
+                        }
+                        PrimitiveKind.CHAR -> {
+                            mb.append(RvInst.IType(RvArithImmOp.SLLI, rd, rs, 24))
+                            mb.append(RvInst.IType(RvArithImmOp.SRAI, rd, rd, 24))
+                        }
+                        else -> mb.append(RvInst.Mv(rd, rs))
                     }
                 }
 
                 CastKind.TRUNC -> {
-                    val dstWidth = widthOf(dstType)
-                    if (dstWidth == 1 || (dstType is IrPrimitive && dstType.kind == PrimitiveKind.BOOL)) {
-                        mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, rs, 1))
-                    } else if (dstType is IrPrimitive && dstType.kind == PrimitiveKind.CHAR) {
-                        mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, rs, 0xFF))
-                    } else {
-                        mb.append(RvInst.Mv(rd, rs))
+                    when ((dstType as? IrPrimitive)?.kind) {
+                        PrimitiveKind.BOOL -> mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, rs, 1))
+                        PrimitiveKind.CHAR -> mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, rs, 0xFF))
+                        else -> mb.append(RvInst.Mv(rd, rs))
                     }
                 }
             }

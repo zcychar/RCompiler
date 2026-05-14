@@ -340,26 +340,16 @@ object FrameLayout {
      * Emit `sw rs, offset(sp)` with large-offset support.
      *
      * If offset fits in 12 bits: `sw rs, offset(sp)`
-     * Otherwise: we need a temporary register.  We use `t0` as a scratch
-     * register (it's caller-saved and not live at spill points since the
-     * allocator assigned it — and the spill code uses dedicated fresh regs).
-     *
-     * Actually, after register allocation the value to store is already in
-     * a physical register `rs`, and we need a *different* register to hold
-     * the computed address.  We use the reserved `t0` convention for this:
+     * Otherwise: we need a temporary register for the computed address. The
+     * allocator never hands out `t0`, so the frame finalizer can use it as a
+     * reserved scratch:
      *
      *   li   t0, offset
      *   add  t0, sp, t0
      *   sw   rs, 0(t0)
      *
-     * Note: `t0` is caller-saved and may have been allocated to user code.
-     * In practice, large stack frames on RV32 (> 2047 bytes) are rare for
-     * REIMU workloads.  If correctness is paramount, a more sophisticated
-     * scratch-register selection could be used. For now this is acceptable
-     * because the large-offset stores only appear for spill code around
-     * individual instructions, and the fresh spill regs don't interfere
-     * with t0 in those narrow windows. In the prologue/epilogue we handle
-     * large offsets differently (see below).
+     * If the stored register is itself `t0` (possible only for hand-built test
+     * machine IR), `t1` is used instead.
      */
     private fun emitSpRelativeStore(
         out: MutableList<RvInst>,
