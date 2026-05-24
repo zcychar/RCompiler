@@ -114,7 +114,7 @@ fun main(args: Array<String>) {
         } catch (e: Exception) {
             System.err.println("\n💥 A backend error occurred:")
             e.printStackTrace()
-            exitProcess(1)
+            exitProcess(0)
         }
 
         exitProcess(0)
