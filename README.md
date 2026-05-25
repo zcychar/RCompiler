@@ -25,6 +25,16 @@ cp build/libs/RCompiler-1.0-SNAPSHOT-all.jar RCompiler-1.0-SNAPSHOT-all.jar
 ./test_asm_batch.bash --stats-only --range 1 50
 ```
 
+For RV64IM ASM execution, use the qemu-based runner. It assembles the generated
+RV64 assembly, links it with `runtime/rv64_linux_runtime.s`, runs the ELF under
+`qemu-riscv64`, and diffs stdout against the testcase answer:
+
+```bash
+./gradlew shadowJar
+./test_asm_rv64.bash comprehensive1
+./test_asm_rv64_batch.bash --range 1 50 -q
+```
+
 Optional comparison runs can pass compiler flags through `make`:
 
 ```bash
