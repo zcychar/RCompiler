@@ -37,7 +37,7 @@ class IrBackend(
             DeadCodeEliminationPass(),
             // PhiLoweringPass removed: φ nodes are kept in SSA form and
             // lowered to register moves by the instruction selector,
-            // avoiding expensive memory traffic on the REIMU target.
+            // avoiding expensive memory traffic in generated assembly.
         )
     )
 

@@ -133,9 +133,12 @@ class RvMachineFunction(
      * The maximum number of outgoing arguments that overflow beyond `a0–a7`
      * (i.e., arguments that must be passed on the stack). Determines the
      * size of the outgoing argument area at the bottom of the frame.
-     * Measured in **bytes** (each overflow arg occupies 4 bytes on RV32).
+     * Measured in **bytes** (each overflow arg occupies an 8-byte RV64 ABI slot).
      */
     var outgoingArgAreaSize: Int = 0
+
+    /** Virtual-register id to value width in bytes. Used to size spill slots. */
+    val vregWidths: MutableMap<Int, Int> = mutableMapOf()
 
     // -------------------------------------------------------------------
     //  Virtual-register ID allocator
@@ -145,10 +148,12 @@ class RvMachineFunction(
 
     /**
      * Allocate a fresh virtual register ID.
-     * [width] is the data width in bytes (1 for byte, 4 for word/pointer).
+     * [width] is the data width in bytes (1 for byte, 4 for i32, 8 for pointer).
      */
     fun newVreg(width: Int = 4): RvOperand.Reg {
-        return RvOperand.Reg(nextVregId++, width)
+        val id = nextVregId++
+        vregWidths[id] = width
+        return RvOperand.Reg(id, width)
     }
 
     /** Return the total number of virtual registers allocated so far. */

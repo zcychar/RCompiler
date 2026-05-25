@@ -1,5 +1,6 @@
 package backend.ir
 
+import backend.TargetLayout
 import frontend.semantic.*
 
 sealed interface IrType {
@@ -116,18 +117,19 @@ fun getLValueInnerType(value: IrValue): IrType {
   return (value.type as? IrPointer)?.pointee ?: error("invalid lvalue")
 }
 
-// Target-aware size/alignment calculator for RV32 (pointer and ints are 4 bytes).
+// Target-aware size/alignment calculator for RV64IM/LP64.
 private fun alignTo(value: Int, align: Int): Int =
   if (align <= 1) value else ((value + align - 1) / align) * align
 
 fun typeLayout(type: IrType): Pair<Int, Int> = when (type) {
   is IrPrimitive -> when (type.kind) {
     PrimitiveKind.BOOL, PrimitiveKind.CHAR -> 1 to 1
-    PrimitiveKind.I32, PrimitiveKind.U32, PrimitiveKind.ISIZE, PrimitiveKind.USIZE -> 4 to 4
+    PrimitiveKind.I32, PrimitiveKind.U32, PrimitiveKind.ISIZE, PrimitiveKind.USIZE ->
+      TargetLayout.INT_BYTES to TargetLayout.INT_BYTES
     PrimitiveKind.UNIT, PrimitiveKind.NEVER -> 0 to 1
   }
 
-  is IrPointer -> 4 to 4 // RV32 pointer
+  is IrPointer -> TargetLayout.POINTER_BYTES to TargetLayout.POINTER_BYTES
 
   is IrArray -> {
     val (elemSize, elemAlign) = typeLayout(type.element)

@@ -9,7 +9,7 @@ import backend.ir.*
  * After instruction selection, register allocation, and frame layout, every
  * [RvMachineFunction] contains only physical registers and concrete offsets.
  * This pass translates each function into assembly text suitable for consumption
- * by a GNU-compatible RISC-V assembler (or the REIMU simulator).
+ * by a GNU-compatible RISC-V assembler.
  *
  * Output format:
  * - `.text` section with functions (including builtin runtime wrappers)
@@ -24,8 +24,7 @@ import backend.ir.*
  * `getInt`, `exit`, etc.) which the front-end mangles with a trailing `.`
  * (e.g. `printInt.`).  In the IR path these are emitted as LLVM IR that calls
  * libc's `printf` / `scanf`.  For the native RISC-V path we emit thin assembly
- * wrappers that call `printf` / `scanf` — primitives recognised by REIMU at the
- * simulator level — so no external `builtin.s` is needed.
+ * wrappers that call `printf` / `scanf`, so no external `builtin.s` is needed.
  */
 object AsmEmitter {
 
@@ -140,8 +139,7 @@ object AsmEmitter {
     /**
      * Emit RISC-V assembly implementations of the builtin prelude functions.
      *
-     * These are thin wrappers around libc primitives (`printf`, `scanf`, …)
-     * that REIMU recognises at the simulator level.
+     * These are thin wrappers around libc primitives (`printf`, `scanf`, ...).
      *
      * Format string constants used by these wrappers are emitted separately
      * in [emitRodataSection].
@@ -199,12 +197,12 @@ object AsmEmitter {
     private fun emitPrintInt(sb: StringBuilder) {
         sb.appendLine("printInt.:")
         sb.appendLine("    addi  sp, sp, -16")
-        sb.appendLine("    sw  ra, 12(sp)")
+        sb.appendLine("    sd  ra, 8(sp)")
         sb.appendLine("    mv  a1, a0")
         sb.appendLine("    lui  a0, %hi(.L__fmt_d)")
         sb.appendLine("    addi  a0, a0, %lo(.L__fmt_d)")
         sb.appendLine("    call  printf")
-        sb.appendLine("    lw  ra, 12(sp)")
+        sb.appendLine("    ld  ra, 8(sp)")
         sb.appendLine("    addi  sp, sp, 16")
         sb.appendLine("    ret")
     }
@@ -215,12 +213,12 @@ object AsmEmitter {
     private fun emitPrintlnInt(sb: StringBuilder) {
         sb.appendLine("printlnInt.:")
         sb.appendLine("    addi  sp, sp, -16")
-        sb.appendLine("    sw  ra, 12(sp)")
+        sb.appendLine("    sd  ra, 8(sp)")
         sb.appendLine("    mv  a1, a0")
         sb.appendLine("    lui  a0, %hi(.L__fmt_d_ln)")
         sb.appendLine("    addi  a0, a0, %lo(.L__fmt_d_ln)")
         sb.appendLine("    call  printf")
-        sb.appendLine("    lw  ra, 12(sp)")
+        sb.appendLine("    ld  ra, 8(sp)")
         sb.appendLine("    addi  sp, sp, 16")
         sb.appendLine("    ret")
     }
@@ -231,13 +229,13 @@ object AsmEmitter {
     private fun emitGetInt(sb: StringBuilder) {
         sb.appendLine("getInt.:")
         sb.appendLine("    addi  sp, sp, -16")
-        sb.appendLine("    sw  ra, 12(sp)")
+        sb.appendLine("    sd  ra, 8(sp)")
         sb.appendLine("    lui  a0, %hi(.L__fmt_d)")
         sb.appendLine("    addi  a0, a0, %lo(.L__fmt_d)")
-        sb.appendLine("    addi  a1, sp, 8")
+        sb.appendLine("    addi  a1, sp, 0")
         sb.appendLine("    call  scanf")
-        sb.appendLine("    lw  a0, 8(sp)")
-        sb.appendLine("    lw  ra, 12(sp)")
+        sb.appendLine("    lw  a0, 0(sp)")
+        sb.appendLine("    ld  ra, 8(sp)")
         sb.appendLine("    addi  sp, sp, 16")
         sb.appendLine("    ret")
     }
@@ -248,12 +246,12 @@ object AsmEmitter {
     private fun emitPrint(sb: StringBuilder) {
         sb.appendLine("print.:")
         sb.appendLine("    addi  sp, sp, -16")
-        sb.appendLine("    sw  ra, 12(sp)")
+        sb.appendLine("    sd  ra, 8(sp)")
         sb.appendLine("    mv  a1, a0")
         sb.appendLine("    lui  a0, %hi(.L__fmt_s)")
         sb.appendLine("    addi  a0, a0, %lo(.L__fmt_s)")
         sb.appendLine("    call  printf")
-        sb.appendLine("    lw  ra, 12(sp)")
+        sb.appendLine("    ld  ra, 8(sp)")
         sb.appendLine("    addi  sp, sp, 16")
         sb.appendLine("    ret")
     }
@@ -264,12 +262,12 @@ object AsmEmitter {
     private fun emitPrintln(sb: StringBuilder) {
         sb.appendLine("println.:")
         sb.appendLine("    addi  sp, sp, -16")
-        sb.appendLine("    sw  ra, 12(sp)")
+        sb.appendLine("    sd  ra, 8(sp)")
         sb.appendLine("    mv  a1, a0")
         sb.appendLine("    lui  a0, %hi(.L__fmt_s_ln)")
         sb.appendLine("    addi  a0, a0, %lo(.L__fmt_s_ln)")
         sb.appendLine("    call  printf")
-        sb.appendLine("    lw  ra, 12(sp)")
+        sb.appendLine("    ld  ra, 8(sp)")
         sb.appendLine("    addi  sp, sp, 16")
         sb.appendLine("    ret")
     }
@@ -280,16 +278,16 @@ object AsmEmitter {
     private fun emitGetString(sb: StringBuilder) {
         sb.appendLine("getString.:")
         sb.appendLine("    addi  sp, sp, -16")
-        sb.appendLine("    sw  ra, 12(sp)")
+        sb.appendLine("    sd  ra, 8(sp)")
         sb.appendLine("    li  a0, 256")
         sb.appendLine("    call  malloc")
-        sb.appendLine("    sw  a0, 8(sp)")          // save buf ptr
+        sb.appendLine("    sd  a0, 0(sp)")          // save buf ptr
         sb.appendLine("    mv  a1, a0")
         sb.appendLine("    lui  a0, %hi(.L__fmt_s)")
         sb.appendLine("    addi  a0, a0, %lo(.L__fmt_s)")
         sb.appendLine("    call  scanf")
-        sb.appendLine("    lw  a0, 8(sp)")          // return buf
-        sb.appendLine("    lw  ra, 12(sp)")
+        sb.appendLine("    ld  a0, 0(sp)")          // return buf
+        sb.appendLine("    ld  ra, 8(sp)")
         sb.appendLine("    addi  sp, sp, 16")
         sb.appendLine("    ret")
     }

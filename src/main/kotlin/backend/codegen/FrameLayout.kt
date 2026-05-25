@@ -1,5 +1,6 @@
 package backend.codegen
 
+import backend.TargetLayout
 import backend.codegen.riscv.*
 
 // ============================================================================
@@ -34,12 +35,12 @@ import backend.codegen.riscv.*
 //
 //  C.  **Insert prologue** — at the top of the entry block, emit:
 //        addi sp, sp, -frameSize
-//        sw   ra, <ra_offset>(sp)          (if hasCalls)
-//        sw   sN, <sN_offset>(sp)          (for each used callee-saved)
+//        sd   ra, <ra_offset>(sp)          (if hasCalls)
+//        sd   sN, <sN_offset>(sp)          (for each used callee-saved)
 //
 //  D.  **Insert epilogue** — before every `ret` instruction, emit:
-//        lw   sN, <sN_offset>(sp)
-//        lw   ra, <ra_offset>(sp)          (if hasCalls)
+//        ld   sN, <sN_offset>(sp)
+//        ld   ra, <ra_offset>(sp)          (if hasCalls)
 //        addi sp, sp, frameSize
 //
 //  Stack frame layout (growing downward):
@@ -139,8 +140,8 @@ object FrameLayout {
      *
      *   [outgoing arg overflow area]   (outgoingArgAreaSize bytes)
      *   [local slots (allocas+spills)] (each slot at its StackSlotInfo.offset)
-     *   [saved callee-saved registers] (4 bytes each)
-     *   [saved ra]                     (4 bytes, if hasCalls)
+     *   [saved callee-saved registers] (8 bytes each)
+     *   [saved ra]                     (8 bytes, if hasCalls)
      *                                  ← caller's sp
      *
      * All offsets are from the *post-prologue* sp (bottom of the frame).
@@ -167,16 +168,16 @@ object FrameLayout {
         // 3. Callee-saved register save area.
         val savedRegOffsets = mutableMapOf<RvPhysReg?, Int>()
         for (reg in calleeSaved) {
-            offset = alignUp(offset, 4)
+            offset = alignUp(offset, TargetLayout.REGISTER_BYTES)
             savedRegOffsets[reg] = offset
-            offset += 4
+            offset += TargetLayout.REGISTER_BYTES
         }
 
         // 4. ra save slot (if needed).
         if (saveRa) {
-            offset = alignUp(offset, 4)
+            offset = alignUp(offset, TargetLayout.REGISTER_BYTES)
             savedRegOffsets[null] = offset  // null key = ra
-            offset += 4
+            offset += TargetLayout.REGISTER_BYTES
         }
 
         // Total frame size, aligned to 16 bytes.
@@ -206,7 +207,7 @@ object FrameLayout {
      *    extract the slot index, and rewrite the next `addi` with the real offset.
      *
      * 2. **Spill load/store placeholders**: emitted by the register allocator as
-     *    `lw rd, <marker>(sp)` or `sw rs, <marker>(sp)` where marker is a
+     *    `load rd, <marker>(sp)` or `store rs, <marker>(sp)` where marker is a
      *    negative value encoding the slot index: `-(slotIdx + 1) * 256`.
      *    We detect these by checking for negative immediate offsets with sp as base.
      */
@@ -313,9 +314,9 @@ object FrameLayout {
     }
 
     /**
-     * Emit `lw rd, offset(sp)` with large-offset support.
+     * Emit a load from `offset(sp)` with large-offset support.
      *
-     * If offset fits in 12 bits: `lw rd, offset(sp)`
+     * If offset fits in 12 bits: `load rd, offset(sp)`
      * Otherwise: uses `rd` as scratch to materialise the address, then loads from it.
      *   li   rd, offset
      *   add  rd, sp, rd
@@ -337,9 +338,9 @@ object FrameLayout {
     }
 
     /**
-     * Emit `sw rs, offset(sp)` with large-offset support.
+     * Emit a store to `offset(sp)` with large-offset support.
      *
-     * If offset fits in 12 bits: `sw rs, offset(sp)`
+     * If offset fits in 12 bits: `store rs, offset(sp)`
      * Otherwise: we need a temporary register for the computed address. The
      * allocator never hands out `t0`, so the frame finalizer can use it as a
      * reserved scratch:
@@ -389,9 +390,9 @@ object FrameLayout {
      *
      * Prologue:
      *   addi sp, sp, -frameSize
-     *   sw   ra, <offset>(sp)          [if hasCalls]
-     *   sw   s0, <offset>(sp)          [for each used callee-saved]
-     *   sw   s1, <offset>(sp)
+     *   sd   ra, <offset>(sp)          [if hasCalls]
+     *   sd   s0, <offset>(sp)          [for each used callee-saved]
+     *   sd   s1, <offset>(sp)
      *   ...
      */
     private fun insertPrologue(mf: RvMachineFunction, layout: FrameInfo) {
@@ -420,7 +421,7 @@ object FrameLayout {
     }
 
     /**
-     * Emit a single `sw reg, offset(sp)` for the prologue, handling large offsets.
+     * Emit a single `sd reg, offset(sp)` for the prologue, handling large offsets.
      */
     private fun emitPrologueSave(
         out: MutableList<RvInst>,
@@ -428,7 +429,7 @@ object FrameLayout {
         offset: Int,
     ) {
         if (fitsIn12Bit(offset)) {
-            out.add(RvInst.Store(MemWidth.WORD, phys(reg), phys(RvPhysReg.SP), offset))
+            out.add(RvInst.Store(MemWidth.DWORD, phys(reg), phys(RvPhysReg.SP), offset))
         } else {
             // Large offset in prologue: we can use the register being saved as scratch
             // for address computation *if* it is a callee-saved register (since we
@@ -444,7 +445,7 @@ object FrameLayout {
             // can safely use them as scratch without saving.
             out.add(RvInst.Li(phys(scratch), offset))
             out.add(RvInst.RType(RvArithOp.ADD, phys(scratch), phys(RvPhysReg.SP), phys(scratch)))
-            out.add(RvInst.Store(MemWidth.WORD, phys(reg), phys(scratch), 0))
+            out.add(RvInst.Store(MemWidth.DWORD, phys(reg), phys(scratch), 0))
         }
     }
 
@@ -456,9 +457,9 @@ object FrameLayout {
      * Insert epilogue instructions before every `ret` in the function.
      *
      * Epilogue:
-     *   lw   s1, <offset>(sp)
-     *   lw   s0, <offset>(sp)
-     *   lw   ra, <offset>(sp)          [if hasCalls]
+     *   ld   s1, <offset>(sp)
+     *   ld   s0, <offset>(sp)
+     *   ld   ra, <offset>(sp)          [if hasCalls]
      *   addi sp, sp, frameSize
      *   // ret  (already present)
      */
@@ -497,7 +498,7 @@ object FrameLayout {
     }
 
     /**
-     * Emit a single `lw reg, offset(sp)` for the epilogue, handling large offsets.
+     * Emit a single `ld reg, offset(sp)` for the epilogue, handling large offsets.
      */
     private fun emitEpilogueRestore(
         out: MutableList<RvInst>,
@@ -505,16 +506,16 @@ object FrameLayout {
         offset: Int,
     ) {
         if (fitsIn12Bit(offset)) {
-            out.add(RvInst.Load(MemWidth.WORD, phys(reg), phys(RvPhysReg.SP), offset))
+            out.add(RvInst.Load(MemWidth.DWORD, phys(reg), phys(RvPhysReg.SP), offset))
         } else {
             // Large offset: use the target register as scratch to compute address,
             // then load into it (overwriting the address with the loaded value).
             //   li   reg, offset
             //   add  reg, sp, reg
-            //   lw   reg, 0(reg)
+            //   ld   reg, 0(reg)
             out.add(RvInst.Li(phys(reg), offset))
             out.add(RvInst.RType(RvArithOp.ADD, phys(reg), phys(RvPhysReg.SP), phys(reg)))
-            out.add(RvInst.Load(MemWidth.WORD, phys(reg), phys(reg), 0))
+            out.add(RvInst.Load(MemWidth.DWORD, phys(reg), phys(reg), 0))
         }
     }
 
@@ -546,9 +547,9 @@ object FrameLayout {
 
     /**
      * After frame layout, incoming overflow arguments (parameters beyond a0–a7)
-     * are located at `sp + frameSize + (argIdx * 4)` from the callee's
+     * are located at `sp + frameSize + (argIdx * 8)` from the callee's
      * perspective. The instruction selector emitted loads with preliminary
-     * offsets `(i - 8) * 4`.  This method walks the entry block and patches
+     * offsets `(i - 8) * 8`.  This method walks the entry block and patches
      * those loads.
      *
      * NOTE: This is called implicitly by [run] through [patchIncomingArgs]

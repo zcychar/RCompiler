@@ -3,7 +3,7 @@ package backend.codegen.riscv
 /**
  * RISC-V machine-level instruction representation.
  *
- * These model a subset of RV32IM sufficient to lower every IR instruction.
+ * These model a subset of RV64IM sufficient to lower every IR instruction.
  * During instruction selection, operands are [RvOperand.Reg] (virtual registers).
  * After register allocation, they are replaced with [RvOperand.PhysReg].
  *
@@ -47,7 +47,7 @@ sealed class RvInst {
      * R-type instruction: `<op> rd, rs1, rs2`
      *
      * Covers: add, sub, and, or, xor, sll, srl, sra, slt, sltu,
-     *         mul, mulh, mulhsu, mulhu, div, divu, rem, remu
+     *         RV64 word forms, and M-extension ops.
      */
     data class RType(
         val op: RvArithOp,
@@ -72,7 +72,8 @@ sealed class RvInst {
     /**
      * I-type instruction: `<op> rd, rs1, imm`
      *
-     * Covers: addi, andi, ori, xori, slti, sltiu, slli, srli, srai
+     * Covers: addi, andi, ori, xori, slti, sltiu, slli, srli, srai,
+     *         plus RV64 word-immediate forms.
      */
     data class IType(
         val op: RvArithImmOp,
@@ -91,11 +92,11 @@ sealed class RvInst {
     }
 
     // ===================================================================
-    //  Load: lb, lbu, lh, lhu, lw
+    //  Load: lb, lbu, lh, lhu, lw, ld
     // ===================================================================
 
     /**
-     * Load instruction: `<lw|lb|lbu|lh|lhu> rd, offset(base)`
+     * Load instruction: `<lw|ld|lb|lbu|lh|lhu> rd, offset(base)`
      */
     data class Load(
         val width: MemWidth,
@@ -114,11 +115,11 @@ sealed class RvInst {
     }
 
     // ===================================================================
-    //  Store: sb, sh, sw
+    //  Store: sb, sh, sw, sd
     // ===================================================================
 
     /**
-     * Store instruction: `<sw|sb|sh> rs, offset(base)`
+     * Store instruction: `<sw|sd|sb|sh> rs, offset(base)`
      */
     data class Store(
         val width: MemWidth,
@@ -400,29 +401,39 @@ sealed class RvInst {
 // ===========================================================================
 
 /**
- * R-type (register-register) arithmetic/logic opcodes — RV32IM.
+ * R-type (register-register) arithmetic/logic opcodes — RV64IM.
  */
 enum class RvArithOp(val mnemonic: String) {
     ADD("add"),
     SUB("sub"),
+    ADDW("addw"),
+    SUBW("subw"),
     AND("and"),
     OR("or"),
     XOR("xor"),
     SLL("sll"),
     SRL("srl"),
     SRA("sra"),
+    SLLW("sllw"),
+    SRLW("srlw"),
+    SRAW("sraw"),
     SLT("slt"),
     SLTU("sltu"),
 
     // M-extension
     MUL("mul"),
+    MULW("mulw"),
     MULH("mulh"),
     MULHSU("mulhsu"),
     MULHU("mulhu"),
     DIV("div"),
+    DIVW("divw"),
     DIVU("divu"),
+    DIVUW("divuw"),
     REM("rem"),
+    REMW("remw"),
     REMU("remu"),
+    REMUW("remuw"),
 }
 
 /**
@@ -430,14 +441,18 @@ enum class RvArithOp(val mnemonic: String) {
  */
 enum class RvArithImmOp(val mnemonic: String) {
     ADDI("addi"),
+    ADDIW("addiw"),
     ANDI("andi"),
     ORI("ori"),
     XORI("xori"),
     SLTI("slti"),
     SLTIU("sltiu"),
     SLLI("slli"),
+    SLLIW("slliw"),
     SRLI("srli"),
+    SRLIW("srliw"),
     SRAI("srai"),
+    SRAIW("sraiw"),
 }
 
 /**
@@ -470,8 +485,19 @@ enum class MemWidth(
     /** Half-word (16-bit) — unsigned load. Not used in current IR but defined for completeness. */
     HALF(2, "lhu", "sh"),
 
-    /** Word (32-bit). Used for i32, pointers, and all 32-bit values. */
+    /** Word (32-bit). Used for i32 and other 32-bit scalar values. */
     WORD(4, "lw", "sw"),
+
+    /** Double word (64-bit). Used for pointers, saved registers, and ABI slots. */
+    DWORD(8, "ld", "sd"),
+}
+
+fun memWidthForBytes(bytes: Int): MemWidth = when (bytes) {
+    1 -> MemWidth.BYTE
+    2 -> MemWidth.HALF
+    4 -> MemWidth.WORD
+    8 -> MemWidth.DWORD
+    else -> error("unsupported memory width: $bytes bytes")
 }
 
 // ===========================================================================

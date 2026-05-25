@@ -1,6 +1,6 @@
 # RCompiler
 
-A compiler for a subset of Rust, targeting **RISC-V RV32IM**.
+A compiler for a subset of Rust, targeting **RISC-V RV64IM**.
 
 Written in Kotlin, the compiler implements a complete pipeline from source code to
 GNU-style RISC-V assembly.
@@ -17,7 +17,7 @@ GNU-style RISC-V assembly.
 ./gradlew run --args="file.rx --emit=ir"  # Emit IR instead
 ```
 
-For IR-1 ASM benchmarking:
+Legacy IR-1 ASM benchmarking uses the RV32-oriented REIMU path:
 
 ```bash
 ./gradlew shadowJar
@@ -31,12 +31,12 @@ Optional comparison runs can pass compiler flags through `make`:
 COMPILER_FLAGS=--no-opt ./test_asm_batch.bash --stats-only --range 1 50
 ```
 
-For backend optimization work, use `test_asm_batch.bash` on
-`comprehensive1..50` as the primary correctness and REIMU cycle gate. Generated
-compiler-stage tasks such as `allCompilerTests` are useful focused translation
-checks, but they do not measure the target cycle behavior. See
-`docs/testing-workflow.md` for the full validation workflow and generated
-compiler-test task names.
+For backend optimization work, generated compiler-stage tasks such as
+`allCompilerTests` are useful focused translation checks. For RV64IM assembly,
+validate generated `.s` files with an RV64 assembler such as `llvm-mc
+-triple=riscv64 -mattr=+m` or `riscv64-unknown-elf-as -march=rv64im -mabi=lp64`.
+The old REIMU-based ASM scripts are RV32-oriented and are not the RV64 execution
+gate.
 
 ## Optimizations
 - [x] Mem2Reg scalar/pointer alloca promotion

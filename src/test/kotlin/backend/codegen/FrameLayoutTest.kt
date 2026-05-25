@@ -133,18 +133,18 @@ class FrameLayoutTest {
             bb.append(RvInst.Ret(listOf(RvPhysReg.A0)))
         }
 
-        // Frame should be at least 16 bytes (ra save = 4, padded to 16).
+        // Frame should be at least 16 bytes (ra save = 8, padded to 16).
         assertTrue(mf.frameSize >= 16, "Frame size should be at least 16")
         assertTrue(mf.frameSize % 16 == 0, "Frame size should be 16-byte aligned")
 
         val instrs = rendered(mf)
 
         // Should save ra in prologue.
-        assertTrue(instrs.any { it.contains("sw  ra,") && it.contains("(sp)") },
+        assertTrue(instrs.any { it.contains("sd  ra,") && it.contains("(sp)") },
             "Prologue should save ra. Instructions: $instrs")
 
         // Should restore ra in epilogue.
-        assertTrue(instrs.any { it.contains("lw  ra,") && it.contains("(sp)") },
+        assertTrue(instrs.any { it.contains("ld  ra,") && it.contains("(sp)") },
             "Epilogue should restore ra. Instructions: $instrs")
     }
 
@@ -169,15 +169,15 @@ class FrameLayoutTest {
         val instrs = rendered(mf)
 
         // Both s0 and s1 should be saved.
-        assertTrue(instrs.any { it.contains("sw  s0,") && it.contains("(sp)") },
+        assertTrue(instrs.any { it.contains("sd  s0,") && it.contains("(sp)") },
             "s0 should be saved in prologue")
-        assertTrue(instrs.any { it.contains("sw  s1,") && it.contains("(sp)") },
+        assertTrue(instrs.any { it.contains("sd  s1,") && it.contains("(sp)") },
             "s1 should be saved in prologue")
 
         // Both should be restored.
-        assertTrue(instrs.any { it.contains("lw  s0,") && it.contains("(sp)") },
+        assertTrue(instrs.any { it.contains("ld  s0,") && it.contains("(sp)") },
             "s0 should be restored in epilogue")
-        assertTrue(instrs.any { it.contains("lw  s1,") && it.contains("(sp)") },
+        assertTrue(instrs.any { it.contains("ld  s1,") && it.contains("(sp)") },
             "s1 should be restored in epilogue")
     }
 
@@ -200,15 +200,15 @@ class FrameLayoutTest {
         val instrs = rendered(mf)
 
         // ra and s0 both saved.
-        assertTrue(instrs.any { it.contains("sw  ra,") },
+        assertTrue(instrs.any { it.contains("sd  ra,") },
             "ra should be saved")
-        assertTrue(instrs.any { it.contains("sw  s0,") },
+        assertTrue(instrs.any { it.contains("sd  s0,") },
             "s0 should be saved")
 
         // ra and s0 both restored.
-        assertTrue(instrs.any { it.contains("lw  ra,") },
+        assertTrue(instrs.any { it.contains("ld  ra,") },
             "ra should be restored")
-        assertTrue(instrs.any { it.contains("lw  s0,") },
+        assertTrue(instrs.any { it.contains("ld  s0,") },
             "s0 should be restored")
     }
 
@@ -553,9 +553,9 @@ class FrameLayoutTest {
         assertTrue(mf.frameSize % 16 == 0,
             "Frame size ${mf.frameSize} should be 16-byte aligned")
 
-        // Frame must accommodate: local(8) + spill(4) + s0(4) + s1(4) + ra(4) = 24, aligned to 32.
-        assertTrue(mf.frameSize >= 24,
-            "Frame size ${mf.frameSize} should be at least 24 bytes")
+        // Frame must accommodate: local(8) + spill(4) + s0(8) + s1(8) + ra(8) = 36, aligned to 48.
+        assertTrue(mf.frameSize >= 36,
+            "Frame size ${mf.frameSize} should be at least 36 bytes")
 
         val instrs = rendered(mf)
 
@@ -564,14 +564,14 @@ class FrameLayoutTest {
             "No slot comments should remain")
 
         // Saves: ra, s0, s1.
-        assertTrue(instrs.any { it.contains("sw  ra,") }, "Should save ra")
-        assertTrue(instrs.any { it.contains("sw  s0,") }, "Should save s0")
-        assertTrue(instrs.any { it.contains("sw  s1,") }, "Should save s1")
+        assertTrue(instrs.any { it.contains("sd  ra,") }, "Should save ra")
+        assertTrue(instrs.any { it.contains("sd  s0,") }, "Should save s0")
+        assertTrue(instrs.any { it.contains("sd  s1,") }, "Should save s1")
 
         // Restores.
-        assertTrue(instrs.any { it.contains("lw  ra,") }, "Should restore ra")
-        assertTrue(instrs.any { it.contains("lw  s0,") }, "Should restore s0")
-        assertTrue(instrs.any { it.contains("lw  s1,") }, "Should restore s1")
+        assertTrue(instrs.any { it.contains("ld  ra,") }, "Should restore ra")
+        assertTrue(instrs.any { it.contains("ld  s0,") }, "Should restore s0")
+        assertTrue(instrs.any { it.contains("ld  s1,") }, "Should restore s1")
 
         // No negative offsets should remain.
         val allLoads = allInstructions(mf).filterIsInstance<RvInst.Load>()
@@ -598,16 +598,16 @@ class FrameLayoutTest {
     fun `outgoing arg area is included in frame size`() {
         val mf = framed {
             hasCalls = true
-            outgoingArgAreaSize = 8  // 2 overflow args
+            outgoingArgAreaSize = 16  // 2 overflow args
             val bb = createBlock("entry")
             bb.append(RvInst.Call("many_args"))
             bb.append(RvInst.Ret())
         }
 
-        // Frame should include: outgoing(8) + ra(4) = 12, aligned to 16.
-        assertTrue(mf.frameSize >= 12,
+        // Frame should include: outgoing(16) + ra(8) = 24, aligned to 32.
+        assertTrue(mf.frameSize >= 24,
             "Frame should include outgoing arg area")
-        assertEquals(16, mf.frameSize,
+        assertEquals(32, mf.frameSize,
             "Frame should be 16-byte aligned")
     }
 
@@ -869,11 +869,11 @@ class FrameLayoutTest {
         val instrs = rendered(mf)
 
         // Should save ra.
-        assertTrue(instrs.any { it.contains("sw  ra,") }, "Should save ra")
+        assertTrue(instrs.any { it.contains("sd  ra,") }, "Should save ra")
 
         // Should NOT save any callee-saved regs.
         for (reg in SAVED_REGS) {
-            assertFalse(instrs.any { it.contains("sw  ${reg.abiName},") },
+            assertFalse(instrs.any { it.contains("sd  ${reg.abiName},") },
                 "Should NOT save ${reg.abiName} when not used")
         }
     }
@@ -886,7 +886,7 @@ class FrameLayoutTest {
     fun `frame size accounts for outgoing args, slots, callee-saved, and ra`() {
         val mf = framed {
             hasCalls = true
-            outgoingArgAreaSize = 12  // 3 overflow args
+            outgoingArgAreaSize = 24  // 3 overflow args
             usedCalleeSaved.add(RvPhysReg.S0)
             usedCalleeSaved.add(RvPhysReg.S1)
             usedCalleeSaved.add(RvPhysReg.S2)
@@ -897,10 +897,10 @@ class FrameLayoutTest {
             bb.append(RvInst.Ret())
         }
 
-        // Minimum frame: outgoing(12) + local(20) + s0(4) + s1(4) + s2(4) + ra(4) = 48
-        // Aligned to 16 = 48 (already a multiple of 16).
-        assertTrue(mf.frameSize >= 48,
-            "Frame size ${mf.frameSize} should be at least 48")
+        // Minimum frame: outgoing(24) + local(20) + s0(8) + s1(8) + s2(8) + ra(8) = 76.
+        // Aligned to 16 = 80.
+        assertTrue(mf.frameSize >= 80,
+            "Frame size ${mf.frameSize} should be at least 80")
         assertTrue(mf.frameSize % 16 == 0,
             "Frame size ${mf.frameSize} should be 16-byte aligned")
     }
@@ -930,7 +930,7 @@ class FrameLayoutTest {
     @Test
     fun `slot offsets are above outgoing arg area`() {
         val mf = framed {
-            outgoingArgAreaSize = 16  // 4 overflow args (16 bytes)
+            outgoingArgAreaSize = 32  // 4 overflow args (32 bytes)
 
             val bb = createBlock("entry")
             val slot0 = allocateStackSlot("local", 4, 4)
@@ -939,8 +939,8 @@ class FrameLayoutTest {
             bb.append(RvInst.Ret())
         }
 
-        // The local slot should be at offset >= 16 (above the outgoing arg area).
-        assertTrue(mf.stackSlots[0].offset >= 16,
-            "Local slot offset ${mf.stackSlots[0].offset} should be >= outgoing arg area (16)")
+        // The local slot should be at offset >= 32 (above the outgoing arg area).
+        assertTrue(mf.stackSlots[0].offset >= 32,
+            "Local slot offset ${mf.stackSlots[0].offset} should be >= outgoing arg area (32)")
     }
 }

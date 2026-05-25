@@ -23,7 +23,7 @@ class GraphColorRegAllocTest {
     //  Helpers
     // -----------------------------------------------------------------------
 
-    private fun v(id: Int): RvOperand.Reg = RvOperand.Reg(id)
+    private fun v(id: Int, width: Int = 4): RvOperand.Reg = RvOperand.Reg(id, width)
     private fun p(reg: RvPhysReg): RvOperand.PhysReg = RvOperand.PhysReg(reg)
 
     /** Build a machine function, run regalloc, return the mutated mf. */
@@ -330,6 +330,35 @@ class GraphColorRegAllocTest {
         assertTrue(
             spillSlots.isNotEmpty(),
             "Should have spill slots when pressure > K=27"
+        )
+    }
+
+    @Test
+    fun `pointer-width spills allocate doubleword slots`() {
+        val mf = allocated {
+            val bb = createBlock("entry")
+            val inputs = (0 until 30).map { newVreg(8) }
+
+            for (i in 0 until 30) {
+                bb.append(RvInst.Li(inputs[i], i))
+            }
+
+            var acc = inputs[0]
+            for (i in 1 until 30) {
+                val dst = newVreg(8)
+                bb.append(RvInst.RType(RvArithOp.ADD, dst, acc, inputs[i]))
+                acc = dst
+            }
+
+            bb.append(RvInst.Mv(p(RvPhysReg.A0), acc))
+            bb.append(RvInst.Ret(listOf(RvPhysReg.A0)))
+        }
+
+        val spillSlots = mf.stackSlots.filter { it.name.startsWith("spill.") }
+        assertTrue(spillSlots.isNotEmpty(), "Should have spill slots")
+        assertTrue(
+            spillSlots.all { it.size == 8 && it.alignment == 8 },
+            "Pointer-width spills should use 8-byte slots: $spillSlots"
         )
     }
 

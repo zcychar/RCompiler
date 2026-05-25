@@ -19,13 +19,13 @@ class CastLoweringTest {
   }
 
   @Test
-  fun `sign extending char shifts by twenty four bits`() {
+  fun `sign extending char shifts by fifty six bits`() {
     val asm = compileCast(CastKind.SEXT, IrConstant(255, char), i32)
 
     assertTrue(asm.contains("slli"), "sext char should emit a left shift:\n$asm")
     assertTrue(asm.contains("srai"), "sext char should emit an arithmetic right shift:\n$asm")
-    assertTrue(asm.contains(", 24"), "sext char must use 24-bit shifts:\n$asm")
-    assertFalse(asm.contains(", 31"), "sext char must not use the bool sign-extension shift:\n$asm")
+    assertTrue(asm.contains(", 56"), "sext char must use 56-bit shifts on RV64:\n$asm")
+    assertFalse(asm.contains(", 63"), "sext char must not use the bool sign-extension shift:\n$asm")
   }
 
   @Test

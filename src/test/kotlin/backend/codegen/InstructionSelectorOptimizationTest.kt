@@ -119,6 +119,71 @@ class InstructionSelectorOptimizationTest {
     }
 
     @Test
+    fun `materialized unsigned word compare zero extends operands on RV64`() {
+        val (module, function, builder) = newFunction(
+            "unsignedCmp.",
+            bool,
+            listOf(u32, u32),
+            listOf("a", "b")
+        )
+        val entry = function.createBlock("entry")
+        builder.positionAt(function, entry)
+
+        val cmp = builder.emit(
+            IrCmp(
+                "",
+                bool,
+                ComparePredicate.ULT,
+                IrParameter(0, "a", u32),
+                IrParameter(1, "b", u32)
+            )
+        )
+        builder.emitTerminator(IrReturn("", bool, cmp))
+
+        val asm = RiscVCodegen.compile(module)
+        assertTrue(asm.contains("slli"), "unsigned u32 compare should zero-extend lhs/rhs first:\n$asm")
+        assertTrue(asm.contains("srli"), "unsigned u32 compare should zero-extend lhs/rhs first:\n$asm")
+        assertTrue(asm.contains("sltu"), "materialized unsigned compare should use sltu:\n$asm")
+    }
+
+    @Test
+    fun `branch only unsigned word compare zero extends before direct branch`() {
+        val (module, function, builder) = newFunction(
+            "unsignedBranchCmp.",
+            i32,
+            listOf(u32, u32),
+            listOf("a", "b")
+        )
+        val entry = function.createBlock("entry")
+        val elseBlock = function.createBlock("else")
+        val thenBlock = function.createBlock("then")
+
+        builder.positionAt(function, entry)
+        val cmp = builder.emit(
+            IrCmp(
+                "",
+                bool,
+                ComparePredicate.ULT,
+                IrParameter(0, "a", u32),
+                IrParameter(1, "b", u32)
+            )
+        )
+        builder.emitTerminator(IrBranch("", unit, cmp, "then", "else"))
+
+        builder.positionAt(function, elseBlock)
+        builder.emitTerminator(IrReturn("", i32, IrConstant(0, i32)))
+
+        builder.positionAt(function, thenBlock)
+        builder.emitTerminator(IrReturn("", i32, IrConstant(1, i32)))
+
+        val asm = RiscVCodegen.compile(module)
+        assertTrue(asm.contains("slli"), "direct unsigned branch should zero-extend lhs/rhs first:\n$asm")
+        assertTrue(asm.contains("srli"), "direct unsigned branch should zero-extend lhs/rhs first:\n$asm")
+        assertTrue(asm.contains("bltu"), "branch should still use direct unsigned branch:\n$asm")
+        assertNoOpcode(asm, "sltu")
+    }
+
+    @Test
     fun `unsigned div and rem by power of two lower to cheap immediates`() {
         val (module, function, builder) = newFunction("udivRemPow2.", u32, listOf(u32), listOf("x"))
         val entry = function.createBlock("entry")

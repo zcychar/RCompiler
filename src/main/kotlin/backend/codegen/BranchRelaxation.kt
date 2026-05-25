@@ -12,7 +12,7 @@ import backend.codegen.riscv.*
  * 4 bytes each).
  *
  * When a function is large enough that a conditional branch target exceeds this
- * range, the assembler (or REIMU linker) will reject the program.
+ * range, the assembler or linker will reject the program.
  *
  * This pass rewrites out-of-range conditional branches into an inverted-branch +
  * unconditional-jump sequence:

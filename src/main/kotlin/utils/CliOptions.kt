@@ -136,7 +136,7 @@ data class CliOptions(
 
         /** Human-readable help text printed by --help. */
         val HELP_TEXT = """
-            |RCompiler — a Rust-subset compiler targeting RISC-V (RV32IM)
+            |RCompiler — a Rust-subset compiler targeting RISC-V (RV64IM)
             |
             |Usage: rcompiler [options] [INPUT]
             |

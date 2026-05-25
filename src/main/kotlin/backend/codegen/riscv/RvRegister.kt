@@ -1,7 +1,7 @@
 package backend.codegen.riscv
 
 /**
- * RV32I physical registers.
+ * RV64I physical registers.
  *
  * Each entry carries its ABI name (used in assembly emission) and
  * its architectural number (x0–x31).
@@ -141,7 +141,7 @@ sealed class RvOperand {
 
     /**
      * Virtual register, identified by a unique non-negative integer.
-     * [width] records the data width in bytes (1 for i1/i8, 4 for i32/ptr)
+     * [width] records the data width in bytes (1 for i1/i8, 4 for i32, 8 for ptr)
      * and is used when generating spill loads/stores.
      */
     data class Reg(val id: Int, val width: Int = 4) : RvOperand() {
@@ -173,7 +173,7 @@ sealed class RvOperand {
 // Convenience helpers
 // ---------------------------------------------------------------------------
 
-/** Shorthand for creating a virtual-register operand (word-width). */
+/** Shorthand for creating a virtual-register operand (32-bit scalar width by default). */
 fun vreg(id: Int, width: Int = 4): RvOperand.Reg = RvOperand.Reg(id, width)
 
 /** Shorthand for creating a physical-register operand. */

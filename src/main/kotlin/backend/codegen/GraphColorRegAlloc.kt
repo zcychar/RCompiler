@@ -18,7 +18,7 @@ import backend.codegen.riscv.*
 //    6. SELECT     — pop stack and assign colors (physical registers)
 //    7. SPILL & RETRY — if actual spills found, insert load/store, restart
 //
-//  K = 26 (allocatable RV32I registers; t0 is reserved as a frame-layout scratch)
+//  K = 26 (allocatable RV64I registers; t0 is reserved as a frame-layout scratch)
 //
 //  After successful allocation the allocator rewrites every instruction in the
 //  machine function, replacing virtual register operands with physical registers
@@ -484,7 +484,7 @@ class GraphColorRegAlloc {
         /**
          * Pick a physical register not in [usedColors].
          *
-         * Preference order (for REIMU performance):
+         * Preference order:
          *   1. **Caller-saved** (t1–t6, a0–a7) for nodes NOT live across a call.
          *   2. **Callee-saved** (s0–s11) for nodes live across a call.
          *
@@ -562,7 +562,7 @@ class GraphColorRegAlloc {
 
     /**
      * For each spilled virtual register, allocate a stack slot and insert
-     * `sw` after every definition and `lw` before every use.
+     * a store after every definition and a load before every use.
      *
      * Each spill point gets a **fresh** tiny-lived virtual register so that
      * the next round's liveness analysis sees very short live ranges that
@@ -571,11 +571,15 @@ class GraphColorRegAlloc {
     private fun insertSpillCode(mf: RvMachineFunction, spilledKeys: Set<RegKey>) {
         // Map each spilled vreg id to its stack slot index.
         val spillSlots = mutableMapOf<Int, Int>()
+        val spillWidths = mutableMapOf<Int, Int>()
+        val vregWidths = collectVregWidths(mf)
 
         for (key in spilledKeys) {
             if (key !is RegKey.Vreg) continue
-            val slotIdx = mf.allocateStackSlot("spill.v${key.id}", 4, 4)
+            val width = vregWidths[key.id] ?: 4
+            val slotIdx = mf.allocateStackSlot("spill.v${key.id}", width, width)
             spillSlots[key.id] = slotIdx
+            spillWidths[key.id] = width
         }
 
         if (spillSlots.isEmpty()) return
@@ -599,23 +603,13 @@ class GraphColorRegAlloc {
                     }
                 }
 
-                // Build a rewriting map: spilled vreg → fresh tiny vreg.
-                val rewriteMap = mutableMapOf<Int, RvOperand.PhysReg>()
-
-                // For each used spill: allocate a fresh vreg and insert lw before.
-                // We misuse PhysReg as the rewrite target type is
-                // Map<Int, RvOperand.PhysReg> in mapRegs. Instead, we need to allocate
-                // fresh Reg and insert loads. mapRegs only maps vreg id → PhysReg,
-                // which doesn't help here. So we do manual rewriting.
-
-                // Since mapRegs only supports vreg→PhysReg, we'll instead replace
-                // the spilled vreg with a fresh vreg in all operands manually.
+                // Replace spilled vregs with fresh vregs in all operands manually.
                 val freshMap = mutableMapOf<Int, RvOperand.Reg>()
 
                 // Allocate fresh vregs for each spilled operand.
                 for ((vregId, _) in usedSpills + defSpills) {
                     if (vregId !in freshMap) {
-                        freshMap[vregId] = mf.newVreg(4)
+                        freshMap[vregId] = mf.newVreg(spillWidths[vregId] ?: 4)
                     }
                 }
 
@@ -624,17 +618,20 @@ class GraphColorRegAlloc {
                     if (vregId !in freshMap) continue
                     val freshReg = freshMap[vregId]!!
                     // Load from stack slot. Offset is 0 for now; frame layout patches it.
-                    // We emit: lw freshReg, 0(sp) — with the slot index recorded.
-                    // Actually, we emit an addi to get the slot address, then lw.
-                    // For simplicity, emit a direct lw with placeholder offset.
+                    // We emit a direct load with a placeholder offset.
                     // The frame finalizer will patch StackSlotInfo.offset, and we use
                     // it here. But since offset isn't known yet, we use slotIdx as a
                     // marker. We'll compute actual offset by reading the slot info.
                     //
-                    // For now: emit `lw freshReg, <slotOffset>(sp)` where slotOffset
+                    // For now: emit `load freshReg, <slotOffset>(sp)` where slotOffset
                     // is currently 0 (to be patched by FrameLayout).
                     newInsts.add(
-                        RvInst.Load(MemWidth.WORD, freshReg, phys(RvPhysReg.SP), spillSlotMarkerOffset(slotIdx))
+                        RvInst.Load(
+                            memWidthForBytes(freshReg.width),
+                            freshReg,
+                            phys(RvPhysReg.SP),
+                            spillSlotMarkerOffset(slotIdx)
+                        )
                     )
                 }
 
@@ -647,7 +644,12 @@ class GraphColorRegAlloc {
                     if (vregId !in freshMap) continue
                     val freshReg = freshMap[vregId]!!
                     newInsts.add(
-                        RvInst.Store(MemWidth.WORD, freshReg, phys(RvPhysReg.SP), spillSlotMarkerOffset(slotIdx))
+                        RvInst.Store(
+                            memWidthForBytes(freshReg.width),
+                            freshReg,
+                            phys(RvPhysReg.SP),
+                            spillSlotMarkerOffset(slotIdx)
+                        )
                     )
                 }
             }
@@ -657,12 +659,34 @@ class GraphColorRegAlloc {
         }
     }
 
+    private fun collectVregWidths(mf: RvMachineFunction): Map<Int, Int> {
+        val widths = mf.vregWidths.toMutableMap()
+
+        fun record(op: RvOperand) {
+            if (op is RvOperand.Reg) {
+                val current = widths[op.id]
+                if (current == null || op.width > current) {
+                    widths[op.id] = op.width
+                }
+            }
+        }
+
+        for (block in mf.blocks) {
+            for (inst in block.instructions) {
+                inst.defs().forEach(::record)
+                inst.uses().forEach(::record)
+            }
+        }
+
+        return widths
+    }
+
     /**
      * Produce a "marker" offset for a spill slot.
      *
      * During spill code insertion the actual frame offset is not yet known.
      * We encode the slot index as a negative marker that FrameLayout will
-     * recognise and patch:  marker = -(slotIdx + 1) * 4.
+     * recognise and patch:  marker = -(slotIdx + 1) * 256.
      *
      * This avoids collisions with legitimate zero or positive offsets.
      * FrameLayout will later walk all instructions, find loads/stores to `sp`

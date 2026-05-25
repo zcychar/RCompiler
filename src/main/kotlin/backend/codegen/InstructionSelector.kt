@@ -1,5 +1,6 @@
 package backend.codegen
 
+import backend.TargetLayout
 import backend.codegen.riscv.*
 import backend.ir.*
 
@@ -9,7 +10,7 @@ import backend.ir.*
  *
  * Key responsibilities:
  * - Map every IR value to a virtual register (or constant).
- * - Lower each IR instruction per the RV32IM lowering table.
+ * - Lower each IR instruction per the RV64IM lowering table.
  * - Handle φ nodes by emitting register moves on predecessor edges,
  *   using parallel-copy sequentialization with cycle breaking.
  * - Split critical edges where needed for φ lowering.
@@ -112,18 +113,36 @@ class InstructionSelector(
                 PrimitiveKind.BOOL -> 1
                 PrimitiveKind.CHAR -> 1
                 PrimitiveKind.I32, PrimitiveKind.U32,
-                PrimitiveKind.ISIZE, PrimitiveKind.USIZE -> 4
+                PrimitiveKind.ISIZE, PrimitiveKind.USIZE -> TargetLayout.INT_BYTES
                 PrimitiveKind.UNIT, PrimitiveKind.NEVER -> 4
             }
-            is IrPointer -> 4
+            is IrPointer -> TargetLayout.POINTER_BYTES
             else -> 4
         }
 
-        private fun memWidthOf(type: IrType): MemWidth = when (widthOf(type)) {
-            1 -> MemWidth.BYTE
-            2 -> MemWidth.HALF
-            else -> MemWidth.WORD
-        }
+        private fun memWidthOf(type: IrType): MemWidth = memWidthForBytes(widthOf(type))
+
+        private fun isWordScalar(type: IrType): Boolean =
+            (type as? IrPrimitive)?.kind in setOf(
+                PrimitiveKind.I32,
+                PrimitiveKind.U32,
+                PrimitiveKind.ISIZE,
+                PrimitiveKind.USIZE,
+            )
+
+        private fun isUnsignedScalar(type: IrType): Boolean =
+            (type as? IrPrimitive)?.kind in setOf(
+                PrimitiveKind.BOOL,
+                PrimitiveKind.CHAR,
+                PrimitiveKind.U32,
+                PrimitiveKind.USIZE,
+            )
+
+        private fun isUnsignedWordScalar(type: IrType): Boolean =
+            (type as? IrPrimitive)?.kind in setOf(
+                PrimitiveKind.U32,
+                PrimitiveKind.USIZE,
+            )
 
         private fun collectIrDefinitions(): Map<String, IrInstruction> {
             val definitions = linkedMapOf<String, IrInstruction>()
@@ -224,13 +243,13 @@ class InstructionSelector(
             }
 
             is IrGlobalRef -> {
-                val rd = mf.newVreg(4)
+                val rd = mf.newVreg(TargetLayout.POINTER_BYTES)
                 block.append(RvInst.La(rd, value.name))
                 rd
             }
 
             is IrFunctionRef -> {
-                val rd = mf.newVreg(4)
+                val rd = mf.newVreg(TargetLayout.POINTER_BYTES)
                 block.append(RvInst.La(rd, value.name))
                 rd
             }
@@ -251,7 +270,7 @@ class InstructionSelector(
          * in a side table and the frame finalizer rewrites the immediate.
          */
         private fun slotAddress(slotIndex: Int, block: RvMachineBlock): RvOperand.Reg {
-            val rd = mf.newVreg(4)
+            val rd = mf.newVreg(TargetLayout.POINTER_BYTES)
             // Emit addi rd, sp, 0 as a placeholder. Frame layout will patch the immediate
             // to the actual sp-relative offset. We record slot index via a comment.
             block.append(RvInst.Comment("slot $slotIndex"))
@@ -313,10 +332,10 @@ class InstructionSelector(
                     // a load from a placeholder offset. Frame finalization patches it.
                     // The "# overflow_arg" comment is a marker so patchIncomingArgs can
                     // reliably identify these loads (vs. spill loads or prologue code).
-                    val overflowOffset = (i - argRegs.size) * 4
+                    val overflowOffset = (i - argRegs.size) * TargetLayout.ABI_STACK_SLOT_BYTES
                     entryBlock.append(RvInst.Comment("overflow_arg $overflowOffset"))
                     entryBlock.append(
-                        RvInst.Load(MemWidth.WORD, dstReg, phys(RvPhysReg.SP), overflowOffset)
+                        RvInst.Load(memWidthOf(paramType), dstReg, phys(RvPhysReg.SP), overflowOffset)
                     )
                     // Track max outgoing arg area needed by the *callee* perspective.
                 }
@@ -416,7 +435,7 @@ class InstructionSelector(
             // Try to use I-type (immediate) form when RHS is a small constant.
             if (inst.rhs is IrConstant) {
                 val immVal = inst.rhs.value.toInt()
-                val immOp = binaryToImm(inst.operator, immVal)
+                val immOp = binaryToImm(inst.operator, immVal, inst.type)
                 if (immOp != null) {
                     val lhs = operandOf(inst.lhs, mb)
                     mb.append(RvInst.IType(immOp, rd, lhs, immVal))
@@ -426,7 +445,7 @@ class InstructionSelector(
             // Similarly for LHS constant on commutative ops.
             if (inst.lhs is IrConstant && isCommutative(inst.operator)) {
                 val immVal = inst.lhs.value.toInt()
-                val immOp = binaryToImm(inst.operator, immVal)
+                val immOp = binaryToImm(inst.operator, immVal, inst.type)
                 if (immOp != null) {
                     val rhs = operandOf(inst.rhs, mb)
                     mb.append(RvInst.IType(immOp, rd, rhs, immVal))
@@ -436,7 +455,7 @@ class InstructionSelector(
 
             val lhs = operandOf(inst.lhs, mb)
             val rhs = operandOf(inst.rhs, mb)
-            val rvOp = binaryToRType(inst.operator)
+            val rvOp = binaryToRType(inst.operator, inst.type)
             mb.append(RvInst.RType(rvOp, rd, lhs, rhs))
         }
 
@@ -457,7 +476,7 @@ class InstructionSelector(
                     if (isPositivePowerOfTwo(rhsValue)) {
                         mb.append(
                             RvInst.IType(
-                                RvArithImmOp.SRLI,
+                                if (isWordScalar(inst.type)) RvArithImmOp.SRLIW else RvArithImmOp.SRLI,
                                 rd,
                                 operandOf(inst.lhs, mb),
                                 log2(rhsValue)
@@ -477,7 +496,7 @@ class InstructionSelector(
                         if (fitsIn12Bit(mask)) {
                             mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, lhs, mask))
                         } else {
-                            val maskReg = mf.newVreg()
+                            val maskReg = mf.newVreg(widthOf(inst.type))
                             mb.append(RvInst.Li(maskReg, mask))
                             mb.append(RvInst.RType(RvArithOp.AND, rd, lhs, maskReg))
                         }
@@ -502,24 +521,28 @@ class InstructionSelector(
             return false
         }
 
-        private fun binaryToRType(op: BinaryOperator): RvArithOp = when (op) {
-            BinaryOperator.ADD -> RvArithOp.ADD
-            BinaryOperator.SUB -> RvArithOp.SUB
-            BinaryOperator.MUL -> RvArithOp.MUL
-            BinaryOperator.SDIV -> RvArithOp.DIV
-            BinaryOperator.UDIV -> RvArithOp.DIVU
-            BinaryOperator.SREM -> RvArithOp.REM
-            BinaryOperator.UREM -> RvArithOp.REMU
+        private fun binaryToRType(op: BinaryOperator, type: IrType): RvArithOp = when (op) {
+            BinaryOperator.ADD -> if (isWordScalar(type)) RvArithOp.ADDW else RvArithOp.ADD
+            BinaryOperator.SUB -> if (isWordScalar(type)) RvArithOp.SUBW else RvArithOp.SUB
+            BinaryOperator.MUL -> if (isWordScalar(type)) RvArithOp.MULW else RvArithOp.MUL
+            BinaryOperator.SDIV -> if (isWordScalar(type)) RvArithOp.DIVW else RvArithOp.DIV
+            BinaryOperator.UDIV -> if (isWordScalar(type)) RvArithOp.DIVUW else RvArithOp.DIVU
+            BinaryOperator.SREM -> if (isWordScalar(type)) RvArithOp.REMW else RvArithOp.REM
+            BinaryOperator.UREM -> if (isWordScalar(type)) RvArithOp.REMUW else RvArithOp.REMU
             BinaryOperator.AND -> RvArithOp.AND
             BinaryOperator.OR -> RvArithOp.OR
             BinaryOperator.XOR -> RvArithOp.XOR
-            BinaryOperator.SHL -> RvArithOp.SLL
-            BinaryOperator.ASHR -> RvArithOp.SRA
-            BinaryOperator.LSHR -> RvArithOp.SRL
+            BinaryOperator.SHL -> if (isWordScalar(type)) RvArithOp.SLLW else RvArithOp.SLL
+            BinaryOperator.ASHR -> if (isWordScalar(type)) RvArithOp.SRAW else RvArithOp.SRA
+            BinaryOperator.LSHR -> if (isWordScalar(type)) RvArithOp.SRLW else RvArithOp.SRL
         }
 
         private fun binaryToImm(op: BinaryOperator, immVal: Int): RvArithImmOp? {
-            if (!fitsIn12Bit(immVal)) return null
+            if (op in SHIFT_OPERATORS) {
+                if (immVal !in 0..63) return null
+            } else if (!fitsIn12Bit(immVal)) {
+                return null
+            }
             return when (op) {
                 BinaryOperator.ADD -> RvArithImmOp.ADDI
                 BinaryOperator.AND -> RvArithImmOp.ANDI
@@ -529,6 +552,19 @@ class InstructionSelector(
                 BinaryOperator.ASHR -> RvArithImmOp.SRAI
                 BinaryOperator.LSHR -> RvArithImmOp.SRLI
                 else -> null
+            }
+        }
+
+        private fun binaryToImm(op: BinaryOperator, immVal: Int, type: IrType): RvArithImmOp? {
+            val opImm = binaryToImm(op, immVal) ?: return null
+            if (!isWordScalar(type)) return opImm
+            if (op in SHIFT_OPERATORS && immVal !in 0..31) return null
+            return when (opImm) {
+                RvArithImmOp.ADDI -> RvArithImmOp.ADDIW
+                RvArithImmOp.SLLI -> RvArithImmOp.SLLIW
+                RvArithImmOp.SRLI -> RvArithImmOp.SRLIW
+                RvArithImmOp.SRAI -> RvArithImmOp.SRAIW
+                else -> opImm
             }
         }
 
@@ -546,7 +582,11 @@ class InstructionSelector(
 
             when (inst.operator) {
                 UnaryOperator.NEG -> {
-                    mb.append(RvInst.Neg(rd, rs))
+                    if (isWordScalar(inst.type)) {
+                        mb.append(RvInst.RType(RvArithOp.SUBW, rd, phys(RvPhysReg.ZERO), rs))
+                    } else {
+                        mb.append(RvInst.Neg(rd, rs))
+                    }
                 }
                 UnaryOperator.NOT -> {
                     val isBool = inst.type is IrPrimitive && inst.type.kind == PrimitiveKind.BOOL
@@ -567,16 +607,17 @@ class InstructionSelector(
             val rd = vregFor(inst.name, inst.type)
             val lhs = operandOf(inst.lhs, mb)
             val rhs = operandOf(inst.rhs, mb)
+            val (cmpLhs, cmpRhs) = unsignedCompareOperands(inst, lhs, rhs, mb)
 
             when (inst.predicate) {
                 ComparePredicate.EQ -> {
                     // sub t, lhs, rhs; seqz rd, t
-                    val t = mf.newVreg()
+                    val t = mf.newVreg(widthOf(inst.lhs.type))
                     mb.append(RvInst.RType(RvArithOp.SUB, t, lhs, rhs))
                     mb.append(RvInst.Seqz(rd, t))
                 }
                 ComparePredicate.NE -> {
-                    val t = mf.newVreg()
+                    val t = mf.newVreg(widthOf(inst.lhs.type))
                     mb.append(RvInst.RType(RvArithOp.SUB, t, lhs, rhs))
                     mb.append(RvInst.Snez(rd, t))
                 }
@@ -596,17 +637,17 @@ class InstructionSelector(
                     mb.append(RvInst.IType(RvArithImmOp.XORI, rd, rd, 1))
                 }
                 ComparePredicate.ULT -> {
-                    mb.append(RvInst.RType(RvArithOp.SLTU, rd, lhs, rhs))
+                    mb.append(RvInst.RType(RvArithOp.SLTU, rd, cmpLhs, cmpRhs))
                 }
                 ComparePredicate.ULE -> {
-                    mb.append(RvInst.RType(RvArithOp.SLTU, rd, rhs, lhs))
+                    mb.append(RvInst.RType(RvArithOp.SLTU, rd, cmpRhs, cmpLhs))
                     mb.append(RvInst.IType(RvArithImmOp.XORI, rd, rd, 1))
                 }
                 ComparePredicate.UGT -> {
-                    mb.append(RvInst.RType(RvArithOp.SLTU, rd, rhs, lhs))
+                    mb.append(RvInst.RType(RvArithOp.SLTU, rd, cmpRhs, cmpLhs))
                 }
                 ComparePredicate.UGE -> {
-                    mb.append(RvInst.RType(RvArithOp.SLTU, rd, lhs, rhs))
+                    mb.append(RvInst.RType(RvArithOp.SLTU, rd, cmpLhs, cmpRhs))
                     mb.append(RvInst.IType(RvArithImmOp.XORI, rd, rd, 1))
                 }
             }
@@ -638,11 +679,11 @@ class InstructionSelector(
                     mb.append(RvInst.Mv(phys(ARG_REGS[idx]), argReg))
                     argPhysRegs.add(ARG_REGS[idx])
                 } else {
-                    // Overflow argument: store to stack.
-                    val overflowOffset = (idx - ARG_REGS.size) * 4
-                    mb.append(RvInst.Store(MemWidth.WORD, argReg, phys(RvPhysReg.SP), overflowOffset))
+                    // Overflow arguments occupy 8-byte RV64 ABI stack slots.
+                    val overflowOffset = (idx - ARG_REGS.size) * TargetLayout.ABI_STACK_SLOT_BYTES
+                    mb.append(RvInst.Store(MemWidth.DWORD, argReg, phys(RvPhysReg.SP), overflowOffset))
                     // Track outgoing arg area.
-                    val needed = (idx - ARG_REGS.size + 1) * 4
+                    val needed = (idx - ARG_REGS.size + 1) * TargetLayout.ABI_STACK_SLOT_BYTES
                     if (needed > mf.outgoingArgAreaSize) {
                         mf.outgoingArgAreaSize = needed
                     }
@@ -681,7 +722,7 @@ class InstructionSelector(
                 } else if (fitsIn12Bit(offset.value)) {
                     mb.append(RvInst.IType(RvArithImmOp.ADDI, rd, baseReg, offset.value))
                 } else {
-                    val t = mf.newVreg()
+                    val t = mf.newVreg(TargetLayout.POINTER_BYTES)
                     mb.append(RvInst.Li(t, offset.value))
                     mb.append(RvInst.RType(RvArithOp.ADD, rd, baseReg, t))
                 }
@@ -709,11 +750,11 @@ class InstructionSelector(
                     accumulatedConst += c
                 } else {
                     if (c != 0) {
-                        val t = mf.newVreg()
+                        val t = mf.newVreg(TargetLayout.POINTER_BYTES)
                         if (fitsIn12Bit(c)) {
                             mb.append(RvInst.IType(RvArithImmOp.ADDI, t, dynamicReg!!, c))
                         } else {
-                            val ci = mf.newVreg()
+                            val ci = mf.newVreg(TargetLayout.POINTER_BYTES)
                             mb.append(RvInst.Li(ci, c))
                             mb.append(RvInst.RType(RvArithOp.ADD, t, dynamicReg!!, ci))
                         }
@@ -727,11 +768,11 @@ class InstructionSelector(
                     if (accumulatedConst == 0) {
                         dynamicReg = reg
                     } else {
-                        val t = mf.newVreg()
+                        val t = mf.newVreg(TargetLayout.POINTER_BYTES)
                         if (fitsIn12Bit(accumulatedConst)) {
                             mb.append(RvInst.IType(RvArithImmOp.ADDI, t, reg, accumulatedConst))
                         } else {
-                            val ci = mf.newVreg()
+                            val ci = mf.newVreg(TargetLayout.POINTER_BYTES)
                             mb.append(RvInst.Li(ci, accumulatedConst))
                             mb.append(RvInst.RType(RvArithOp.ADD, t, reg, ci))
                         }
@@ -739,7 +780,7 @@ class InstructionSelector(
                         accumulatedConst = 0
                     }
                 } else {
-                    val t = mf.newVreg()
+                    val t = mf.newVreg(TargetLayout.POINTER_BYTES)
                     mb.append(RvInst.RType(RvArithOp.ADD, t, dynamicReg!!, reg))
                     dynamicReg = t
                 }
@@ -818,12 +859,12 @@ class InstructionSelector(
         ): RvOperand.Reg {
             if (factor == 1) return value
             if (factor <= 0) {
-                val zero = mf.newVreg()
+                val zero = mf.newVreg(TargetLayout.POINTER_BYTES)
                 mb.append(RvInst.Li(zero, 0))
                 return zero
             }
             if (isPositivePowerOfTwo(factor)) {
-                val shifted = mf.newVreg()
+                val shifted = mf.newVreg(TargetLayout.POINTER_BYTES)
                 mb.append(RvInst.IType(RvArithImmOp.SLLI, shifted, value, log2(factor)))
                 return shifted
             }
@@ -834,14 +875,14 @@ class InstructionSelector(
                     val term = if (bit == 0) {
                         value
                     } else {
-                        val shifted = mf.newVreg()
+                        val shifted = mf.newVreg(TargetLayout.POINTER_BYTES)
                         mb.append(RvInst.IType(RvArithImmOp.SLLI, shifted, value, bit))
                         shifted
                     }
                     acc = if (acc == null) {
                         term
                     } else {
-                        val sum = mf.newVreg()
+                        val sum = mf.newVreg(TargetLayout.POINTER_BYTES)
                         mb.append(RvInst.RType(RvArithOp.ADD, sum, acc, term))
                         sum
                     }
@@ -849,9 +890,9 @@ class InstructionSelector(
                 return acc ?: value
             }
 
-            val sizeReg = mf.newVreg()
+            val sizeReg = mf.newVreg(TargetLayout.POINTER_BYTES)
             mb.append(RvInst.Li(sizeReg, factor))
-            val product = mf.newVreg()
+            val product = mf.newVreg(TargetLayout.POINTER_BYTES)
             mb.append(RvInst.RType(RvArithOp.MUL, product, value, sizeReg))
             return product
         }
@@ -865,14 +906,40 @@ class InstructionSelector(
             val dstType = inst.type
 
             when (inst.kind) {
-                CastKind.BITCAST, CastKind.PTRTOINT, CastKind.INTTOPTR -> {
-                    mb.append(RvInst.Mv(rd, rs))
+                CastKind.BITCAST -> {
+                    if (isWordScalar(dstType)) {
+                        mb.append(RvInst.IType(RvArithImmOp.ADDIW, rd, rs, 0))
+                    } else if (dstType is IrPointer && isUnsignedScalar(srcType)) {
+                        zeroExtendWord(rd, rs, mb)
+                    } else {
+                        mb.append(RvInst.Mv(rd, rs))
+                    }
+                }
+
+                CastKind.PTRTOINT -> {
+                    if (isWordScalar(dstType)) {
+                        mb.append(RvInst.IType(RvArithImmOp.ADDIW, rd, rs, 0))
+                    } else {
+                        mb.append(RvInst.Mv(rd, rs))
+                    }
+                }
+
+                CastKind.INTTOPTR -> {
+                    if (dstType is IrPointer && isUnsignedScalar(srcType)) {
+                        zeroExtendWord(rd, rs, mb)
+                    } else {
+                        mb.append(RvInst.Mv(rd, rs))
+                    }
                 }
 
                 CastKind.ZEXT -> {
                     when ((srcType as? IrPrimitive)?.kind) {
                         PrimitiveKind.BOOL -> mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, rs, 1))
                         PrimitiveKind.CHAR -> mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, rs, 0xFF))
+                        PrimitiveKind.U32, PrimitiveKind.USIZE -> {
+                            if (dstType is IrPointer) zeroExtendWord(rd, rs, mb)
+                            else mb.append(RvInst.Mv(rd, rs))
+                        }
                         else -> mb.append(RvInst.Mv(rd, rs))
                     }
                 }
@@ -880,12 +947,14 @@ class InstructionSelector(
                 CastKind.SEXT -> {
                     when ((srcType as? IrPrimitive)?.kind) {
                         PrimitiveKind.BOOL -> {
-                            mb.append(RvInst.IType(RvArithImmOp.SLLI, rd, rs, 31))
-                            mb.append(RvInst.IType(RvArithImmOp.SRAI, rd, rd, 31))
+                            val shift = TargetLayout.REGISTER_BYTES * 8 - 1
+                            mb.append(RvInst.IType(RvArithImmOp.SLLI, rd, rs, shift))
+                            mb.append(RvInst.IType(RvArithImmOp.SRAI, rd, rd, shift))
                         }
                         PrimitiveKind.CHAR -> {
-                            mb.append(RvInst.IType(RvArithImmOp.SLLI, rd, rs, 24))
-                            mb.append(RvInst.IType(RvArithImmOp.SRAI, rd, rd, 24))
+                            val shift = TargetLayout.REGISTER_BYTES * 8 - 8
+                            mb.append(RvInst.IType(RvArithImmOp.SLLI, rd, rs, shift))
+                            mb.append(RvInst.IType(RvArithImmOp.SRAI, rd, rd, shift))
                         }
                         else -> mb.append(RvInst.Mv(rd, rs))
                     }
@@ -895,6 +964,9 @@ class InstructionSelector(
                     when ((dstType as? IrPrimitive)?.kind) {
                         PrimitiveKind.BOOL -> mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, rs, 1))
                         PrimitiveKind.CHAR -> mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, rs, 0xFF))
+                        PrimitiveKind.I32, PrimitiveKind.U32,
+                        PrimitiveKind.ISIZE, PrimitiveKind.USIZE ->
+                            mb.append(RvInst.IType(RvArithImmOp.ADDIW, rd, rs, 0))
                         else -> mb.append(RvInst.Mv(rd, rs))
                     }
                 }
@@ -906,6 +978,29 @@ class InstructionSelector(
         private fun lowerConst(inst: IrConst, mb: RvMachineBlock) {
             val rd = vregFor(inst.name, inst.type)
             mb.append(RvInst.Li(rd, inst.constant.value.toInt()))
+        }
+
+        private fun zeroExtendWord(rd: RvOperand.Reg, rs: RvOperand.Reg, mb: RvMachineBlock) {
+            val shift = TargetLayout.REGISTER_BYTES * 8 - TargetLayout.INT_BYTES * 8
+            mb.append(RvInst.IType(RvArithImmOp.SLLI, rd, rs, shift))
+            mb.append(RvInst.IType(RvArithImmOp.SRLI, rd, rd, shift))
+        }
+
+        private fun unsignedCompareOperands(
+            cmp: IrCmp,
+            lhs: RvOperand.Reg,
+            rhs: RvOperand.Reg,
+            mb: RvMachineBlock,
+        ): Pair<RvOperand.Reg, RvOperand.Reg> {
+            if (!isUnsignedCompare(cmp.predicate) || !isUnsignedWordScalar(cmp.lhs.type)) {
+                return lhs to rhs
+            }
+
+            val lhsZext = mf.newVreg(TargetLayout.POINTER_BYTES)
+            val rhsZext = mf.newVreg(TargetLayout.POINTER_BYTES)
+            zeroExtendWord(lhsZext, lhs, mb)
+            zeroExtendWord(rhsZext, rhs, mb)
+            return lhsZext to rhsZext
         }
 
         // ---------------------------------------------------------------
@@ -965,10 +1060,13 @@ class InstructionSelector(
             val selected = selectBranch(cmp)
             val trueLabel = machineLabel(br.trueTarget)
             val falseLabel = machineLabel(br.falseTarget)
+            val lhs = operandOf(selected.lhs, mb)
+            val rhs = operandOf(selected.rhs, mb)
+            val (branchLhs, branchRhs) = unsignedCompareOperands(cmp, lhs, rhs, mb)
             emitConditionalBranch(
                 selected.cond,
-                operandOf(selected.lhs, mb),
-                operandOf(selected.rhs, mb),
+                branchLhs,
+                branchRhs,
                 trueLabel,
                 falseLabel,
                 nextMachineLabel(irBlock),
@@ -1231,8 +1329,22 @@ class InstructionSelector(
     private companion object {
         const val MAX_SHIFT_ADD_TERMS = 3
 
+        val SHIFT_OPERATORS = setOf(
+            BinaryOperator.SHL,
+            BinaryOperator.ASHR,
+            BinaryOperator.LSHR,
+        )
+
         fun isPositivePowerOfTwo(value: Int): Boolean =
             value > 0 && (value and (value - 1)) == 0
+
+        fun isUnsignedCompare(predicate: ComparePredicate): Boolean = when (predicate) {
+            ComparePredicate.ULT,
+            ComparePredicate.ULE,
+            ComparePredicate.UGT,
+            ComparePredicate.UGE -> true
+            else -> false
+        }
 
         fun log2(value: Int): Int = Integer.numberOfTrailingZeros(value)
     }

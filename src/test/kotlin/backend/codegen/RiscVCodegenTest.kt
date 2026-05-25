@@ -274,8 +274,8 @@ class RiscVCodegenTest {
         assertAsmContains(asm, "addi  sp, sp, -", "Prologue sp subtract")
         assertAsmContains(asm, "addi  sp, sp, ", "Epilogue sp add")
         // Should save ra.
-        assertAsmContains(asm, "sw  ra,", "Prologue ra save")
-        assertAsmContains(asm, "lw  ra,", "Epilogue ra restore")
+        assertAsmContains(asm, "sd  ra,", "Prologue ra save")
+        assertAsmContains(asm, "ld  ra,", "Epilogue ra restore")
     }
 
     // -----------------------------------------------------------------------
@@ -302,8 +302,8 @@ class RiscVCodegenTest {
         assertNoVregs(asm)
         // Callee-saved should be saved/restored.
         for (reg in mf.usedCalleeSaved) {
-            assertAsmContains(asm, "sw  ${reg.abiName},", "Save ${reg.abiName}")
-            assertAsmContains(asm, "lw  ${reg.abiName},", "Restore ${reg.abiName}")
+            assertAsmContains(asm, "sd  ${reg.abiName},", "Save ${reg.abiName}")
+            assertAsmContains(asm, "ld  ${reg.abiName},", "Restore ${reg.abiName}")
         }
     }
 
@@ -687,7 +687,7 @@ class RiscVCodegenTest {
 
         val asm = AsmEmitter.emitFunction(mf)
         for (reg in SAVED_REGS) {
-            assertAsmNotContains(asm, "sw  ${reg.abiName},",
+            assertAsmNotContains(asm, "sd  ${reg.abiName},",
                 "Should not save ${reg.abiName}")
         }
     }
@@ -736,6 +736,8 @@ class RiscVCodegenTest {
         bb.append(RvInst.IType(RvArithImmOp.ADDI, p(RvPhysReg.A3), p(RvPhysReg.A2), 100))
         bb.append(RvInst.Store(MemWidth.WORD, p(RvPhysReg.A3), p(RvPhysReg.SP), 0))
         bb.append(RvInst.Load(MemWidth.WORD, p(RvPhysReg.A4), p(RvPhysReg.SP), 0))
+        bb.append(RvInst.Store(MemWidth.DWORD, p(RvPhysReg.A4), p(RvPhysReg.SP), 8))
+        bb.append(RvInst.Load(MemWidth.DWORD, p(RvPhysReg.A6), p(RvPhysReg.SP), 8))
         bb.append(RvInst.Store(MemWidth.BYTE, p(RvPhysReg.A0), p(RvPhysReg.SP), 4))
         bb.append(RvInst.Load(MemWidth.BYTE, p(RvPhysReg.A5), p(RvPhysReg.SP), 4))
         bb.append(RvInst.Call("extern_func", argRegs = listOf(RvPhysReg.A0)))
@@ -756,6 +758,8 @@ class RiscVCodegenTest {
         assertAsmContains(asm, "addi  a3, a2, 100")
         assertAsmContains(asm, "sw  a3, 0(sp)")
         assertAsmContains(asm, "lw  a4, 0(sp)")
+        assertAsmContains(asm, "sd  a4, 8(sp)")
+        assertAsmContains(asm, "ld  a6, 8(sp)")
         assertAsmContains(asm, "sb  a0, 4(sp)")
         assertAsmContains(asm, "lbu  a5, 4(sp)")
         assertAsmContains(asm, "call  extern_func")
