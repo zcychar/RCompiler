@@ -70,7 +70,6 @@ class FunctionEmitter(
     builder.positionAt(function, function.entryBlock("entry"))
     valueEnv.pushFunction(signature.returnType)
     valueEnv.enterScope()
-    builder.freshLocalName("entry")
     bindParameters(fnSymbol, signature)
     val expectsValue = signature.returnType !is IrPrimitive || signature.returnType.kind != PrimitiveKind.UNIT
     val sretPtr = valueEnv.resolve(SRET_BINDING) as? Bind.Pointer

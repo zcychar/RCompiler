@@ -9,6 +9,8 @@ class IrBuilder(
   private var currentBlock: IrBasicBlock? = null
   private var nextRegisterId: Int = 0
   private val nameCounters: MutableMap<String, Int> = mutableMapOf()
+  private val usedNames: MutableSet<String> = mutableSetOf()
+  private val issuedNames: MutableSet<String> = mutableSetOf()
   private var allocaInsertPos: Int = 0
   private var entryBlock: IrBasicBlock? = null
 
@@ -16,33 +18,90 @@ class IrBuilder(
     if (currentFunction !== function) {
       nextRegisterId = 0
       nameCounters.clear()
+      usedNames.clear()
+      issuedNames.clear()
       entryBlock = function.entryBlock("entry")
       allocaInsertPos = entryBlock?.instructions?.size ?: 0
+      registerExistingNames(function)
     }
     currentFunction = function
     currentBlock = block
     if (!function.blocks.contains(block)) {
       function.appendBlock(block)
+      registerName(block.label)
+      issuedNames.remove(block.label)
     }
   }
 
   fun ensureBlock(name: String): IrBasicBlock {
     val fn = currentFunction ?: error("No current function")
-    return fn.blocks.find { it.label == name } ?: fn.createBlock(name)
+    val existing = fn.blocks.find { it.label == name }
+    if (existing != null) {
+      issuedNames.remove(name)
+      return existing
+    }
+    return fn.createBlock(name).also {
+      registerName(it.label)
+      issuedNames.remove(it.label)
+    }
   }
 
   fun freshLocalName(hint: String): String {
-    val count = (nameCounters[hint] ?: 0) + 1
-    nameCounters[hint] = count
-    return if (count == 1) hint else "$hint.$count"
+    val name = freshUniqueName(hint.ifBlank { "rcc.local" })
+    issuedNames.add(name)
+    return name
   }
 
   fun currentBlockLabel(): String {
     return currentBlock?.label ?: error("asking for current block label with no block")
   }
 
+  private fun freshTempName(): String {
+    while (true) {
+      val candidate = "rcc.tmp.${++nextRegisterId}"
+      if (registerName(candidate)) return candidate
+    }
+  }
 
-  private fun freshTempName(): String = "t${++nextRegisterId}"
+  private fun nameFor(instruction: IrInstruction, returnName: String?): String {
+    val requested = returnName ?: instruction.name.takeIf { it.isNotBlank() }
+    if (requested.isNullOrBlank()) return freshTempName()
+    if (issuedNames.remove(requested)) return requested
+    return freshUniqueName(requested)
+  }
+
+  private fun freshUniqueName(hint: String): String {
+    var nextSuffix = nameCounters[hint] ?: 0
+    while (true) {
+      val candidate = if (nextSuffix == 0) hint else "$hint.${nextSuffix + 1}"
+      nextSuffix++
+      if (registerName(candidate)) {
+        nameCounters[hint] = nextSuffix
+        return candidate
+      }
+    }
+  }
+
+  private fun registerName(name: String): Boolean {
+    if (name.isBlank()) return true
+    return usedNames.add(name)
+  }
+
+  private fun registerExistingNames(function: IrFunction) {
+    function.signature.parameters.indices.forEach { index ->
+      val parameterName = function.parameterNames.getOrNull(index)?.takeIf { it.isNotBlank() } ?: "arg$index"
+      registerName(parameterName)
+    }
+    function.blocks.forEach { block ->
+      registerName(block.label)
+      block.instructions.forEach { instruction ->
+        registerName(instruction.name)
+      }
+      block.terminator?.let { terminator ->
+        registerName(terminator.name)
+      }
+    }
+  }
 
   fun emit(instruction: IrInstruction, returnName: String? = null): IrLocal {
     val block = currentBlock ?: error("No current block")
@@ -51,7 +110,7 @@ class IrBuilder(
     }
     return when (instruction) {
       is IrAlloca -> {
-        val idInstruction = instruction.withId(returnName ?: freshTempName())
+        val idInstruction = instruction.withId(nameFor(instruction, returnName))
         val entry = entryBlock ?: currentFunction?.entryBlock("entry")
         if (entry == null) error("No entry block for current function")
         val insertAt = allocaInsertPos.coerceAtMost(entry.instructions.size)
@@ -70,7 +129,7 @@ class IrBuilder(
       is IrGep,
       is IrPhi,
       is IrCast -> {
-        val idInstruction = instruction.withId(returnName ?: freshTempName())
+        val idInstruction = instruction.withId(nameFor(instruction, returnName))
         block.append(idInstruction)
         IrLocal(idInstruction.name, idInstruction.type)
       }
@@ -81,7 +140,7 @@ class IrBuilder(
 
   fun emitTerminator(terminator: IrTerminator, returnName: String? = null) {
     val block = currentBlock ?: error("No current block")
-    val termWithId = terminator.withId(returnName ?: freshTempName())
+    val termWithId = terminator.withId(nameFor(terminator, returnName))
     block.setTerminator(termWithId)
     currentBlock = null
   }
