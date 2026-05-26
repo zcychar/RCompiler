@@ -420,7 +420,7 @@ class ExprEmitter(
         val srcW = bitWidth(valueType)
         val dstW = bitWidth(irTarget)
         when {
-          srcW == dstW -> return value
+          srcW == dstW -> return emitSameWidthPrimitiveCast(value, irTarget)
           dstW < srcW -> CastKind.TRUNC
           else -> if (isUnsigned(valueType) || valueType.kind == PrimitiveKind.BOOL) CastKind.ZEXT else CastKind.SEXT
         }
@@ -1111,6 +1111,19 @@ class ExprEmitter(
     PrimitiveKind.CHAR -> 8
     PrimitiveKind.I32, PrimitiveKind.U32, PrimitiveKind.ISIZE, PrimitiveKind.USIZE -> 32
     PrimitiveKind.UNIT, PrimitiveKind.NEVER -> 0
+  }
+
+  private fun emitSameWidthPrimitiveCast(value: IrValue, targetType: IrPrimitive): IrValue {
+    if (value.type == targetType) return value
+    return builder.emit(
+      IrBinary(
+        name = "",
+        type = targetType,
+        operator = BinaryOperator.ADD,
+        lhs = value,
+        rhs = IrConstant(0, targetType),
+      )
+    )
   }
 
   private fun isUnsigned(type: IrType): Boolean =
