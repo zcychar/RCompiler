@@ -1,5 +1,7 @@
 package backend.ir.opt
 
+// Folds constants and simplifies branches in IR.
+
 import backend.ir.*
 
 class ConstantPropagationPass : FunctionPass {

@@ -1,5 +1,7 @@
 package backend.ir.opt
 
+// Simplifies IR control flow and bypasses empty jump blocks.
+
 import backend.ir.*
 import backend.ir.analysis.buildCfg
 

@@ -1,5 +1,7 @@
 package backend.ir
 
+// Owns declared IR types, globals, functions, and module rendering.
+
 import utils.CompileError
 
 class IrModule {
@@ -49,9 +51,7 @@ class IrModule {
     types.values.filterIsInstance<IrStruct>().filter { it.name != null }.forEach { struct ->
       appendLine(struct.renderDefinition())
     }
-//        globals.forEach { global ->
-//            appendLine(global.render())
-//        }
+
     functions.forEach { function ->
       appendLine(function.render())
     }

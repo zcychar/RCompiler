@@ -1,112 +1,72 @@
 package backend.codegen
 
+// Lowers IR functions into RISC-V machine functions with virtual registers.
+
 import backend.TargetLayout
 import backend.codegen.riscv.*
 import backend.ir.*
 
-/**
- * Instruction Selector: lowers an [IrFunction] into an [RvMachineFunction] with
- * unlimited virtual registers.
- *
- * Key responsibilities:
- * - Map every IR value to a virtual register (or constant).
- * - Lower each IR instruction per the RV64IM lowering table.
- * - Handle φ nodes by emitting register moves on predecessor edges,
- *   using parallel-copy sequentialization with cycle breaking.
- * - Split critical edges where needed for φ lowering.
- * - Allocate stack slots for IR allocas.
- */
 class InstructionSelector(
     private val irModule: IrModule,
 ) {
 
-    /** Select instructions for every declared function in the module. */
     fun selectAll(): List<RvMachineFunction> =
         irModule.declaredFunctions()
             .filter { it.blocks.isNotEmpty() }
             .map { select(it) }
 
-    /** Select instructions for a single IR function. */
     fun select(irFunc: IrFunction): RvMachineFunction {
         val ctx = FunctionSelectionContext(irFunc)
         ctx.run()
         return ctx.mf
     }
 
-    // ===================================================================
-    //  Per-function selection context
-    // ===================================================================
-
     private inner class FunctionSelectionContext(
         val irFunc: IrFunction,
     ) {
         val mf = RvMachineFunction(irFunc.name)
 
-        /** IR value name → virtual register that holds its value. */
         val valueMap = mutableMapOf<String, RvOperand.Reg>()
 
-        /** IR alloca name → stack slot index in [mf.stackSlots]. */
         val slotMap = mutableMapOf<String, Int>()
 
-        /** IR block label → machine block. */
         val blockMap = mutableMapOf<String, RvMachineBlock>()
 
-        /**
-         * Pending φ-move sets, keyed by (predecessor label → successor label).
-         * Each entry is a list of (dst vreg, src IR value) pairs representing
-         * the parallel copy that must be emitted on that edge.
-         */
         val phiEdgeCopies = mutableMapOf<EdgeKey, MutableList<PhiCopy>>()
 
-        /** Labels of blocks that contain φ nodes (used for critical-edge detection). */
         val blocksWithPhis = mutableSetOf<String>()
 
-        /** IR definition and use summaries used for branch-local peepholes. */
         private val irDefinitions = collectIrDefinitions()
         private val irUseCounts = collectIrUseCounts()
 
         fun run() {
-            // Phase 0: Pre-create all machine blocks so forward references work.
+
             for (irBlock in irFunc.blocks) {
                 val label = machineLabel(irBlock.label)
                 val mb = mf.createBlock(label)
                 blockMap[irBlock.label] = mb
             }
 
-            // Phase 1: Scan φ nodes to build edge copy sets and mark φ-bearing blocks.
             collectPhiCopies()
 
-            // Phase 2: Lower parameters.
             lowerParameters()
 
-            // Phase 3: Lower each block's instructions and terminator.
             for (irBlock in irFunc.blocks) {
                 lowerBlock(irBlock)
             }
 
-            // Phase 4: Emit φ moves on predecessor edges (possibly splitting critical edges).
             emitPhiMoves()
 
-            // Phase 5: Rebuild CFG edges from the final instruction stream.
             mf.rebuildCfgEdges()
         }
 
-        // ---------------------------------------------------------------
-        //  Machine label naming: <funcName>.<blockLabel>
-        //  except the entry block which uses the function name directly.
-        // ---------------------------------------------------------------
-
         private fun machineLabel(irLabel: String): String {
-            // The first block's label becomes the function name itself.
+
             if (irFunc.blocks.isNotEmpty() && irFunc.blocks[0].label == irLabel) {
                 return irFunc.name
             }
             return "${irFunc.name}.$irLabel"
         }
-
-        // ---------------------------------------------------------------
-        //  Width helper: IR type → byte width for register / mem ops
-        // ---------------------------------------------------------------
 
         private fun widthOf(type: IrType): Int = when (type) {
             is IrPrimitive -> when (type.kind) {
@@ -203,27 +163,15 @@ class InstructionSelector(
             (type as? IrPrimitive)?.kind == PrimitiveKind.UNIT ||
                 (type as? IrPrimitive)?.kind == PrimitiveKind.NEVER
 
-        // ---------------------------------------------------------------
-        //  Value mapping: IR value → RvOperand
-        // ---------------------------------------------------------------
-
-        /**
-         * Get or create the virtual register for a named IR value (IrLocal produced
-         * by an instruction). If it doesn't exist yet, allocate a fresh vreg.
-         */
         private fun vregFor(name: String, type: IrType): RvOperand.Reg {
             return valueMap.getOrPut(name) { mf.newVreg(widthOf(type)) }
         }
 
-        /**
-         * Materialise an [IrValue] into an [RvOperand.Reg], emitting instructions
-         * into [block] as needed (e.g. `li` for constants, `la` for globals).
-         */
         private fun operandOf(value: IrValue, block: RvMachineBlock): RvOperand.Reg = when (value) {
             is IrLocal -> vregFor(value.name, value.type)
 
             is IrParameter -> {
-                // Parameters should already be mapped during lowerParameters.
+
                 val paramKey = value.name.ifEmpty { "arg${value.index}" }
                 valueMap[paramKey]
                     ?: error("ISel: unmapped parameter '${paramKey}'")
@@ -236,7 +184,7 @@ class InstructionSelector(
             }
 
             is IrUndef -> {
-                // Undef → just give it a fresh vreg; its value is don't-care.
+
                 val rd = mf.newVreg(widthOf(value.type))
                 block.append(RvInst.Li(rd, 0))
                 rd
@@ -257,30 +205,13 @@ class InstructionSelector(
             else -> error("ISel: unsupported IrValue type: ${value::class.simpleName}")
         }
 
-        // ---------------------------------------------------------------
-        //  Stack slot address materialisation
-        // ---------------------------------------------------------------
-
-        /**
-         * Emit instructions to compute the address of a stack slot into a vreg.
-         * During isel the offset is 0 (placeholder); frame finalization resolves it.
-         * We emit `addi rd, sp, 0` — the `0` will be patched during frame layout.
-         *
-         * We use a **slot-reference instruction** pattern: we store the slot index
-         * in a side table and the frame finalizer rewrites the immediate.
-         */
         private fun slotAddress(slotIndex: Int, block: RvMachineBlock): RvOperand.Reg {
             val rd = mf.newVreg(TargetLayout.POINTER_BYTES)
-            // Emit addi rd, sp, 0 as a placeholder. Frame layout will patch the immediate
-            // to the actual sp-relative offset. We record slot index via a comment.
+
             block.append(RvInst.Comment("slot $slotIndex"))
             block.append(RvInst.IType(RvArithImmOp.ADDI, rd, phys(RvPhysReg.SP), 0))
             return rd
         }
-
-        // ---------------------------------------------------------------
-        //  Phase 1: Collect φ copies
-        // ---------------------------------------------------------------
 
         private fun collectPhiCopies() {
             for (irBlock in irFunc.blocks) {
@@ -290,13 +221,12 @@ class InstructionSelector(
                 blocksWithPhis.add(irBlock.label)
 
                 for (phi in phis) {
-                    // Defensive: φ must not carry aggregates.
+
                     require(!isAggregate(phi.type)) {
                         "ISel: φ node '${phi.name}' has aggregate type ${phi.type.render()}. " +
                             "Aggregates must use destination-passing, not φ nodes."
                     }
 
-                    // Allocate the destination vreg for this φ.
                     val dstReg = vregFor(phi.name, phi.type)
 
                     for (incoming in phi.incoming) {
@@ -307,10 +237,6 @@ class InstructionSelector(
                 }
             }
         }
-
-        // ---------------------------------------------------------------
-        //  Phase 2: Lower parameters
-        // ---------------------------------------------------------------
 
         private fun lowerParameters() {
             val sig = irFunc.signature
@@ -324,33 +250,25 @@ class InstructionSelector(
                 valueMap[paramName] = dstReg
 
                 if (i < argRegs.size) {
-                    // Argument comes in a physical register: emit mv vreg, aX.
+
                     entryBlock.append(RvInst.Mv(dstReg, phys(argRegs[i])))
                 } else {
-                    // Argument is on the stack (overflow area). The frame layout will
-                    // place these at known offsets above the caller's sp. For now emit
-                    // a load from a placeholder offset. Frame finalization patches it.
-                    // The "# overflow_arg" comment is a marker so patchIncomingArgs can
-                    // reliably identify these loads (vs. spill loads or prologue code).
+
                     val overflowOffset = (i - argRegs.size) * TargetLayout.ABI_STACK_SLOT_BYTES
                     entryBlock.append(RvInst.Comment("overflow_arg $overflowOffset"))
                     entryBlock.append(
                         RvInst.Load(memWidthOf(paramType), dstReg, phys(RvPhysReg.SP), overflowOffset)
                     )
-                    // Track max outgoing arg area needed by the *callee* perspective.
+
                 }
             }
         }
-
-        // ---------------------------------------------------------------
-        //  Phase 3: Lower a basic block
-        // ---------------------------------------------------------------
 
         private fun lowerBlock(irBlock: IrBasicBlock) {
             val mb = blockMap[irBlock.label]!!
 
             for (inst in irBlock.instructions) {
-                // Skip φ nodes — handled separately.
+
                 if (inst is IrPhi) continue
                 if (inst is IrCmp && isBranchOnlyCmp(inst, irBlock)) continue
                 lowerInstruction(inst, mb)
@@ -358,10 +276,6 @@ class InstructionSelector(
 
             irBlock.terminator?.let { lowerTerminator(it, mb, irBlock) }
         }
-
-        // ---------------------------------------------------------------
-        //  Instruction lowering
-        // ---------------------------------------------------------------
 
         private fun lowerInstruction(inst: IrInstruction, mb: RvMachineBlock) {
             when (inst) {
@@ -375,12 +289,10 @@ class InstructionSelector(
                 is IrGep -> lowerGep(inst, mb)
                 is IrCast -> lowerCast(inst, mb)
                 is IrConst -> lowerConst(inst, mb)
-                is IrPhi -> { /* already handled */ }
-                is IrTerminator -> { /* handled in lowerTerminator */ }
+                is IrPhi -> {  }
+                is IrTerminator -> {  }
             }
         }
-
-        // -- IrAlloca --------------------------------------------------
 
         private fun lowerAlloca(inst: IrAlloca, mb: RvMachineBlock) {
             val allocType = inst.allocatedType
@@ -388,12 +300,9 @@ class InstructionSelector(
             val slotIdx = mf.allocateStackSlot(inst.name, size, align)
             slotMap[inst.name] = slotIdx
 
-            // The alloca produces a pointer → materialise the address.
             val addrReg = slotAddress(slotIdx, mb)
             valueMap[inst.name] = addrReg
         }
-
-        // -- IrLoad ----------------------------------------------------
 
         private fun lowerLoad(inst: IrLoad, mb: RvMachineBlock) {
             val addrReg = operandOf(inst.address, mb)
@@ -401,13 +310,10 @@ class InstructionSelector(
             val mw = memWidthOf(inst.type)
             mb.append(RvInst.Load(mw, rd, addrReg, 0))
 
-            // For i1 loads, mask to 1 bit.
             if (inst.type is IrPrimitive && inst.type.kind == PrimitiveKind.BOOL) {
                 mb.append(RvInst.IType(RvArithImmOp.ANDI, rd, rd, 1))
             }
         }
-
-        // -- IrStore ---------------------------------------------------
 
         private fun lowerStore(inst: IrStore, mb: RvMachineBlock) {
             val valueType = inst.value.type
@@ -415,7 +321,6 @@ class InstructionSelector(
             val addrReg = operandOf(inst.address, mb)
             val mw = memWidthOf(valueType)
 
-            // For i1 stores, mask before storing.
             if (valueType is IrPrimitive && valueType.kind == PrimitiveKind.BOOL) {
                 val masked = mf.newVreg(1)
                 mb.append(RvInst.IType(RvArithImmOp.ANDI, masked, valReg, 1))
@@ -425,14 +330,11 @@ class InstructionSelector(
             mb.append(RvInst.Store(mw, valReg, addrReg, 0))
         }
 
-        // -- IrBinary --------------------------------------------------
-
         private fun lowerBinary(inst: IrBinary, mb: RvMachineBlock) {
             val rd = vregFor(inst.name, inst.type)
 
             if (tryLowerBinaryByConstant(inst, rd, mb)) return
 
-            // Try to use I-type (immediate) form when RHS is a small constant.
             if (inst.rhs is IrConstant) {
                 val immVal = inst.rhs.value.toInt()
                 val immOp = binaryToImm(inst.operator, immVal, inst.type)
@@ -442,7 +344,7 @@ class InstructionSelector(
                     return
                 }
             }
-            // Similarly for LHS constant on commutative ops.
+
             if (inst.lhs is IrConstant && isCommutative(inst.operator)) {
                 val immVal = inst.lhs.value.toInt()
                 val immOp = binaryToImm(inst.operator, immVal, inst.type)
@@ -574,8 +476,6 @@ class InstructionSelector(
             else -> false
         }
 
-        // -- IrUnary ---------------------------------------------------
-
         private fun lowerUnary(inst: IrUnary, mb: RvMachineBlock) {
             val rd = vregFor(inst.name, inst.type)
             val rs = operandOf(inst.operand, mb)
@@ -591,17 +491,15 @@ class InstructionSelector(
                 UnaryOperator.NOT -> {
                     val isBool = inst.type is IrPrimitive && inst.type.kind == PrimitiveKind.BOOL
                     if (isBool) {
-                        // Logical NOT for i1: xori rd, rs, 1
+
                         mb.append(RvInst.IType(RvArithImmOp.XORI, rd, rs, 1))
                     } else {
-                        // Bitwise NOT: not rd, rs  (xori rd, rs, -1)
+
                         mb.append(RvInst.Not(rd, rs))
                     }
                 }
             }
         }
-
-        // -- IrCmp -----------------------------------------------------
 
         private fun lowerCmp(inst: IrCmp, mb: RvMachineBlock) {
             val rd = vregFor(inst.name, inst.type)
@@ -611,7 +509,7 @@ class InstructionSelector(
 
             when (inst.predicate) {
                 ComparePredicate.EQ -> {
-                    // sub t, lhs, rhs; seqz rd, t
+
                     val t = mf.newVreg(widthOf(inst.lhs.type))
                     mb.append(RvInst.RType(RvArithOp.SUB, t, lhs, rhs))
                     mb.append(RvInst.Seqz(rd, t))
@@ -625,7 +523,7 @@ class InstructionSelector(
                     mb.append(RvInst.RType(RvArithOp.SLT, rd, lhs, rhs))
                 }
                 ComparePredicate.SLE -> {
-                    // !(rhs < lhs) → slt rd, rhs, lhs; xori rd, rd, 1
+
                     mb.append(RvInst.RType(RvArithOp.SLT, rd, rhs, lhs))
                     mb.append(RvInst.IType(RvArithImmOp.XORI, rd, rd, 1))
                 }
@@ -653,36 +551,31 @@ class InstructionSelector(
             }
         }
 
-        // -- IrCall ----------------------------------------------------
-
         private fun lowerCall(inst: IrCall, mb: RvMachineBlock) {
             mf.hasCalls = true
             val calleeName = inst.callee.name
             val argPhysRegs = mutableListOf<RvPhysReg>()
 
-            // Check for memcpy lowering.
             val isMemcpy = calleeName == "llvm.memcpy.p0.p0.i32"
 
             val actualCallee = if (isMemcpy) "memcpy" else calleeName
 
-            // Filter out the volatile flag (4th arg) for memcpy.
             val args = if (isMemcpy && inst.arguments.size == 4) {
                 inst.arguments.take(3)
             } else {
                 inst.arguments
             }
 
-            // Move arguments into a0–a7 or onto the stack.
             for ((idx, arg) in args.withIndex()) {
                 val argReg = operandOf(arg, mb)
                 if (idx < ARG_REGS.size) {
                     mb.append(RvInst.Mv(phys(ARG_REGS[idx]), argReg))
                     argPhysRegs.add(ARG_REGS[idx])
                 } else {
-                    // Overflow arguments occupy 8-byte RV64 ABI stack slots.
+
                     val overflowOffset = (idx - ARG_REGS.size) * TargetLayout.ABI_STACK_SLOT_BYTES
                     mb.append(RvInst.Store(MemWidth.DWORD, argReg, phys(RvPhysReg.SP), overflowOffset))
-                    // Track outgoing arg area.
+
                     val needed = (idx - ARG_REGS.size + 1) * TargetLayout.ABI_STACK_SLOT_BYTES
                     if (needed > mf.outgoingArgAreaSize) {
                         mf.outgoingArgAreaSize = needed
@@ -690,28 +583,22 @@ class InstructionSelector(
                 }
             }
 
-            // Emit the call.
             val returnsVoid = inst.type is IrPrimitive &&
                 (inst.type as IrPrimitive).kind == PrimitiveKind.UNIT
             val resultPhysRegs = if (returnsVoid) emptyList() else listOf(RvPhysReg.A0)
 
             mb.append(RvInst.Call(actualCallee, argPhysRegs, resultPhysRegs))
 
-            // If non-void, move a0 to the destination vreg.
             if (!returnsVoid && inst.name.isNotBlank()) {
                 val rd = vregFor(inst.name, inst.type)
                 mb.append(RvInst.Mv(rd, phys(RvPhysReg.A0)))
             }
         }
 
-        // -- IrGep -----------------------------------------------------
-
         private fun lowerGep(inst: IrGep, mb: RvMachineBlock) {
             val rd = vregFor(inst.name, inst.type)
             val baseReg = operandOf(inst.base, mb)
 
-            // The IR GEP has indices: typically [0, fieldIdx] for structs
-            // or [0, elemIdx] for arrays.
             val baseType = inst.base.type
             val pointee = (baseType as? IrPointer)?.pointee ?: baseType
 
@@ -731,8 +618,6 @@ class InstructionSelector(
             }
         }
 
-
-
         private fun computeGepOffset(
             basePointee: IrType,
             indices: List<IrValue>,
@@ -740,7 +625,6 @@ class InstructionSelector(
         ): GepResult {
             if (indices.isEmpty()) return GepResult.Constant(0)
 
-            // First index: scales by sizeof(basePointee).
             var currentType = basePointee
             var accumulatedConst = 0
             var dynamicReg: RvOperand.Reg? = null
@@ -788,7 +672,7 @@ class InstructionSelector(
 
             for ((i, idx) in indices.withIndex()) {
                 if (i == 0) {
-                    // First index: offset = idx * sizeof(currentType)
+
                     val elemSize = typeSize(currentType)
                     if (idx is IrConstant) {
                         addConstant(idx.value.toInt() * elemSize)
@@ -801,10 +685,10 @@ class InstructionSelector(
                         }
                     }
                 } else {
-                    // Subsequent indices: depends on current type.
+
                     when (currentType) {
                         is IrStruct -> {
-                            // Index must be constant (field index).
+
                             val fieldIdx = (idx as IrConstant).value.toInt()
                             var fieldOffset = 0
                             for (fi in 0 until fieldIdx) {
@@ -831,7 +715,7 @@ class InstructionSelector(
                             currentType = currentType.element
                         }
                         else -> {
-                            // Scalar pointer dereference — treat like array element access.
+
                             val elemSize = typeSize(currentType)
                             if (idx is IrConstant) {
                                 addConstant(idx.value.toInt() * elemSize)
@@ -896,8 +780,6 @@ class InstructionSelector(
             mb.append(RvInst.RType(RvArithOp.MUL, product, value, sizeReg))
             return product
         }
-
-        // -- IrCast ----------------------------------------------------
 
         private fun lowerCast(inst: IrCast, mb: RvMachineBlock) {
             val rd = vregFor(inst.name, inst.type)
@@ -973,8 +855,6 @@ class InstructionSelector(
             }
         }
 
-        // -- IrConst ---------------------------------------------------
-
         private fun lowerConst(inst: IrConst, mb: RvMachineBlock) {
             val rd = vregFor(inst.name, inst.type)
             mb.append(RvInst.Li(rd, inst.constant.value.toInt()))
@@ -1002,10 +882,6 @@ class InstructionSelector(
             zeroExtendWord(rhsZext, rhs, mb)
             return lhsZext to rhsZext
         }
-
-        // ---------------------------------------------------------------
-        //  Terminator lowering
-        // ---------------------------------------------------------------
 
         private fun lowerTerminator(term: IrTerminator, mb: RvMachineBlock, irBlock: IrBasicBlock) {
             when (term) {
@@ -1138,20 +1014,14 @@ class InstructionSelector(
             mb.append(RvInst.J(target))
         }
 
-        // ---------------------------------------------------------------
-        //  Phase 4: Emit φ moves with parallel-copy sequentialization
-        // ---------------------------------------------------------------
-
         private fun emitPhiMoves() {
-            // Process each edge that has pending φ copies.
+
             for ((edge, copies) in phiEdgeCopies) {
                 val predLabel = edge.predecessor
                 val succLabel = edge.successor
                 val predBlock = blockMap[predLabel]
                     ?: error("ISel: φ edge predecessor '$predLabel' not found")
 
-                // Check if this is a critical edge:
-                // Predecessor has multiple successors AND successor has φ nodes (multiple preds).
                 val predTerminator = irFunc.blocks.find { it.label == predLabel }?.terminator
                 val isCritical = predTerminator is IrBranch &&
                     predTerminator.trueTarget != predTerminator.falseTarget &&
@@ -1159,19 +1029,17 @@ class InstructionSelector(
 
                 val targetBlock: RvMachineBlock
                 if (isCritical) {
-                    // Split the critical edge: create a trampoline block.
+
                     targetBlock = splitCriticalEdge(predLabel, succLabel)
                 } else {
                     targetBlock = predBlock
                 }
 
-                // Resolve the parallel copy into an ordered sequence of moves.
                 val resolvedCopies = resolveParallelCopies(copies, targetBlock)
 
-                // Emit the resolved moves.
                 for (move in resolvedCopies) {
                     if (isCritical) {
-                        // Insert at end (before the jump we added during splitting).
+
                         targetBlock.insertBeforeTerminator(move)
                     } else {
                         targetBlock.insertBeforeTerminator(move)
@@ -1180,10 +1048,6 @@ class InstructionSelector(
             }
         }
 
-        /**
-         * Split a critical edge from [predLabel] to [succLabel] by inserting a
-         * trampoline block. Returns the new trampoline block.
-         */
         private fun splitCriticalEdge(predLabel: String, succLabel: String): RvMachineBlock {
             val predMb = blockMap[predLabel]!!
             val succMachineLabel = machineLabel(succLabel)
@@ -1192,7 +1056,6 @@ class InstructionSelector(
             val trampoline = mf.createBlock(trampolineLabel)
             trampoline.append(RvInst.J(succMachineLabel))
 
-            // Rewrite the predecessor's branch target from succLabel to trampoline.
             val insts = predMb.instructions
             for (i in insts.indices) {
                 val inst = insts[i]
@@ -1207,34 +1070,22 @@ class InstructionSelector(
                             insts[i] = inst.copy(target = trampolineLabel)
                         }
                     }
-                    else -> { /* skip */ }
+                    else -> {  }
                 }
             }
 
-            // Register the trampoline in the block map so it can be found.
             blockMap["$predLabel.to.$succLabel"] = trampoline
             return trampoline
         }
 
-        /**
-         * Resolve a parallel-copy set into a sequentially-correct list of
-         * [RvInst] (mostly [RvInst.Mv] and [RvInst.Li]).
-         *
-         * Handles:
-         * - Self-copies (a ← a): elided.
-         * - Constants (dst ← constant): emitted as `li` directly (no conflict).
-         * - Acyclic chains: topologically ordered.
-         * - Cycles: broken with a fresh temporary virtual register.
-         */
         private fun resolveParallelCopies(
             copies: List<PhiCopy>,
             emitBlock: RvMachineBlock,
         ): List<RvInst> {
             val result = mutableListOf<RvInst>()
 
-            // Separate constant sources (always safe) from register-to-register copies.
             val constCopies = mutableListOf<PhiCopy>()
-            val regCopies = mutableListOf<Pair<RvOperand.Reg, RvOperand.Reg>>() // dst, src
+            val regCopies = mutableListOf<Pair<RvOperand.Reg, RvOperand.Reg>>()
 
             for (copy in copies) {
                 val dst = copy.dst
@@ -1245,36 +1096,26 @@ class InstructionSelector(
                         constCopies.add(copy)
                     }
                     is IrUndef -> {
-                        // Don't-care value: emit li 0.
+
                         result.add(RvInst.Li(dst, 0))
                     }
                     else -> {
                         val srcReg = operandOf(srcVal, emitBlock)
-                        // Self-copy: elide.
+
                         if (srcReg == dst) continue
                         regCopies.add(dst to srcReg)
                     }
                 }
             }
 
-            // Emit constant copies — these never conflict with anything.
             for (copy in constCopies) {
                 result.add(RvInst.Li(copy.dst, (copy.srcValue as IrConstant).value.toInt()))
             }
 
-            // Sequentialize register-to-register copies.
-            //
-            // We use the standard algorithm:
-            // 1. Build a map: dst → src for the remaining copies.
-            // 2. A copy dst ← src is "ready" if dst is not used as a source by any
-            //    other pending copy.
-            // 3. Emit ready copies, removing them and potentially freeing up new ones.
-            // 4. If no copy is ready, we have a cycle — break it with a temp.
-
             val pending = regCopies.toMutableList()
 
             while (pending.isNotEmpty()) {
-                // Find a copy whose destination is not a source of any other pending copy.
+
                 val readyIdx = pending.indexOfFirst { (dst, _) ->
                     pending.none { (_, src) -> src == dst }
                 }
@@ -1283,12 +1124,12 @@ class InstructionSelector(
                     val (dst, src) = pending.removeAt(readyIdx)
                     result.add(RvInst.Mv(dst, src))
                 } else {
-                    // All remaining copies form one or more cycles. Break one cycle.
+
                     val (dst, src) = pending.removeAt(0)
                     val tmp = mf.newVreg(dst.width)
                     result.add(RvInst.Mv(tmp, dst))
                     result.add(RvInst.Mv(dst, src))
-                    // Rewrite all remaining copies that used `dst` as source to use `tmp`.
+
                     for (i in pending.indices) {
                         if (pending[i].second == dst) {
                             pending[i] = pending[i].first to tmp
@@ -1300,10 +1141,6 @@ class InstructionSelector(
             return result
         }
     }
-
-    // ===================================================================
-    //  Helper data classes
-    // ===================================================================
 
     private sealed class GepResult {
         data class Constant(val value: Int) : GepResult()

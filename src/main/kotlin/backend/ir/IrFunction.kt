@@ -1,15 +1,13 @@
 package backend.ir
 
+// Defines IR function signatures, bodies, and textual rendering.
+
 import frontend.semantic.Function
 import frontend.semantic.RefType
 
-
 data class IrFunctionSignature(
     val parameters: List<IrType>,
-    /**
-     * Logical return type from the language. If [sretType] is set, the physical
-     * return type becomes void and the value is written to the hidden sret pointer.
-     */
+
     val returnType: IrType,
     val sretType: IrType? = null,
 ) {

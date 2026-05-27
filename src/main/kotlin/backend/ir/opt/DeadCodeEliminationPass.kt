@@ -1,5 +1,7 @@
 package backend.ir.opt
 
+// Removes unused side-effect-free IR instructions.
+
 import backend.ir.IrFunction
 import backend.ir.IrModule
 

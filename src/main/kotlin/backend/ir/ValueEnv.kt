@@ -1,5 +1,7 @@
 package backend.ir
 
+// Tracks scoped value bindings, function frames, and loop targets during IR emission.
+
 import frontend.semantic.Scope
 
 class ValueEnv {
@@ -69,7 +71,6 @@ sealed interface Bind {
 }
 
 const val SRET_BINDING = "__sret"
-
 
 private data class FunctionFrame(
   val returnType: IrType,

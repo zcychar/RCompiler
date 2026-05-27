@@ -1,5 +1,7 @@
 package backend.ir
 
+// Defines IR basic blocks and terminator management.
+
 import utils.CompileError
 
 class IrBasicBlock(val label: String) {

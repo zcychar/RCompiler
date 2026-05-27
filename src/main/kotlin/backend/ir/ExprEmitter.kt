@@ -1,5 +1,7 @@
 package backend.ir
 
+// Lowers typed expressions into IR, including aggregate destination passing.
+
 import frontend.Keyword
 import frontend.Literal
 import frontend.Punctuation
@@ -8,23 +10,6 @@ import frontend.ast.*
 import frontend.semantic.*
 import utils.CompileError
 
-/**
- * Expression emitter handling the currently supported lowering surface.
- * Unsupported expressions fail fast so missing coverage is obvious while we grow the backend.
- *
- * ## Aggregate Strategy
- *
- * Aggregates (structs, arrays) are **never** produced as SSA values. Instead, every
- * aggregate-typed expression is represented as a pointer to its storage.
- *
- * [emitExpr] accepts an optional [destPtr] parameter. When the caller already has
- * a destination for an aggregate (e.g. a `let` binding's alloca, an sret slot),
- * it passes that pointer so the expression can store directly into it — no temporary,
- * no whole-aggregate load, no whole-aggregate store.
- *
- * When [destPtr] is null and the expression produces an aggregate, a temporary alloca
- * is created and returned as the pointer.
- */
 class ExprEmitter(
   private val context: CodegenContext,
   private val builder: IrBuilder = context.builder,
@@ -32,13 +17,6 @@ class ExprEmitter(
 ) {
   private val blockEmitter by lazy { FunctionEmitter(context, builder, this, valueEnv) }
 
-  /**
-   * Emit an expression.
-   *
-   * @param destPtr  If non-null and the expression produces an aggregate, the result
-   *                 will be written directly into [destPtr] and [destPtr] is returned.
-   *                 Ignored for scalar expressions.
-   */
   fun emitExpr(node: ExprNode, expectedType: IrType? = null, destPtr: IrValue? = null): IrValue = when (node) {
     is LiteralExprNode -> emitLiteral(node)
     is PathExprNode -> emitPath(node, destPtr)
@@ -76,13 +54,6 @@ class ExprEmitter(
     else -> error("Unsupported literal ${node.type}")
   }
 
-  /**
-   * Emit a path expression.
-   *
-   * For scalars: loads the value and returns it.
-   * For aggregates: returns the pointer to the storage. If [destPtr] is provided,
-   * copies the aggregate field-wise into [destPtr] and returns [destPtr].
-   */
   private fun emitPath(node: PathExprNode, destPtr: IrValue? = null): IrValue {
     if (node.seg2 != null) {
       error("Qualified paths are not supported in expression lowering yet")
@@ -93,7 +64,7 @@ class ExprEmitter(
       is Bind.Pointer -> {
         val pointeeType = it.getPointeeType()
         if (isAggregate(pointeeType)) {
-          // Aggregate: return pointer, or copy to dest
+
           if (destPtr != null) {
             builder.emitAggregateCopy(destPtr, it.addr, pointeeType)
             destPtr
@@ -121,7 +92,7 @@ class ExprEmitter(
     val lhsInner = getLValueInnerType(lhs)
 
     if (isAggregate(lhsInner)) {
-      // Aggregate assignment: emit RHS directly into the LHS destination.
+
       emitExpr(node.rhs, destPtr = lhs)
       return unitValue()
     }
@@ -165,8 +136,7 @@ class ExprEmitter(
   }
 
   private fun emitBinaryOp(node: BinaryExprNode): IrValue {
-    // For short-circuit operators, the RHS must not be eagerly evaluated —
-    // it is only emitted inside the guarded basic block by the thunk.
+
     if (node.op == Punctuation.AND_AND) {
       val lhs = emitExpr(node.lhs)
       return emitShortCircuitAnd(lhs) { emitExpr(node.rhs) }
@@ -260,7 +230,6 @@ class ExprEmitter(
     )
   }
 
-  //lhs -- lvalue
   private fun emitAssignArithmetic(operator: BinaryOperator, lhs: IrValue, rhs: IrValue): IrValue {
     val left = builder.emit(
       IrLoad("", getLValueInnerType(lhs), lhs)
@@ -344,7 +313,6 @@ class ExprEmitter(
     return emitShortCircuit(lhs, rhsThunk, shortCircuitOnTrue = true)
   }
 
-  //lhs,rhs -- ssa value
   private fun emitShortCircuit(lhs: IrValue, rhsThunk: () -> IrValue, shortCircuitOnTrue: Boolean): IrValue {
     val boolType = IrPrimitive(PrimitiveKind.BOOL)
     if (lhs.type != boolType) error("Short-circuit operators require boolean operands")
@@ -354,7 +322,6 @@ class ExprEmitter(
     val rhsLabel = builder.freshLocalName(if (shortCircuitOnTrue) "or.rhs" else "and.rhs")
     val mergeLabel = builder.freshLocalName("sc.merge")
     var rhsPred: String? = null
-
 
     val trueTarget = if (shortCircuitOnTrue) mergeLabel else rhsLabel
     val falseTarget = if (shortCircuitOnTrue) rhsLabel else mergeLabel
@@ -446,8 +413,7 @@ class ExprEmitter(
     if (baseAddr != null) return retargetPointer(baseAddr, expectType)
 
     val value = emitExpr(node.expr)
-    // If the value is already a pointer to an aggregate (our new convention),
-    // we can use it directly for borrowing.
+
     if (value.type is IrPointer && isAggregate((value.type as IrPointer).pointee)) {
       return retargetPointer(value, expectType)
     }
@@ -461,7 +427,7 @@ class ExprEmitter(
       ?: error("Cannot dereference non-pointer type ${pointer.type}")
     val pointeeType = pointerType.pointee
     if (isAggregate(pointeeType)) {
-      // Dereferencing a pointer to an aggregate: return the pointer (or copy to dest).
+
       if (destPtr != null) {
         builder.emitAggregateCopy(destPtr, pointer, pointeeType)
         return destPtr
@@ -482,10 +448,6 @@ class ExprEmitter(
     return value ?: expectedType?.let { IrUndef(it) } ?: unitValue()
   }
 
-  /**
-   * Emit an if-expression. For aggregate results, uses destination-passing to avoid
-   * whole-aggregate phi nodes.
-   */
   private fun emitIf(node: IfExprNode, destPtr: IrValue? = null): IrValue {
     val function = context.currentFunction ?: error("No active function")
     val condExpr = node.conds.firstOrNull()?.expr ?: error("if without condition")
@@ -499,7 +461,6 @@ class ExprEmitter(
 
     val isAggResult = needsValue && isAggregate(resultType)
 
-    // For aggregate results, ensure we have a destination pointer.
     val aggDest = if (isAggResult) {
       destPtr ?: builder.emit(
         IrAlloca("", IrPointer(resultType), resultType)
@@ -521,7 +482,6 @@ class ExprEmitter(
         falseTarget = elseLabel,
       )
     )
-
 
     val thenBlock = builder.ensureBlock(thenLabel)
     builder.positionAt(function, thenBlock)
@@ -564,8 +524,7 @@ class ExprEmitter(
     builder.positionAt(function, mergeBlock)
 
     if (isAggResult) {
-      // Aggregate result: the destination pointer already has the value written by
-      // whichever branch executed. Return the pointer.
+
       return aggDest!!
     }
 
@@ -597,7 +556,6 @@ class ExprEmitter(
 
     builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = condLabel))
 
-
     val condBlock = builder.ensureBlock(condLabel)
     builder.positionAt(function, condBlock)
     val condExpr = node.conds.firstOrNull()?.expr ?: error("while without condition")
@@ -618,8 +576,6 @@ class ExprEmitter(
       IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = exitLabel)
     )
 
-
-
     val bodyBlock = builder.ensureBlock(bodyLabel)
     builder.positionAt(function, bodyBlock)
     valueEnv.pushLoop(breakTarget = linkLabel, continueTarget = condLabel)
@@ -634,7 +590,6 @@ class ExprEmitter(
     return unitValue()
   }
 
-  //not used!
   private fun emitLoop(node: LoopExprNode): IrValue {
     val function = context.currentFunction ?: error("No active function")
     val bodyLabel = builder.freshLocalName("loop.body")
@@ -656,7 +611,6 @@ class ExprEmitter(
     return unitValue()
   }
 
-  //no break with expression
   private fun emitBreak(node: BreakExprNode): IrValue {
     val target = valueEnv.currentBreakTarget() ?: error("break outside loop")
     builder.emitTerminator(IrJump(name = "", type = IrPrimitive(PrimitiveKind.UNIT), target = target))
@@ -669,12 +623,6 @@ class ExprEmitter(
     return IrUndef(IrPrimitive(PrimitiveKind.NEVER))
   }
 
-  /**
-   * Emit a function call.
-   *
-   * For sret (aggregate return): if [destPtr] is provided, passes it directly as the
-   * sret pointer, avoiding a temporary alloca + copy. Returns the pointer.
-   */
   private fun emitCall(node: CallExprNode, destPtr: IrValue? = null): IrValue {
     val calleePath = node.expr as? PathExprNode ?: error("function calls require path callee")
     val fnName = calleePath.seg2?.name ?: calleePath.seg1.name ?: error("unsupported callee path")
@@ -689,7 +637,7 @@ class ExprEmitter(
     val args = mutableListOf<IrValue>()
     var sretSlot: IrValue? = null
     signature.sretType?.let {
-      // Use caller-provided destPtr if available, otherwise alloca a temp.
+
       sretSlot = destPtr ?: builder.emit(
         IrAlloca(
           builder.freshLocalName("sret"),
@@ -712,19 +660,13 @@ class ExprEmitter(
       ),
     )
     return if (signature.sretType != null) {
-      // Return the sret pointer directly — no whole-aggregate load.
+
       sretSlot!!
     } else {
       callResult
     }
   }
 
-  /**
-   * Emit a method call.
-   *
-   * For sret (aggregate return): if [destPtr] is provided, passes it directly as the
-   * sret pointer, avoiding a temporary alloca + copy. Returns the pointer.
-   */
   private fun emitMethodCall(node: MethodCallExprNode, destPtr: IrValue? = null): IrValue {
     val fnName = node.pathSeg.name ?: error("method name missing")
     emitBuiltinMethodCall(node, fnName)?.let { return it }
@@ -766,7 +708,7 @@ class ExprEmitter(
       if (selfParamType is IrPointer) {
         tryLValue(node.expr) ?: {
           val baseValue = emitExpr(node.expr)
-          // If the baseValue is already a pointer (aggregate), use it directly.
+
           if (baseValue.type is IrPointer && isAggregate((baseValue.type as IrPointer).pointee)) {
             baseValue
           } else {
@@ -811,12 +753,6 @@ class ExprEmitter(
     }
   }
 
-  /**
-   * Emit an array literal.
-   *
-   * Stores elements directly into [destPtr] if provided, otherwise allocates a temp.
-   * Returns a pointer to the array storage — never a whole-aggregate SSA value.
-   */
   private fun emitArrayExpr(node: ArrayExprNode, destPtr: IrValue? = null): IrValue {
     val type = node.type as? ArrayType ?: error("array literal without type")
     val irType = toIrType(type) as IrArray
@@ -827,12 +763,6 @@ class ExprEmitter(
     return dest
   }
 
-  /**
-   * Emit a struct literal.
-   *
-   * Stores fields directly into [destPtr] if provided, otherwise allocates a temp.
-   * Returns a pointer to the struct storage — never a whole-aggregate SSA value.
-   */
   private fun emitStructExpr(node: StructExprNode, destPtr: IrValue? = null): IrValue {
     val path = node.path as? PathExprNode ?: error("struct literal requires path")
     val irType = structLayout(node.type as StructType)
@@ -843,17 +773,11 @@ class ExprEmitter(
     return dest
   }
 
-  /**
-   * Emit a return statement.
-   *
-   * For aggregate returns (sret): writes the return value directly into the sret
-   * pointer using destination-passing — no whole-aggregate SSA value.
-   */
   private fun emitReturn(node: ReturnExprNode): IrValue {
     val expectedType = valueEnv.currentReturnType()
     val sretPtr = valueEnv.resolve(SRET_BINDING) as? Bind.Pointer
     if (sretPtr != null) {
-      // Aggregate return via sret: emit directly into the sret pointer.
+
       if (node.expr != null) {
         emitExpr(node.expr, expectedType = expectedType, destPtr = sretPtr.addr)
       }
@@ -882,13 +806,6 @@ class ExprEmitter(
     return IrUndef(IrPrimitive(PrimitiveKind.NEVER))
   }
 
-  /**
-   * Emit a field access expression.
-   *
-   * For scalar fields: returns the loaded scalar value.
-   * For aggregate fields: returns a pointer to the field. If [destPtr] is provided,
-   * copies the aggregate field into [destPtr].
-   */
   private fun emitFieldAccess(node: FieldAccessExprNode, destPtr: IrValue? = null): IrValue {
     val lvalue = emitLValue(node)
     val innerType = getLValueInnerType(lvalue)
@@ -908,13 +825,6 @@ class ExprEmitter(
     )
   }
 
-  /**
-   * Emit an index access expression.
-   *
-   * For scalar elements: returns the loaded scalar value.
-   * For aggregate elements: returns a pointer. If [destPtr] is provided,
-   * copies the aggregate element into [destPtr].
-   */
   private fun emitIndexAccess(node: IndexExprNode, destPtr: IrValue? = null): IrValue {
     val lvalue = emitLValue(node)
     val innerType = getLValueInnerType(lvalue)
@@ -1002,7 +912,7 @@ class ExprEmitter(
 
     is IndexExprNode -> {
       var base = emitLValue(node.base)
-      //base is IrPointer(innerType) innerType: IrArray, IrPointer(IrArray), elementType, IrPointer(elementType)?
+
       val innerType = getLValueInnerType(base)
 
       val indexValue = emitExpr(node.index)
@@ -1016,7 +926,6 @@ class ExprEmitter(
           )
         )
       }
-      //now base_type is either IrPointer(IrArray) or IrPointer(elementType)
 
       val elementType = when (val it = getLValueInnerType(base)) {
         is IrArray -> it.element
@@ -1046,7 +955,6 @@ class ExprEmitter(
       }"
     )
   }
-
 
   private fun tryLValue(expr: ExprNode): IrValue? = when (expr) {
     is PathExprNode, is DerefExprNode, is FieldAccessExprNode, is IndexExprNode -> {
@@ -1131,7 +1039,6 @@ class ExprEmitter(
 
   private fun unitValue(): IrValue = IrUndef(IrPrimitive(PrimitiveKind.UNIT))
 
-
   private fun fieldIndex(semantic: StructType, fieldName: String): Int {
     val names = semantic.fields.keys.toList()
     val idx = names.indexOf(fieldName)
@@ -1152,7 +1059,7 @@ class ExprEmitter(
         )
       )
       if (isAggregate(type)) {
-        // For nested aggregate fields, use destination-passing.
+
         emitExpr(valueExpr.fields[index].expr!!, destPtr = indexAddr)
       } else {
         val indexExpr = emitExpr(valueExpr.fields[index].expr!!)
@@ -1175,9 +1082,8 @@ class ExprEmitter(
         ?: error("array repeat size unknown")
       if (count == 0) return
 
-      // Small repeat arrays: unroll for better optimization.
       if (count <= ARRAY_UNROLL_THRESHOLD) {
-        // For scalar repeat values, evaluate once and store N times.
+
         if (!isAggregate(elemType)) {
           val repeated = emitExpr(valueExpr.repeatOp)
           for (i in 0 until count) {
@@ -1187,7 +1093,7 @@ class ExprEmitter(
             builder.emit(IrStore("", unit, elemPtr, repeated))
           }
         } else {
-          // Aggregate repeat: use destination-passing per element.
+
           for (i in 0 until count) {
             val elemPtr = builder.emit(
               IrGep("", IrPointer(elemType), toDst, listOf(IrConstant(0, i32), IrConstant(i.toLong(), i32)))
@@ -1198,7 +1104,6 @@ class ExprEmitter(
         return
       }
 
-      // Large repeat arrays: use a loop.
       val idxPtr = builder.emit(IrAlloca(builder.freshLocalName("fill.idx"), IrPointer(i32), i32))
       builder.emit(IrStore("", unit, idxPtr, IrConstant(0, i32)))
 
@@ -1209,7 +1114,6 @@ class ExprEmitter(
 
       builder.emitTerminator(IrJump("", unit, condLabel))
 
-      // cond
       val condBlock = builder.ensureBlock(condLabel)
       builder.positionAt(fn, condBlock)
       val idxVal = builder.emit(IrLoad("", i32, idxPtr))
@@ -1218,7 +1122,6 @@ class ExprEmitter(
       )
       builder.emitTerminator(IrBranch("", unit, cmp, bodyLabel, endLabel))
 
-      // body
       val bodyBlock = builder.ensureBlock(bodyLabel)
       builder.positionAt(fn, bodyBlock)
       val curIdx = builder.emit(IrLoad("", i32, idxPtr))
@@ -1237,13 +1140,11 @@ class ExprEmitter(
       builder.emit(IrStore("", unit, idxPtr, nextIdx))
       builder.emitTerminator(IrJump("", unit, condLabel))
 
-      // end
       val endBlock = builder.ensureBlock(endLabel)
       builder.positionAt(fn, endBlock)
       return
     }
 
-    // Explicit element list
     valueExpr.elements.forEachIndexed { idx, node ->
       val elemPtr = builder.emit(
         IrGep("", IrPointer(elemType), toDst, listOf(IrConstant(0, i32), IrConstant(idx.toLong(), i32)))
@@ -1257,7 +1158,7 @@ class ExprEmitter(
   }
 
   companion object {
-    /** Arrays with repeat count at or below this threshold are unrolled instead of looped. */
+
     private const val ARRAY_UNROLL_THRESHOLD = 16
   }
 

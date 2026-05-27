@@ -1,5 +1,7 @@
 package backend.ir.opt
 
+// Splits conservative aggregate allocas into scalar slots.
+
 import backend.ir.*
 
 class SroaPass(

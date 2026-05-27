@@ -1,15 +1,9 @@
 package backend.ir.opt
 
+// Inlines small non-recursive callees into callers.
+
 import backend.ir.*
 
-/**
- * Function inlining pass.
- *
- * Uses Tarjan's SCC on the call graph to detect recursive/mutually-recursive
- * functions (skipped). Processes functions bottom-up in reverse topological
- * order so that callees are already optimised when inlined into callers,
- * giving full transitive inlining in a single pass.
- */
 class InlinePass(
   private val instructionThreshold: Int = 100,
   private val callerInstructionBudget: Int = 300,
@@ -20,7 +14,6 @@ class InlinePass(
     val functions = module.declaredFunctions()
     if (functions.isEmpty()) return
 
-    // Phase 1: call-graph analysis
     val callGraph = buildCallGraph(functions)
     val allNames = functions.map { it.name }.toSet()
     val sccs = tarjanSCC(callGraph, allNames)
@@ -37,7 +30,6 @@ class InlinePass(
 
     val fnByName = functions.associateBy { it.name }
 
-    // Phase 2: bottom-up inlining (Tarjan outputs reverse-topo order)
     for (scc in sccs) {
       if (scc.size > 1) continue
       val fnName = scc.single()
@@ -47,8 +39,6 @@ class InlinePass(
       inlineCallsInFunction(fn, fnByName, recursive)
     }
   }
-
-  // ── call graph ──────────────────────────────────────────────────────
 
   private fun buildCallGraph(functions: List<IrFunction>): Map<String, Set<String>> {
     val graph = mutableMapOf<String, Set<String>>()
@@ -107,10 +97,8 @@ class InlinePass(
     for (node in nodes) {
       if (node !in nodeIndex) strongConnect(node)
     }
-    return result // reverse topological order
+    return result
   }
-
-  // ── per-function inlining ───────────────────────────────────────────
 
   private fun inlineCallsInFunction(
     fn: IrFunction,
@@ -155,8 +143,6 @@ class InlinePass(
     return projected <= callerInstructionBudget
   }
 
-  // ── call-site splicing ──────────────────────────────────────────────
-
   private fun inlineCallSite(
     caller: IrFunction,
     block: IrBasicBlock,
@@ -168,15 +154,12 @@ class InlinePass(
 
     val prefix = "inline.${callee.name.trimEnd('.')}.${inlineCounter++}"
 
-    // label remap
     val labelMap = callee.blocks.associate { it.label to "$prefix.${it.label}" }
     fun remapLabel(label: String): String = labelMap[label] ?: label
 
-    // parameter → argument map (by index)
     val argMap = mutableMapOf<Int, IrValue>()
     call.arguments.forEachIndexed { i, arg -> argMap[i] = arg }
 
-    // value remap
     fun remapName(name: String): String = if (name.isBlank()) "" else "$prefix.$name"
 
     fun remapValue(value: IrValue): IrValue = when (value) {
@@ -184,8 +167,6 @@ class InlinePass(
       is IrLocal -> IrLocal(remapName(value.name), value.type)
       else -> value
     }
-
-    // ── 1. split caller block ──
 
     val contLabel = "$prefix.cont"
     val preCall = block.instructions.subList(0, callIndex).toList()
@@ -204,12 +185,10 @@ class InlinePass(
     contBlock.instructions.addAll(postCall)
     if (origTerminator != null) {
       contBlock.setTerminator(origTerminator)
-      // update phi predecessors in successors: old block label → contLabel
+
       val succs = terminatorSuccessors(origTerminator)
       updatePhiPredecessors(caller, block.label, contLabel, succs)
     }
-
-    // ── 2. clone callee body ──
 
     val clonedBlocks = mutableListOf<IrBasicBlock>()
     val hoistedAllocas = mutableListOf<IrAlloca>()
@@ -252,8 +231,6 @@ class InlinePass(
       clonedBlocks.add(cloned)
     }
 
-    // ── 3. insert blocks into caller (must happen before value replacement) ──
-
     insertHoistedAllocas(caller, hoistedAllocas)
 
     val insertPos = caller.blocks.indexOf(block) + 1
@@ -261,8 +238,6 @@ class InlinePass(
       caller.blocks.add(insertPos + i, clonedBlock)
     }
     caller.blocks.add(insertPos + clonedBlocks.size, contBlock)
-
-    // ── 4. wire return values ──
 
     val callReturnsVoid =
       (call.type as? IrPrimitive)?.kind == PrimitiveKind.UNIT
@@ -286,8 +261,6 @@ class InlinePass(
       }
     }
   }
-
-  // ── helpers ─────────────────────────────────────────────────────────
 
   private fun cloneInstruction(
     inst: IrInstruction,
@@ -316,7 +289,7 @@ class InlinePass(
         },
       )
       is IrCast -> inst.copy(name = n, value = remap(inst.value))
-      // terminators are handled separately
+
       is IrReturn -> error("return handled separately")
       is IrBranch -> error("branch handled separately")
       is IrJump -> error("jump handled separately")
@@ -351,10 +324,6 @@ class InlinePass(
     }
   }
 
-  /**
-   * Replace all uses of `IrLocal(oldName, _)` with [newValue] throughout the
-   * function's instructions and terminators.
-   */
   private fun replaceUsesOfValue(fn: IrFunction, oldName: String, newValue: IrValue) {
     val replace: (IrValue) -> IrValue = { v ->
       if (v is IrLocal && v.name == oldName) newValue else v

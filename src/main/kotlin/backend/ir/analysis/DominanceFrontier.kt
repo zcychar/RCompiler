@@ -1,5 +1,7 @@
 package backend.ir.analysis
 
+// Computes dominance frontiers for SSA construction.
+
 fun computeDominanceFrontier(
   cfg: Cfg,
   dominators: DominatorInfo,

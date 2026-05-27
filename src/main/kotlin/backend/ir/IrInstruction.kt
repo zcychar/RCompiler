@@ -1,5 +1,7 @@
 package backend.ir
 
+// Defines IR instruction and terminator nodes.
+
 import kotlin.text.buildString
 
 sealed interface IrInstruction {

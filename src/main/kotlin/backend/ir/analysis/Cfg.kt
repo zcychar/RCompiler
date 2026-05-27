@@ -1,5 +1,7 @@
  package backend.ir.analysis
 
+// Builds predecessor and successor maps for IR functions.
+
 import backend.ir.IrBranch
 import backend.ir.IrFunction
 import backend.ir.IrJump

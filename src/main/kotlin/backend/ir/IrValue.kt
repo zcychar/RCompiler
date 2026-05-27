@@ -1,5 +1,7 @@
 package backend.ir
 
+// Defines IR values such as locals, parameters, globals, constants, and undef.
+
 sealed interface IrValue {
   val type: IrType
   fun render(): String
@@ -25,7 +27,6 @@ data class IrFunctionRef(val name: String, override val type: IrType) : IrValue 
   override fun render(): String = "@$name"
 }
 
-
 data class IrConstant(val value: Long, override val type: IrType) : IrValue {
   override fun render(): String = value.toString()
 }
@@ -33,4 +34,3 @@ data class IrConstant(val value: Long, override val type: IrType) : IrValue {
 data class IrUndef(override val type: IrType) : IrValue {
   override fun render(): String = "undef"
 }
-

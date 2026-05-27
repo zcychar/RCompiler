@@ -1,5 +1,7 @@
 package backend.ir.opt
 
+// Promotes scalar stack slots to SSA registers with phi nodes.
+
 import backend.ir.*
 import backend.ir.analysis.buildCfg
 import backend.ir.analysis.computeDominanceFrontier
@@ -165,9 +167,9 @@ class Mem2RegPass : FunctionPass {
       block.instructions.forEach { instruction ->
         when (instruction) {
           is IrAlloca -> Unit
-          is IrLoad -> Unit // Address-use is allowed for candidates.
+          is IrLoad -> Unit
           is IrStore -> {
-            rejectIfCandidate(instruction.value) // Candidate used as value means escape.
+            rejectIfCandidate(instruction.value)
           }
 
           is IrBinary -> {

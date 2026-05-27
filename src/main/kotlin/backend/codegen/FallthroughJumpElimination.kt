@@ -1,5 +1,7 @@
 package backend.codegen
 
+// Removes unconditional jumps to the immediately following block.
+
 import backend.codegen.riscv.RvInst
 import backend.codegen.riscv.RvMachineFunction
 

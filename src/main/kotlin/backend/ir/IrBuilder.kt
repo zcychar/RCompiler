@@ -1,5 +1,7 @@
 package backend.ir
 
+// Provides scoped helpers for creating named IR instructions and aggregate copies.
+
 import utils.CompileError
 
 class IrBuilder(
@@ -147,7 +149,6 @@ class IrBuilder(
 
   fun hasInsertionPoint(): Boolean = currentBlock != null
 
-
   fun borrow(toName: String?, baseValue: IrValue): IrLocal {
     val ret = emit(
       IrAlloca(toName ?: "", IrPointer(baseValue.type), baseValue.type), toName
@@ -158,18 +159,10 @@ class IrBuilder(
     return ret
   }
 
-  /**
-   * Copy an aggregate value from [srcPtr] to [destPtr] field-by-field.
-   * For structs, emits a GEP+load+store per field (recursively for nested aggregates).
-   * For arrays, emits element-wise copies.
-   * For scalars, emits a single load+store.
-   * For very large aggregates (> 256 bytes), falls back to a memcpy call.
-   */
   fun emitAggregateCopy(destPtr: IrValue, srcPtr: IrValue, type: IrType) {
     val size = typeSize(type)
     if (size == 0) return
 
-    // For very large aggregates, use memcpy call
     if (size > 256) {
       emitMemcpyCall(destPtr, srcPtr, size.toLong())
       return
@@ -215,16 +208,13 @@ class IrBuilder(
       }
 
       else -> {
-        // Scalar: simple load + store
+
         val v = emit(IrLoad("", type, srcPtr))
         emit(IrStore("", IrPrimitive(PrimitiveKind.UNIT), destPtr, v))
       }
     }
   }
 
-  /**
-   * Emit an @llvm.memcpy call for large copies.
-   */
   private fun emitMemcpyCall(destPtr: IrValue, srcPtr: IrValue, size: Long) {
     val i8Ptr = IrPointer(IrPrimitive(PrimitiveKind.CHAR))
     val i32 = IrPrimitive(PrimitiveKind.I32)
@@ -245,7 +235,6 @@ class IrBuilder(
   }
 }
 
-// Extension to produce a copy with a new id for convenience.
 @Suppress("UNCHECKED_CAST")
 private fun <T : IrInstruction> T.withId(name: String): T = when (this) {
   is IrConst -> copy(name = name)

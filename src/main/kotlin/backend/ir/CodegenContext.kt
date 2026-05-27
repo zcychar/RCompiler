@@ -1,5 +1,7 @@
 package backend.ir
 
+// Holds shared IR-generation state while lowering typed AST nodes.
+
 import frontend.ast.ConstItemNode
 import frontend.ast.FunctionItemNode
 import frontend.ast.StructItemNode
@@ -11,10 +13,6 @@ import frontend.semantic.Scope
 import frontend.semantic.Struct
 import frontend.semantic.Type
 
-/**
- * Shared backend context. Tracks the module under construction and exposes helpers
- * for type mapping, builder access, and string interning as outlined in the design docs.
- */
 class CodegenContext(
     val module: IrModule = IrModule(),
     val rootScope: Scope? = null,
@@ -39,14 +37,14 @@ class CodegenContext(
         val irStruct = structLayout(symbol.type)
         module.declareType(symbol.name, irStruct)
         val previousScope = currentScope
-        // Emit methods with self
+
         symbol.methods.values.forEach { fn ->
             val fnNode = fn.node as? FunctionItemNode ?: return@forEach
             val implScope = fnNode.declScope
             currentScope = implScope
             functionEmitter.emitMethod(fn, symbol.type, fnNode)
         }
-        // Emit associated functions without self (not present in methods map)
+
         symbol.associateItems.values.forEach { assoc ->
             if (assoc is Function && assoc.selfParam == null) {
                 val fnNode = assoc.node as? frontend.ast.FunctionItemNode ?: return@forEach
@@ -68,7 +66,7 @@ class CodegenContext(
 
     private fun constToIrConstant(value: ConstValue): IrConstant? = when (value) {
         is ConstValue.Int -> IrConstant(value.value, toIrType(value.actualType))
-        // IR-1 only uses integer consts; other shapes are skipped for now.
+
         else -> null
     }
 }

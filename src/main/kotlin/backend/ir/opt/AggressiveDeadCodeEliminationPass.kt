@@ -1,5 +1,7 @@
 package backend.ir.opt
 
+// Marks side-effect roots and removes unlive IR instructions.
+
 import backend.ir.*
 
 class AggressiveDeadCodeEliminationPass : FunctionPass {

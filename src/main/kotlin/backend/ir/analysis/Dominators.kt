@@ -1,5 +1,7 @@
 package backend.ir.analysis
 
+// Computes dominator sets, immediate dominators, and dominator tree edges.
+
 data class DominatorInfo(
   val dom: Map<String, Set<String>>,
   val idom: Map<String, String?>,

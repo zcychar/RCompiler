@@ -1,5 +1,7 @@
 package backend.ir
 
+// Defines IR types and target-aware layout helpers.
+
 import backend.TargetLayout
 import frontend.semantic.*
 
@@ -117,7 +119,6 @@ fun getLValueInnerType(value: IrValue): IrType {
   return (value.type as? IrPointer)?.pointee ?: error("invalid lvalue")
 }
 
-// Target-aware size/alignment calculator for RV64IM/LP64.
 private fun alignTo(value: Int, align: Int): Int =
   if (align <= 1) value else ((value + align - 1) / align) * align
 

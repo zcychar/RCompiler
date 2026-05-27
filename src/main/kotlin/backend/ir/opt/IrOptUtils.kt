@@ -1,5 +1,7 @@
 package backend.ir.opt
 
+// Provides shared IR optimization analysis and rewriting utilities.
+
 import backend.ir.*
 import backend.ir.analysis.buildCfg
 

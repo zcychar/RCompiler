@@ -1,5 +1,7 @@
 package backend.ir.opt
 
+// Runs ordered function-pass pipelines over an IR module.
+
 import backend.ir.IrModule
 
 class PassPipeline(

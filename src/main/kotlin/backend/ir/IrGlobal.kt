@@ -1,5 +1,7 @@
 package backend.ir
 
+// Defines IR globals and their rendering.
+
 data class IrGlobal(
   val name: String,
   override val type: IrType,
