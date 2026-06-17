@@ -1,0 +1,31 @@
+CASE comprehensive1
+Exit code: 0
+Total cycles: 6139624
+Instruction parsed: 1310
+Instruction counts:
+# simple   = 226045
+# mul      = 31562
+# div      = 581
+# mem      = 84669
+# branch   = 29727
+# jump     = 42808
+# jalr     = 4194
+# libcMem  = 0
+# libcIO   = 150
+# libcOp   = 0
+RESULT pass=1 fail=0
+Stats summary:
+  total cycles: 6139624
+  total instruction parsed: 1310
+  average cycles per passed case: 6139624
+  average parsed instructions per passed case: 1310
+  instruction counts:
+    simple=226045
+    mul=31562
+    div=581
+    mem=84669
+    branch=29727
+    jump=42808
+    jalr=4194
+    libcIO=150
+  stats directory: /home/zcychar/RCompiler/benchmark-results/smoke-ir1-1-inline-hoist/stats

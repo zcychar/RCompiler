@@ -1,0 +1,767 @@
+CASE comprehensive1
+Exit code: 0
+Total cycles: 6139624
+Instruction parsed: 1310
+Instruction counts:
+# simple   = 226045
+# mul      = 31562
+# div      = 581
+# mem      = 84669
+# branch   = 29727
+# jump     = 42808
+# jalr     = 4194
+# libcMem  = 0
+# libcIO   = 150
+# libcOp   = 0
+CASE comprehensive2
+Exit code: 0
+Total cycles: 42988755
+Instruction parsed: 3842
+Instruction counts:
+# simple   = 2863254
+# mul      = 864724
+# div      = 31486
+# mem      = 481304
+# branch   = 384160
+# jump     = 581363
+# jalr     = 1134
+# libcMem  = 0
+# libcIO   = 26
+# libcOp   = 200
+CASE comprehensive3
+Exit code: 0
+Total cycles: 9384017
+Instruction parsed: 3111
+Instruction counts:
+# simple   = 654673
+# mul      = 168013
+# div      = 62314
+# mem      = 83248
+# branch   = 128518
+# jump     = 180629
+# jalr     = 824
+# libcMem  = 0
+# libcIO   = 33
+# libcOp   = 16
+CASE comprehensive4
+Exit code: 0
+Total cycles: 103725410
+Instruction parsed: 1615
+Instruction counts:
+# simple   = 2535237
+# mul      = 35615
+# div      = 501
+# mem      = 1519567
+# branch   = 274403
+# jump     = 535272
+# jalr     = 251438
+# libcMem  = 0
+# libcIO   = 33
+# libcOp   = 1
+CASE comprehensive5
+Exit code: 0
+Total cycles: 23645265
+Instruction parsed: 1906
+Instruction counts:
+# simple   = 1444852
+# mul      = 329041
+# div      = 70650
+# mem      = 270561
+# branch   = 194586
+# jump     = 206238
+# jalr     = 190
+# libcMem  = 0
+# libcIO   = 33
+# libcOp   = 0
+CASE comprehensive6
+Exit code: 0
+Total cycles: 231942500
+Instruction parsed: 3158
+Instruction counts:
+# simple   = 17473175
+# mul      = 3695566
+# div      = 19878
+# mem      = 2661967
+# branch   = 2530305
+# jump     = 3618311
+# jalr     = 62
+# libcMem  = 0
+# libcIO   = 32
+# libcOp   = 0
+CASE comprehensive7
+Exit code: 0
+Total cycles: 407837421
+Instruction parsed: 3209
+Instruction counts:
+# simple   = 24415902
+# mul      = 5845559
+# div      = 22548
+# mem      = 4297689
+# branch   = 7305383
+# jump     = 11394056
+# jalr     = 43278
+# libcMem  = 0
+# libcIO   = 27
+# libcOp   = 0
+CASE comprehensive8
+Exit code: 0
+Total cycles: 63848775
+Instruction parsed: 5121
+Instruction counts:
+# simple   = 1321106
+# mul      = 158136
+# div      = 15670
+# mem      = 756080
+# branch   = 146839
+# jump     = 208535
+# jalr     = 13796
+# libcMem  = 0
+# libcIO   = 32
+# libcOp   = 13746
+CASE comprehensive9
+Exit code: 0
+Total cycles: 14770072
+Instruction parsed: 2498
+Instruction counts:
+# simple   = 530408
+# mul      = 53160
+# div      = 390
+# mem      = 203447
+# branch   = 65788
+# jump     = 92041
+# jalr     = 673
+# libcMem  = 0
+# libcIO   = 22
+# libcOp   = 1
+CASE comprehensive10
+Exit code: 0
+Total cycles: 23626591
+Instruction parsed: 2498
+Instruction counts:
+# simple   = 780143
+# mul      = 74870
+# div      = 654
+# mem      = 331705
+# branch   = 92327
+# jump     = 132588
+# jalr     = 794
+# libcMem  = 0
+# libcIO   = 21
+# libcOp   = 1
+CASE comprehensive11
+Exit code: 0
+Total cycles: 479275208
+Instruction parsed: 2428
+Instruction counts:
+# simple   = 29829241
+# mul      = 405214
+# div      = 1261079
+# mem      = 5783724
+# branch   = 4562154
+# jump     = 6653626
+# jalr     = 84369
+# libcMem  = 0
+# libcIO   = 17
+# libcOp   = 0
+CASE comprehensive12
+Exit code: 0
+Total cycles: 9995614
+Instruction parsed: 2900
+Instruction counts:
+# simple   = 745100
+# mul      = 107989
+# div      = 1635
+# mem      = 117202
+# branch   = 115223
+# jump     = 128200
+# jalr     = 792
+# libcMem  = 0
+# libcIO   = 46
+# libcOp   = 0
+CASE comprehensive13
+Exit code: 0
+Total cycles: 5130156
+Instruction parsed: 2489
+Instruction counts:
+# simple   = 374857
+# mul      = 50226
+# div      = 253
+# mem      = 60647
+# branch   = 60084
+# jump     = 61417
+# jalr     = 118
+# libcMem  = 0
+# libcIO   = 93
+# libcOp   = 0
+CASE comprehensive14
+Exit code: 0
+Total cycles: 73343610
+Instruction parsed: 2792
+Instruction counts:
+# simple   = 6170868
+# mul      = 461185
+# div      = 45
+# mem      = 863201
+# branch   = 853742
+# jump     = 1051482
+# jalr     = 436
+# libcMem  = 0
+# libcIO   = 209
+# libcOp   = 3
+CASE comprehensive15
+Exit code: 0
+Total cycles: 2350416
+Instruction parsed: 3101
+Instruction counts:
+# simple   = 166582
+# mul      = 12463
+# div      = 265
+# mem      = 28480
+# branch   = 27115
+# jump     = 29747
+# jalr     = 256
+# libcMem  = 0
+# libcIO   = 77
+# libcOp   = 0
+CASE comprehensive16
+Exit code: 0
+Total cycles: 2477222
+Instruction parsed: 1905
+Instruction counts:
+# simple   = 182240
+# mul      = 29483
+# div      = 7007
+# mem      = 26063
+# branch   = 32898
+# jump     = 37694
+# jalr     = 66
+# libcMem  = 0
+# libcIO   = 32
+# libcOp   = 0
+CASE comprehensive17
+Exit code: 0
+Total cycles: 22260230
+Instruction parsed: 3878
+Instruction counts:
+# simple   = 1323974
+# mul      = 566610
+# div      = 2899
+# mem      = 273095
+# branch   = 101092
+# jump     = 118490
+# jalr     = 461
+# libcMem  = 0
+# libcIO   = 48
+# libcOp   = 0
+CASE comprehensive18
+Exit code: 0
+Total cycles: 1760124
+Instruction parsed: 3377
+Instruction counts:
+# simple   = 139342
+# mul      = 18263
+# div      = 251
+# mem      = 18969
+# branch   = 28841
+# jump     = 36149
+# jalr     = 151
+# libcMem  = 0
+# libcIO   = 59
+# libcOp   = 0
+CASE comprehensive19
+Exit code: 0
+Total cycles: 12170394
+Instruction parsed: 1556
+Instruction counts:
+# simple   = 858717
+# mul      = 123552
+# div      = 2103
+# mem      = 141584
+# branch   = 144355
+# jump     = 197309
+# jalr     = 3475
+# libcMem  = 0
+# libcIO   = 16
+# libcOp   = 2
+CASE comprehensive20
+Exit code: 0
+Total cycles: 4296167
+Instruction parsed: 2101
+Instruction counts:
+# simple   = 266623
+# mul      = 21206
+# div      = 3802
+# mem      = 54468
+# branch   = 31002
+# jump     = 48329
+# jalr     = 2454
+# libcMem  = 0
+# libcIO   = 13
+# libcOp   = 2
+CASE comprehensive21
+Exit code: 0
+Total cycles: 24050842017
+Instruction parsed: 2265
+Instruction counts:
+# simple   = 793242287
+# mul      = 130072478
+# div      = 82939
+# mem      = 343549219
+# branch   = 66614164
+# jump     = 79116638
+# jalr     = 176086
+# libcMem  = 0
+# libcIO   = 116
+# libcOp   = 36
+CASE comprehensive22
+Exit code: 0
+Total cycles: 312493205
+Instruction parsed: 2007
+Instruction counts:
+# simple   = 16816553
+# mul      = 3747582
+# div      = 15962
+# mem      = 3820565
+# branch   = 3156652
+# jump     = 4233721
+# jalr     = 24234
+# libcMem  = 0
+# libcIO   = 29
+# libcOp   = 0
+CASE comprehensive23
+Exit code: 0
+Total cycles: 3539289414
+Instruction parsed: 1856
+Instruction counts:
+# simple   = 159355855
+# mul      = 38716532
+# div      = 417786
+# mem      = 43364491
+# branch   = 37714199
+# jump     = 64231628
+# jalr     = 5045
+# libcMem  = 0
+# libcIO   = 9
+# libcOp   = 0
+CASE comprehensive24
+Exit code: 0
+Total cycles: 75568621
+Instruction parsed: 4142
+Instruction counts:
+# simple   = 5087459
+# mul      = 487493
+# div      = 172649
+# mem      = 847620
+# branch   = 949510
+# jump     = 1304553
+# jalr     = 15177
+# libcMem  = 0
+# libcIO   = 9
+# libcOp   = 0
+CASE comprehensive25
+Exit code: 0
+Total cycles: 14813618
+Instruction parsed: 4421
+Instruction counts:
+# simple   = 446251
+# mul      = 78708
+# div      = 19531
+# mem      = 202849
+# branch   = 58166
+# jump     = 88885
+# jalr     = 1778
+# libcMem  = 0
+# libcIO   = 66
+# libcOp   = 0
+CASE comprehensive26
+Exit code: 0
+Total cycles: 45320193
+Instruction parsed: 5375
+Instruction counts:
+# simple   = 2211972
+# mul      = 450411
+# div      = 63346
+# mem      = 556611
+# branch   = 382900
+# jump     = 582534
+# jalr     = 1159
+# libcMem  = 0
+# libcIO   = 39
+# libcOp   = 0
+CASE comprehensive27
+Exit code: 0
+Total cycles: 326243032
+Instruction parsed: 3611
+Instruction counts:
+# simple   = 20699795
+# mul      = 4955862
+# div      = 346954
+# mem      = 3582854
+# branch   = 4200870
+# jump     = 7253864
+# jalr     = 107510
+# libcMem  = 0
+# libcIO   = 7
+# libcOp   = 0
+CASE comprehensive28
+Exit code: 0
+Total cycles: 72094269
+Instruction parsed: 4417
+Instruction counts:
+# simple   = 9287320
+# mul      = 2230123
+# div      = 769213
+# mem      = 293324
+# branch   = 1557967
+# jump     = 4093743
+# jalr     = 27257
+# libcMem  = 0
+# libcIO   = 18
+# libcOp   = 0
+CASE comprehensive29
+Exit code: 0
+Total cycles: 577320
+Instruction parsed: 1912
+Instruction counts:
+# simple   = 34282
+# mul      = 4983
+# div      = 0
+# mem      = 7331
+# branch   = 4886
+# jump     = 4977
+# jalr     = 5
+# libcMem  = 0
+# libcIO   = 1
+# libcOp   = 0
+CASE comprehensive30
+Exit code: 0
+Total cycles: 220520
+Instruction parsed: 648
+Instruction counts:
+# simple   = 19255
+# mul      = 3518
+# div      = 0
+# mem      = 2383
+# branch   = 3019
+# jump     = 3764
+# jalr     = 26
+# libcMem  = 0
+# libcIO   = 9
+# libcOp   = 0
+CASE comprehensive31
+Exit code: 0
+Total cycles: 270155
+Instruction parsed: 1093
+Instruction counts:
+# simple   = 15604
+# mul      = 2488
+# div      = 14
+# mem      = 3268
+# branch   = 2418
+# jump     = 2563
+# jalr     = 37
+# libcMem  = 0
+# libcIO   = 2
+# libcOp   = 1
+CASE comprehensive32
+Exit code: 0
+Total cycles: 2194612
+Instruction parsed: 690
+Instruction counts:
+# simple   = 172792
+# mul      = 24324
+# div      = 8395
+# mem      = 21238
+# branch   = 33570
+# jump     = 53048
+# jalr     = 13
+# libcMem  = 0
+# libcIO   = 6
+# libcOp   = 1
+CASE comprehensive33
+Exit code: 0
+Total cycles: 3249955
+Instruction parsed: 1242
+Instruction counts:
+# simple   = 278092
+# mul      = 34835
+# div      = 10768
+# mem      = 34462
+# branch   = 35222
+# jump     = 53868
+# jalr     = 656
+# libcMem  = 0
+# libcIO   = 49
+# libcOp   = 0
+CASE comprehensive34
+Exit code: 0
+Total cycles: 435298
+Instruction parsed: 560
+Instruction counts:
+# simple   = 16864
+# mul      = 1457
+# div      = 16
+# mem      = 6131
+# branch   = 1650
+# jump     = 2264
+# jalr     = 352
+# libcMem  = 0
+# libcIO   = 6
+# libcOp   = 0
+CASE comprehensive35
+Exit code: 0
+Total cycles: 4021479
+Instruction parsed: 578
+Instruction counts:
+# simple   = 426955
+# mul      = 7138
+# div      = 95238
+# mem      = 2926
+# branch   = 130661
+# jump     = 167034
+# jalr     = 10
+# libcMem  = 0
+# libcIO   = 4
+# libcOp   = 0
+CASE comprehensive36
+Exit code: 0
+Total cycles: 4032358
+Instruction parsed: 907
+Instruction counts:
+# simple   = 364042
+# mul      = 42944
+# div      = 6476
+# mem      = 40476
+# branch   = 67419
+# jump     = 100492
+# jalr     = 327
+# libcMem  = 0
+# libcIO   = 20
+# libcOp   = 0
+CASE comprehensive37
+Exit code: 0
+Total cycles: 539819
+Instruction parsed: 1253
+Instruction counts:
+# simple   = 25842
+# mul      = 2288
+# div      = 0
+# mem      = 7210
+# branch   = 3690
+# jump     = 5591
+# jalr     = 333
+# libcMem  = 0
+# libcIO   = 4
+# libcOp   = 0
+CASE comprehensive38
+Exit code: 0
+Total cycles: 1356490
+Instruction parsed: 1319
+Instruction counts:
+# simple   = 63185
+# mul      = 9102
+# div      = 100
+# mem      = 18181
+# branch   = 7566
+# jump     = 12677
+# jalr     = 1126
+# libcMem  = 0
+# libcIO   = 12
+# libcOp   = 0
+CASE comprehensive39
+Exit code: 0
+Total cycles: 205770
+Instruction parsed: 825
+Instruction counts:
+# simple   = 20486
+# mul      = 2355
+# div      = 2023
+# mem      = 1392
+# branch   = 3584
+# jump     = 5305
+# jalr     = 23
+# libcMem  = 0
+# libcIO   = 15
+# libcOp   = 5
+CASE comprehensive40
+Exit code: 0
+Total cycles: 32063718
+Instruction parsed: 1136
+Instruction counts:
+# simple   = 2375904
+# mul      = 862058
+# div      = 12020
+# mem      = 369139
+# branch   = 177578
+# jump     = 189693
+# jalr     = 104
+# libcMem  = 0
+# libcIO   = 87
+# libcOp   = 31
+CASE comprehensive41
+Exit code: 0
+Total cycles: 3537100
+Instruction parsed: 1340
+Instruction counts:
+# simple   = 238834
+# mul      = 39011
+# div      = 1297
+# mem      = 39851
+# branch   = 37641
+# jump     = 38445
+# jalr     = 42
+# libcMem  = 0
+# libcIO   = 13
+# libcOp   = 13
+CASE comprehensive42
+Exit code: 0
+Total cycles: 368576
+Instruction parsed: 363
+Instruction counts:
+# simple   = 29552
+# mul      = 3682
+# div      = 33
+# mem      = 3846
+# branch   = 6732
+# jump     = 9836
+# jalr     = 101
+# libcMem  = 0
+# libcIO   = 2
+# libcOp   = 0
+CASE comprehensive43
+Exit code: 0
+Total cycles: 124534
+Instruction parsed: 971
+Instruction counts:
+# simple   = 7819
+# mul      = 763
+# div      = 0
+# mem      = 1651
+# branch   = 708
+# jump     = 840
+# jalr     = 14
+# libcMem  = 0
+# libcIO   = 1
+# libcOp   = 0
+CASE comprehensive44
+Exit code: 0
+Total cycles: 32314802
+Instruction parsed: 577
+Instruction counts:
+# simple   = 1800446
+# mul      = 197889
+# div      = 160024
+# mem      = 372059
+# branch   = 233582
+# jump     = 359791
+# jalr     = 7046
+# libcMem  = 0
+# libcIO   = 11
+# libcOp   = 0
+CASE comprehensive45
+Exit code: 0
+Total cycles: 1215118
+Instruction parsed: 352
+Instruction counts:
+# simple   = 102797
+# mul      = 12215
+# div      = 1086
+# mem      = 11811
+# branch   = 24899
+# jump     = 36569
+# jalr     = 60
+# libcMem  = 0
+# libcIO   = 2
+# libcOp   = 0
+CASE comprehensive46
+Exit code: 0
+Total cycles: 67063520
+Instruction parsed: 719
+Instruction counts:
+# simple   = 2526051
+# mul      = 311249
+# div      = 569912
+# mem      = 749662
+# branch   = 324191
+# jump     = 542760
+# jalr     = 65540
+# libcMem  = 0
+# libcIO   = 1
+# libcOp   = 0
+CASE comprehensive47
+Exit code: 0
+Total cycles: 61869603
+Instruction parsed: 670
+Instruction counts:
+# simple   = 3102100
+# mul      = 457051
+# div      = 93475
+# mem      = 774807
+# branch   = 455999
+# jump     = 896352
+# jalr     = 12855
+# libcMem  = 0
+# libcIO   = 1
+# libcOp   = 0
+CASE comprehensive48
+Exit code: 0
+Total cycles: 432110
+Instruction parsed: 359
+Instruction counts:
+# simple   = 12726
+# mul      = 400
+# div      = 848
+# mem      = 5779
+# branch   = 2635
+# jump     = 4205
+# jalr     = 15
+# libcMem  = 0
+# libcIO   = 5
+# libcOp   = 0
+CASE comprehensive49
+Exit code: 0
+Total cycles: 129654
+Instruction parsed: 473
+Instruction counts:
+# simple   = 9030
+# mul      = 1512
+# div      = 0
+# mem      = 1544
+# branch   = 1369
+# jump     = 1534
+# jalr     = 28
+# libcMem  = 0
+# libcIO   = 8
+# libcOp   = 0
+CASE comprehensive50
+Exit code: 0
+Total cycles: 225465
+Instruction parsed: 350
+Instruction counts:
+# simple   = 21368
+# mul      = 540
+# div      = 2828
+# mem      = 1158
+# branch   = 5939
+# jump     = 9111
+# jalr     = 122
+# libcMem  = 0
+# libcIO   = 60
+# libcOp   = 0
+RESULT pass=50 fail=0
+Stats summary:
+  total cycles: 30194079916
+  total instruction parsed: 101226
+  average cycles per passed case: 603881598
+  average parsed instructions per passed case: 2024
+  instruction counts:
+    simple=1111113857
+    mul=195813428
+    div=4356944
+    mem=416751508
+    branch=133307928
+    jump=188760569
+    jalr=856042
+    libcIO=1631
+    libcOp=14059
+  stats directory: /home/zcychar/RCompiler/benchmark-results/full-ir1-1-50-inline-hoist-budget300/stats

@@ -1,0 +1,15 @@
+testcase=comprehensive13
+Exit code: 0
+Total cycles: 5149132
+Instruction parsed: 2636
+Instruction counts:
+# simple   = 374829
+# mul      = 50226
+# div      = 253
+# mem      = 60944
+# branch   = 60084
+# jump     = 61421
+# jalr     = 114
+# libcMem  = 0
+# libcIO   = 93
+# libcOp   = 0

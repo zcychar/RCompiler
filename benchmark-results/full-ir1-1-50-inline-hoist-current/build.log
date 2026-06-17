@@ -1,0 +1,29 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/home/zcychar/.gradle/wrapper/dists/gradle-8.14-bin/38aieal9i53h9rfe7vjup95b9/gradle-8.14/lib/native-platform-0.22-milestone-28.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+
+> Configure project :
+Discovered stage: IR-1 in root 'RCompiler-Testcases' -> Creating tasks with prefix 'IR1'
+Discovered stage: semantic-2 in root 'RCompiler-Testcases' -> Creating tasks with prefix 'Semantic2'
+Discovered stage: semantic-1 in root 'RCompiler-Testcases' -> Creating tasks with prefix 'Semantic1'
+Discovered stage: frontend in root 'RCompiler-Local-Testcases' -> Creating tasks with prefix 'localFrontend'
+
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :compileKotlin UP-TO-DATE
+> Task :compileJava NO-SOURCE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :shadowJar UP-TO-DATE
+
+[Incubating] Problems report is available at: file:///home/zcychar/RCompiler/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 2s
+3 actionable tasks: 3 up-to-date

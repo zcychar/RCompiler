@@ -1,0 +1,4 @@
+interface:
+  display_name: "Compiler Benchmark"
+  short_description: "Build, run, and compare IR-1 REIMU benchmarks"
+  default_prompt: "Use $compiler-benchmark to build the fat jar, run the IR-1 benchmark, capture stats, and compare them to a previous run."

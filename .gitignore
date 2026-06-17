@@ -46,20 +46,7 @@ bin/
 ### Mac OS ###
 .DS_Store
 
+.tmp
 .idea
 b 
 RCompiler-Spec
-
-docs
-ref
-
-AGENTS.md
-
-REIMU
-
-test_llvm_local.bash
-.tmp
-builtin.c
-
-benchmark-results
-skills
